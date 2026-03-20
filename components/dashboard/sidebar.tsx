@@ -42,9 +42,13 @@ const navItems: NavItem[] = [
   { label: "Turnos", icon: Calendar, href: "#" },
 ]
 
-export function DashboardSidebar() {
+interface DashboardSidebarProps {
+  activeSection: string
+  onSectionChange: (section: string) => void
+}
+
+export function DashboardSidebar({ activeSection, onSectionChange }: DashboardSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
-  const [activeItem, setActiveItem] = useState("Inicio")
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
 
@@ -77,14 +81,14 @@ export function DashboardSidebar() {
         <nav className="flex-1 space-y-1 p-3">
           {navItems.map((item) => {
             const Icon = item.icon
-            const isActive = activeItem === item.label
+            const isActive = activeSection === item.label
 
             if (collapsed) {
               return (
                 <Tooltip key={item.label}>
                   <TooltipTrigger asChild>
                     <button
-                      onClick={() => setActiveItem(item.label)}
+                      onClick={() => onSectionChange(item.label)}
                       className={cn(
                         "flex w-full items-center justify-center rounded-lg p-2.5 transition-colors",
                         isActive
@@ -105,7 +109,7 @@ export function DashboardSidebar() {
             return (
               <button
                 key={item.label}
-                onClick={() => setActiveItem(item.label)}
+                onClick={() => onSectionChange(item.label)}
                 className={cn(
                   "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                   isActive
