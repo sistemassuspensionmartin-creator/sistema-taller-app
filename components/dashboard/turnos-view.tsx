@@ -1,11 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -16,6 +15,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -25,60 +25,79 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-// Horarios y Días
+// Horarios reales del taller
 const HORARIOS = [
-  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-  "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30",
-  "16:00", "16:30", "17:00", "17:30", "18:00"
+  "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00",
+  "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30"
 ]
 
 const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
 
-const SERVICIOS = ["Revisión", "Frenos", "Tren Delantero", "Alineado y Balanceado", "Cambio de Aceite", "Motor", "Electricidad"]
-
-const SERVICE_COLORS: Record<string, string> = {
-  "Revisión": "bg-slate-500/10 text-slate-500 border-slate-500/20",
-  "Frenos": "bg-red-500/10 text-red-500 border-red-500/20",
-  "Tren Delantero": "bg-orange-500/10 text-orange-500 border-orange-500/20",
-  "Alineado y Balanceado": "bg-purple-500/10 text-purple-500 border-purple-500/20",
-  "Cambio de Aceite": "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  "Motor": "bg-stone-500/10 text-stone-500 border-stone-500/20",
-  "Electricidad": "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-}
-
-// Autos registrados de mentira para el buscador
-const AUTOS_REGISTRADOS = [
-  { patente: "AB 123 CD", modelo: "Toyota Corolla", dueño: "Juan Martínez" },
-  { patente: "AC 456 EF", modelo: "Ford Ranger", dueño: "Esteban Q." },
-  { patente: "AD 789 GH", modelo: "VW Golf", dueño: "María G." },
+const SERVICIOS = [
+  "Revisión", "Tren delantero", "Frenos", "Alineado", 
+  "Balanceado", "Alineado + Balanceado", "Cambio de Aceite", "Cubiertas"
 ]
 
-const mockTurnos = [
-  { id: 1, fecha: "2024-04-15", hora: "08:30", cliente: "Juan Pérez", auto: "Toyota Corolla", servicio: "Tren Delantero" },
-  { id: 2, fecha: "2024-04-15", hora: "08:30", cliente: "Ana Rod.", auto: "Peugeot 208", servicio: "Frenos" },
-  { id: 3, fecha: "2024-04-15", hora: "08:30", cliente: "Carlos L.", auto: "Honda Civic", servicio: "Revisión" },
-  { id: 4, fecha: "2024-04-15", hora: "10:30", cliente: "Roberto F.", auto: "Kangoo", servicio: "Alineado y Balanceado" },
-  { id: 5, fecha: "2024-04-15", hora: "14:00", cliente: "María G.", auto: "VW Golf", servicio: "Cambio de Aceite" },
-  { id: 6, fecha: "2024-04-16", hora: "08:30", cliente: "Esteban Q.", auto: "Ford Ranger", servicio: "Tren Delantero" },
-  { id: 7, fecha: "2024-04-17", hora: "11:00", cliente: "Laura M.", auto: "Fiat Cronos", servicio: "Alineado y Balanceado" },
+// Siglas y colores para que el calendario se vea limpio
+const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
+  "Revisión": { sigla: "REV", color: "bg-slate-500/10 text-slate-500 border-slate-500/20" },
+  "Tren delantero": { sigla: "TD", color: "bg-orange-500/10 text-orange-500 border-orange-500/20" },
+  "Frenos": { sigla: "FRE", color: "bg-red-500/10 text-red-500 border-red-500/20" },
+  "Alineado": { sigla: "ALI", color: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
+  "Balanceado": { sigla: "BAL", color: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
+  "Alineado + Balanceado": { sigla: "A+B", color: "bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20" },
+  "Cambio de Aceite": { sigla: "ACE", color: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+  "Cubiertas": { sigla: "CUB", color: "bg-stone-500/10 text-stone-500 border-stone-500/20" },
+}
+
+// Autos registrados simulados (Con presupuestos pendientes)
+const AUTOS_REGISTRADOS = [
+  { 
+    patente: "AB 123 CD", modelo: "Toyota Corolla", dueño: "Juan Martínez", telefono: "+54 11 4567-8901",
+    presupuestos: [{ id: "PR-001", detalle: "Cambio de pastillas y discos", monto: 85000 }]
+  },
+  { 
+    patente: "AC 456 EF", modelo: "Ford Ranger", dueño: "Esteban Q.", telefono: "+54 11 1111-2222",
+    presupuestos: [{ id: "PR-045", detalle: "Service 50.000km", monto: 120000 }]
+  },
+  { 
+    patente: "AD 789 GH", modelo: "VW Golf", dueño: "María G.", telefono: "+54 11 3333-4444",
+    presupuestos: []
+  },
 ]
 
 export function TurnosView() {
   const [fechaActual, setFechaActual] = useState(new Date())
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [turnoSeleccionado, setTurnoSeleccionado] = useState<any>(null)
   
-  // Estado para el formulario del nuevo turno
-  const [tipoRegistro, setTipoRegistro] = useState("registrado") // "registrado" o "manual"
+  // Días marcados como no laborables (Guardamos la fecha en formato string YYYY-MM-DD)
+  const [diasNoLaborables, setDiasNoLaborables] = useState<string[]>([])
+
+  // Estado para el formulario de turno
+  const [tipoRegistro, setTipoRegistro] = useState("registrado")
+  const [busquedaPatente, setBusquedaPatente] = useState("")
+  const [autoEncontrado, setAutoEncontrado] = useState<any>(null)
+
   const [formData, setFormData] = useState({
     fecha: "",
     hora: "",
     servicio: "",
     patente: "",
-    marca: "",
-    modelo: "",
-    nombre: "",
-    telefono: ""
+    marcaModelo: "",
+    nombreDueño: "",
+    telefono: "",
+    observaciones: "",
+    presupuestoAsociado: ""
   })
+
+  // Turnos simulados
+  const [turnos, setTurnos] = useState([
+    { id: 1, fecha: new Date().toISOString().split("T")[0], hora: "08:30", cliente: "Juan Martínez", auto: "Toyota Corolla", patente: "AB 123 CD", servicio: "Frenos", observaciones: "Hace ruido al frenar de golpe", presupuestoAsociado: "PR-001" },
+    { id: 2, fecha: new Date().toISOString().split("T")[0], hora: "08:30", cliente: "Ana Rod.", auto: "Peugeot 208", patente: "XX 999 YY", servicio: "Tren delantero", observaciones: "Revisar precaps", presupuestoAsociado: "" },
+    { id: 3, fecha: new Date().toISOString().split("T")[0], hora: "10:30", cliente: "María G.", auto: "VW Golf", patente: "AD 789 GH", servicio: "Alineado + Balanceado", observaciones: "Vibra a 120km/h", presupuestoAsociado: "" },
+  ])
 
   const obtenerFechasSemana = (fechaBase: Date) => {
     const fechas = []
@@ -108,27 +127,64 @@ export function TurnosView() {
     setFechaActual(newDate)
   }
 
-  const getTurnosParaCelda = (fecha: Date, hora: string) => {
-    const fechaString = fecha.toISOString().split("T")[0] 
-    return mockTurnos.filter(t => t.fecha === fechaString && t.hora === hora)
+  const toggleDiaNoLaborable = (fechaString: string) => {
+    if (diasNoLaborables.includes(fechaString)) {
+      setDiasNoLaborables(diasNoLaborables.filter(d => d !== fechaString))
+    } else {
+      setDiasNoLaborables([...diasNoLaborables, fechaString])
+    }
+  }
+
+  const buscarAuto = () => {
+    const auto = AUTOS_REGISTRADOS.find(a => a.patente.toLowerCase() === busquedaPatente.toLowerCase())
+    if (auto) {
+      setAutoEncontrado(auto)
+      setFormData({
+        ...formData,
+        patente: auto.patente,
+        marcaModelo: auto.modelo,
+        nombreDueño: auto.dueño,
+        telefono: auto.telefono,
+        presupuestoAsociado: ""
+      })
+    } else {
+      alert("Patente no encontrada en el sistema.")
+      setAutoEncontrado(null)
+    }
   }
 
   const handleGuardarTurno = () => {
-    // Acá en el futuro guardaremos en Supabase
-    console.log("Guardando turno:", formData, "Tipo:", tipoRegistro)
-    alert("Turno agendado con éxito (Simulación)")
+    const nuevoTurno = {
+      id: Math.random(),
+      fecha: formData.fecha,
+      hora: formData.hora,
+      servicio: formData.servicio,
+      cliente: formData.nombreDueño,
+      auto: formData.marcaModelo,
+      patente: formData.patente,
+      observaciones: formData.observaciones,
+      presupuestoAsociado: formData.presupuestoAsociado
+    }
+    setTurnos([...turnos, nuevoTurno])
     setIsModalOpen(false)
-    // Limpiamos el formulario
-    setFormData({ fecha: "", hora: "", servicio: "", patente: "", marca: "", modelo: "", nombre: "", telefono: "" })
+    setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: "" })
+    setAutoEncontrado(null)
+    setBusquedaPatente("")
+  }
+
+  const abrirDetalleTurno = (turno: any) => {
+    setTurnoSeleccionado(turno)
+    setIsDetailModalOpen(true)
   }
 
   return (
-    <div className="space-y-6 flex flex-col h-[calc(100vh-100px)]">
+    // FIX DE SCROLL: flex-col y min-h-0 son claves acá
+    <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 pb-4">
       {/* Header y Controles */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Agenda de Turnos</h2>
-          <p className="text-sm text-muted-foreground">Gestión semanal de plazas y servicios</p>
+          <p className="text-sm text-muted-foreground">Gestión semanal (Lunes a Viernes)</p>
         </div>
         
         <div className="flex items-center gap-4">
@@ -138,7 +194,7 @@ export function TurnosView() {
             </Button>
             <div className="flex items-center px-4 text-sm font-medium text-foreground min-w-[140px] justify-center">
               <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
-              Semana Actual
+              {fechaActual.toLocaleDateString("es-AR", { month: "long" }).toUpperCase()}
             </div>
             <Button variant="ghost" size="icon" onClick={nextWeek} className="h-8 w-8 hover:bg-background">
               <ChevronRight className="h-4 w-4" />
@@ -153,60 +209,86 @@ export function TurnosView() {
       </div>
 
       {/* Calendario Semanal */}
-      <Card className="border-border bg-card flex-1 flex flex-col overflow-hidden">
-        <CardContent className="p-0 flex-1 flex flex-col h-full">
-          <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0">
-            <div className="p-3 text-center border-r border-border flex items-center justify-center">
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </div>
-            {fechasSemana.map(fecha => (
-              <div key={fecha.toISOString()} className="p-3 text-center border-r border-border last:border-0 flex flex-col items-center">
-                <span className="text-xs text-muted-foreground uppercase">{DIAS_SEMANA[fecha.getDay() - 1]}</span>
-                <span className="font-bold text-2xl text-card-foreground">{fecha.getDate()}</span>
+      <Card className="border-border bg-card flex-1 flex flex-col min-h-0">
+        {/* Cabecera de Días */}
+        <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0">
+          <div className="p-3 text-center border-r border-border flex items-center justify-center">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </div>
+          {fechasSemana.map(fecha => {
+            const fechaString = fecha.toISOString().split("T")[0]
+            const esNoLaborable = diasNoLaborables.includes(fechaString)
+            return (
+              <div key={fechaString} className={`p-2 text-center border-r border-border last:border-0 flex flex-col items-center relative transition-colors ${esNoLaborable ? 'bg-destructive/10' : ''}`}>
+                <span className="text-xs font-semibold text-muted-foreground uppercase">{DIAS_SEMANA[fecha.getDay() - 1]}</span>
+                <span className={`font-bold text-2xl ${esNoLaborable ? 'text-destructive/50' : 'text-card-foreground'}`}>{fecha.getDate()}</span>
+                
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className={`absolute top-1 right-1 h-6 w-6 rounded-full ${esNoLaborable ? 'text-destructive hover:bg-destructive/20' : 'text-muted-foreground hover:bg-secondary'}`}
+                  title={esNoLaborable ? "Habilitar Día" : "Marcar como No Laborable"}
+                  onClick={() => toggleDiaNoLaborable(fechaString)}
+                >
+                  <Ban className="h-3 w-3" />
+                </Button>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* FIX SCROLL: Contenedor de scroll nativo que ocupa todo el resto del espacio disponible */}
+        <div className="flex-1 overflow-y-auto min-h-0 bg-background/50">
+          <div className="min-w-full">
+            {HORARIOS.map(hora => (
+              <div key={hora} className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0 hover:bg-secondary/10 transition-colors">
+                <div className="p-2 text-center border-r border-border text-xs font-bold text-muted-foreground bg-secondary/20 flex items-start justify-center pt-3">
+                  {hora}
+                </div>
+                {fechasSemana.map(fecha => {
+                  const fechaString = fecha.toISOString().split("T")[0]
+                  const turnosEnCelda = turnos.filter(t => t.fecha === fechaString && t.hora === hora)
+                  const esNoLaborable = diasNoLaborables.includes(fechaString)
+                  
+                  return (
+                    <div 
+                      key={`${fechaString}-${hora}`} 
+                      className={`p-1 border-r border-border last:border-0 min-h-[90px] flex flex-col gap-1 transition-colors ${esNoLaborable ? 'bg-destructive/5 cursor-not-allowed' : ''}`}
+                    >
+                      {!esNoLaborable && turnosEnCelda.map(turno => (
+                        <div 
+                          key={turno.id} 
+                          onClick={() => abrirDetalleTurno(turno)}
+                          className="group relative flex flex-col rounded border border-border bg-card p-1.5 text-xs shadow-sm hover:border-primary/50 transition-colors cursor-pointer overflow-hidden"
+                        >
+                          <div className="font-bold text-foreground truncate">{turno.patente}</div>
+                          <div className="text-muted-foreground truncate text-[10px] mb-1">{turno.auto}</div>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className={`text-[9px] px-1 py-0 font-bold border ${SERVICE_UI[turno.servicio]?.color || "bg-secondary text-foreground"}`}>
+                              {SERVICE_UI[turno.servicio]?.sigla || "SRV"}
+                            </Badge>
+                            {turno.presupuestoAsociado && (
+                              <FileText className="h-3 w-3 text-primary" title="Presupuesto Asociado" />
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
               </div>
             ))}
           </div>
-
-          <ScrollArea className="flex-1">
-            <div className="min-w-full">
-              {HORARIOS.map(hora => (
-                <div key={hora} className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0 hover:bg-secondary/20 transition-colors">
-                  <div className="p-3 text-center border-r border-border text-sm font-medium text-muted-foreground bg-secondary/10 flex items-start justify-center pt-4">
-                    {hora}
-                  </div>
-                  {fechasSemana.map(fecha => {
-                    const turnosEnCelda = getTurnosParaCelda(fecha, hora)
-                    return (
-                      <div key={`${fecha.toISOString()}-${hora}`} className="p-2 border-r border-border last:border-0 min-h-[100px] flex flex-col gap-2">
-                        {turnosEnCelda.map(turno => (
-                          <div 
-                            key={turno.id} 
-                            className="group relative flex flex-col rounded-md border border-border bg-background p-2 text-xs shadow-sm hover:border-primary/50 transition-colors cursor-pointer"
-                          >
-                            <div className="font-semibold text-foreground truncate">{turno.cliente}</div>
-                            <div className="text-muted-foreground truncate mb-1.5">{turno.auto}</div>
-                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 border leading-tight ${SERVICE_COLORS[turno.servicio] || "bg-secondary text-foreground"}`}>
-                              {turno.servicio}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </CardContent>
+        </div>
       </Card>
 
       {/* Modal de Nuevo Turno */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl border-border bg-card">
+        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl text-card-foreground">Agendar Nuevo Turno</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Seleccione la fecha, el servicio y asigne el vehículo.
+              Complete los datos para registrar la cita.
             </DialogDescription>
           </DialogHeader>
 
@@ -224,13 +306,13 @@ export function TurnosView() {
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
-                  <SelectContent className="border-border bg-popover">
+                  <SelectContent className="border-border bg-popover max-h-[200px]">
                     {HORARIOS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-card-foreground">Servicio Principal</Label>
+                <Label className="text-card-foreground">Servicio</Label>
                 <Select value={formData.servicio} onValueChange={(val: string) => setFormData({...formData, servicio: val})}>
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue placeholder="Seleccionar" />
@@ -247,30 +329,61 @@ export function TurnosView() {
               <Tabs defaultValue="registrado" onValueChange={setTipoRegistro}>
                 <TabsList className="w-full grid grid-cols-2 bg-transparent">
                   <TabsTrigger value="registrado" className="data-[state=active]:bg-background">
-                    <Car className="w-4 h-4 mr-2" /> Vehículo Registrado
+                    <Search className="w-4 h-4 mr-2" /> Buscar Registrado
                   </TabsTrigger>
                   <TabsTrigger value="manual" className="data-[state=active]:bg-background">
-                    <User className="w-4 h-4 mr-2" /> Ingreso Manual (Rápido)
+                    <User className="w-4 h-4 mr-2" /> Ingreso Manual
                   </TabsTrigger>
                 </TabsList>
                 
                 <div className="p-4 mt-2 bg-background rounded-md border border-border">
                   <TabsContent value="registrado" className="m-0 space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-card-foreground">Buscar por Patente o Cliente</Label>
-                      <Select value={formData.patente} onValueChange={(val: string) => setFormData({...formData, patente: val})}>
-                        <SelectTrigger className="bg-secondary border-border w-full">
-                          <SelectValue placeholder="Seleccione un vehículo registrado..." />
-                        </SelectTrigger>
-                        <SelectContent className="border-border bg-popover">
-                          {AUTOS_REGISTRADOS.map(auto => (
-                            <SelectItem key={auto.patente} value={auto.patente}>
-                              {auto.patente} - {auto.modelo} ({auto.dueño})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex gap-2 items-end">
+                      <div className="space-y-2 flex-1">
+                        <Label className="text-card-foreground">Patente del Vehículo</Label>
+                        <Input 
+                          placeholder="Ej: AB 123 CD" 
+                          className="bg-secondary border-border uppercase" 
+                          value={busquedaPatente} 
+                          onChange={(e: any) => setBusquedaPatente(e.target.value)}
+                          onKeyDown={(e: any) => e.key === 'Enter' && buscarAuto()}
+                        />
+                      </div>
+                      <Button onClick={buscarAuto} className="bg-primary text-primary-foreground">Buscar</Button>
                     </div>
+
+                    {autoEncontrado && (
+                      <div className="p-3 bg-secondary/50 rounded-md border border-border space-y-3">
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div><span className="text-muted-foreground">Vehículo:</span> <span className="font-semibold text-foreground">{autoEncontrado.modelo}</span></div>
+                          <div><span className="text-muted-foreground">Dueño:</span> <span className="font-semibold text-foreground">{autoEncontrado.dueño}</span></div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Teléfono:</span> <span className="text-foreground">{autoEncontrado.telefono}</span></div>
+                        </div>
+                        
+                        {autoEncontrado.presupuestos.length > 0 ? (
+                          <div className="space-y-2 pt-2 border-t border-border">
+                            <Label className="text-primary font-bold flex items-center gap-2">
+                              <FileText className="w-4 h-4" /> Presupuestos Pendientes
+                            </Label>
+                            <Select value={formData.presupuestoAsociado} onValueChange={(val: string) => setFormData({...formData, presupuestoAsociado: val})}>
+                              <SelectTrigger className="bg-background border-primary/50 text-foreground">
+                                <SelectValue placeholder="Asociar un presupuesto (Opcional)" />
+                              </SelectTrigger>
+                              <SelectContent className="border-border bg-popover">
+                                <SelectItem value="ninguno">No asociar ninguno</SelectItem>
+                                {autoEncontrado.presupuestos.map((p: any) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.id} - {p.detalle} (${p.monto.toLocaleString()})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground pt-2 border-t border-border">No registra presupuestos pendientes.</div>
+                        )}
+                      </div>
+                    )}
                   </TabsContent>
 
                   <TabsContent value="manual" className="m-0 space-y-4">
@@ -283,12 +396,12 @@ export function TurnosView() {
                       <div className="space-y-2">
                         <Label className="text-card-foreground">Marca y Modelo</Label>
                         <Input placeholder="Ej: VW Gol Trend" className="bg-secondary border-border" 
-                          value={formData.modelo} onChange={(e: any) => setFormData({...formData, modelo: e.target.value})}/>
+                          value={formData.marcaModelo} onChange={(e: any) => setFormData({...formData, marcaModelo: e.target.value})}/>
                       </div>
                       <div className="space-y-2">
                         <Label className="text-card-foreground">Nombre del Dueño</Label>
                         <Input placeholder="Ej: Carlos López" className="bg-secondary border-border" 
-                          value={formData.nombre} onChange={(e: any) => setFormData({...formData, nombre: e.target.value})}/>
+                          value={formData.nombreDueño} onChange={(e: any) => setFormData({...formData, nombreDueño: e.target.value})}/>
                       </div>
                       <div className="space-y-2">
                         <Label className="text-card-foreground">Teléfono</Label>
@@ -299,6 +412,17 @@ export function TurnosView() {
                   </TabsContent>
                 </div>
               </Tabs>
+            </div>
+
+            {/* Fila 3: Observaciones */}
+            <div className="space-y-2">
+              <Label className="text-card-foreground">Observaciones del Turno</Label>
+              <Textarea 
+                placeholder="Ej: El cliente dice que vibra el volante a los 100km/h. Dejar las llaves al guardia." 
+                className="bg-secondary border-border resize-none min-h-[80px]"
+                value={formData.observaciones}
+                onChange={(e: any) => setFormData({...formData, observaciones: e.target.value})}
+              />
             </div>
           </div>
 
@@ -312,6 +436,78 @@ export function TurnosView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Detalle de Turno */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-card-foreground flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5 text-primary" />
+              Detalle del Turno
+            </DialogTitle>
+          </DialogHeader>
+
+          {turnoSeleccionado && (
+            <div className="space-y-4 py-4">
+              <div className="flex justify-between items-center pb-4 border-b border-border">
+                <div>
+                  <div className="text-2xl font-bold text-foreground">{turnoSeleccionado.hora}</div>
+                  <div className="text-sm text-muted-foreground">{turnoSeleccionado.fecha}</div>
+                </div>
+                <Badge className={`text-xs px-2 py-1 border ${SERVICE_UI[turnoSeleccionado.servicio]?.color || "bg-secondary text-foreground"}`}>
+                  {turnoSeleccionado.servicio}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 gap-y-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground mb-1">Vehículo</p>
+                  <p className="font-semibold text-foreground flex items-center gap-2">
+                    <Car className="w-4 h-4 text-primary" /> {turnoSeleccionado.auto}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-1">Patente</p>
+                  <p className="font-mono bg-secondary px-2 py-0.5 rounded text-foreground inline-block">
+                    {turnoSeleccionado.patente}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-muted-foreground mb-1">Cliente</p>
+                  <p className="font-medium text-foreground flex items-center gap-2">
+                    <User className="w-4 h-4 text-primary" /> {turnoSeleccionado.cliente}
+                  </p>
+                </div>
+              </div>
+
+              {turnoSeleccionado.presupuestoAsociado && (
+                <div className="mt-2 p-3 bg-primary/10 border border-primary/20 rounded-md flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                    <FileText className="w-4 h-4" /> Presupuesto Asociado
+                  </div>
+                  <span className="font-mono text-xs">{turnoSeleccionado.presupuestoAsociado}</span>
+                </div>
+              )}
+
+              {turnoSeleccionado.observaciones && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Observaciones</p>
+                  <p className="text-sm text-foreground bg-secondary/30 p-3 rounded-md italic">
+                    "{turnoSeleccionado.observaciones}"
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDetailModalOpen(false)} className="border-border text-foreground hover:bg-secondary w-full">
+              Cerrar Detalle
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   )
 }
