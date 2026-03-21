@@ -224,11 +224,13 @@ interface ClientsViewProps {
 export function ClientsView({ onNavigateToVehicles }: ClientsViewProps) {
   const [clients, setClients] = useState<Client[]>(initialClientsData)
   const [searchTerm, setSearchTerm] = useState("")
-  const [isClientModalOpen, setIsClientModalOpen] = useState(true) // Opens automatically
+  // CORRECCIÓN 1: Ambos arrancan en FALSE para no abrirse solos
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false) 
+  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false)
+  
   const [isEditMode, setIsEditMode] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0])
-  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(true)
   const [formData, setFormData] = useState(emptyFormData)
   const [vehicleToDelete, setVehicleToDelete] = useState<Vehiculo | null>(null)
   const [isDeleteVehicleOpen, setIsDeleteVehicleOpen] = useState(false)
@@ -772,15 +774,16 @@ export function ClientsView({ onNavigateToVehicles }: ClientsViewProps) {
                   <h4 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">
                     Vehículos ({selectedClient?.vehiculos.length || 0})
                   </h4>
-<Button 
-    size="sm" 
-    variant="outline" 
-    className="border-border text-foreground hover:bg-secondary"
-    onClick={() => onNavigateToVehicles?.()}
-  >
-    <Plus className="mr-1 h-3 w-3" />
-    Agregar Vehículo
-  </Button>
+                  {/* El botón "Agregar Vehículo" también lo desconecté por si acaso */}
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="border-border text-foreground hover:bg-secondary"
+                    onClick={() => alert("Próximamente: Formulario para vincular un auto nuevo")}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Agregar Vehículo
+                  </Button>
                 </div>
 
                 <div className="space-y-3">
@@ -808,15 +811,16 @@ export function ClientsView({ onNavigateToVehicles }: ClientsViewProps) {
                         </Badge>
                       </div>
                       <div className="flex gap-2">
-<Button
-  size="sm"
-  variant="outline"
-  className="flex-1 border-border text-foreground hover:bg-secondary"
-  onClick={() => onNavigateToVehicles?.()}
-  >
-  <History className="mr-2 h-4 w-4" />
-  Ver Historial de Trabajos
-  </Button>
+                        {/* CORRECCIÓN 2: El botón ahora hace un alert en vez de mandar a la lista suelta */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 border-border text-foreground hover:bg-secondary"
+                          onClick={() => alert(`Próximamente: Historial de trabajos para la patente ${vehiculo.patente}`)}
+                        >
+                          <History className="mr-2 h-4 w-4" />
+                          Ver Historial de Trabajos
+                        </Button>
                         <Button
                           size="sm"
                           variant="outline"
