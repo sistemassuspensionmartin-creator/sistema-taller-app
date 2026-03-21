@@ -30,7 +30,7 @@ export default function DashboardPage() {
         return <VehiclesView />
       case "Taller":
         return <WorkOrdersTable />
-      case "caja":               
+      case "Caja":               
         return <CajaView />
       case "Presupuestos":
         return (
