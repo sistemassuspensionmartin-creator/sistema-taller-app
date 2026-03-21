@@ -521,12 +521,18 @@ export function TurnosView() {
               </div>
 
               {turnoSeleccionado.presupuestoAsociado && (
-                <div className="mt-2 p-3 bg-primary/10 border border-primary/20 rounded-md flex items-center justify-between">
+                <button 
+                  onClick={() => alert(`Próximamente: Abriendo el detalle del presupuesto ${turnoSeleccionado.presupuestoAsociado}`)}
+                  className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors cursor-pointer group"
+                >
                   <div className="flex items-center gap-2 text-sm text-primary font-medium">
                     <FileText className="w-4 h-4" /> Presupuesto Asociado
                   </div>
-                  <span className="font-mono text-xs">{turnoSeleccionado.presupuestoAsociado}</span>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-primary font-bold">{turnoSeleccionado.presupuestoAsociado}</span>
+                    <ExternalLink className="w-4 h-4 text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </button>
               )}
 
               {turnoSeleccionado.observaciones && (
