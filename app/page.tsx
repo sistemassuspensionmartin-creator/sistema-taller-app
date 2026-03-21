@@ -12,6 +12,7 @@ import { WorkOrdersTable } from "@/components/dashboard/work-orders-table"
 import { ThemeProvider } from "@/components/theme-provider"
 import { CajaView } from "@/components/dashboard/caja-view"
 import { TurnosView } from "@/components/dashboard/turnos-view"
+import { PresupuestosView } from "@/components/dashboard/presupuestos-view"
 
 export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState("Vehículos")
@@ -36,21 +37,11 @@ export default function DashboardPage() {
       case "Turnos":
         return <TurnosView />
       case "Presupuestos":
-        return (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-muted-foreground">Sección de Presupuestos - Próximamente</p>
-          </div>
-        )
+        return <PresupuestosView />
       case "Stock/Repuestos":
         return (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="text-muted-foreground">Sección de Stock/Repuestos - Próximamente</p>
-          </div>
-        )
-      case "Turnos":
-        return (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-muted-foreground">Sección de Turnos - Próximamente</p>
           </div>
         )
       default:
