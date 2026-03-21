@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  DollarSign,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { label: "Presupuestos", icon: FileText, href: "#" },
   { label: "Stock/Repuestos", icon: Package, href: "#" },
   { label: "Turnos", icon: Calendar, href: "#" },
+  { label: "Caja", icon: DollarSign, href: "#" },
 ]
 
 interface DashboardSidebarProps {

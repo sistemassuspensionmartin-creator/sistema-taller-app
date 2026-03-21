@@ -10,6 +10,7 @@ import { VehiclesView } from "@/components/dashboard/vehicles-view"
 import { MetricsCards } from "@/components/dashboard/metrics-cards"
 import { WorkOrdersTable } from "@/components/dashboard/work-orders-table"
 import { ThemeProvider } from "@/components/theme-provider"
+import { CajaView } from "@/components/dashboard/caja-view"
 
 export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState("Vehículos")
@@ -29,6 +30,8 @@ export default function DashboardPage() {
         return <VehiclesView />
       case "Taller":
         return <WorkOrdersTable />
+      case "caja":               
+        return <CajaView />
       case "Presupuestos":
         return (
           <div className="flex flex-col items-center justify-center py-20 text-center">
