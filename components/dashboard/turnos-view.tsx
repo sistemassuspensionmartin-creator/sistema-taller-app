@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -49,57 +49,51 @@ const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
 }
 
 const AUTOS_REGISTRADOS = [
-  { 
-    patente: "AB 123 CD", modelo: "Toyota Corolla", dueño: "Juan Martínez", telefono: "+54 11 4567-8901",
-    presupuestos: [{ id: "PR-001", detalle: "Cambio de pastillas y discos", monto: 85000 }]
-  },
-  { 
-    patente: "AC 456 EF", modelo: "Ford Ranger", dueño: "Esteban Q.", telefono: "+54 11 1111-2222",
-    presupuestos: [{ id: "PR-045", detalle: "Service 50.000km", monto: 120000 }]
-  },
-  { 
-    patente: "AD 789 GH", modelo: "VW Golf", dueño: "María G.", telefono: "+54 11 3333-4444",
-    presupuestos: []
-  },
+  { patente: "AB 123 CD", modelo: "Toyota Corolla", dueño: "Juan Martínez", telefono: "+54 11 4567-8901", presupuestos: [{ id: "PR-001", detalle: "Cambio de pastillas y discos", monto: 85000 }] },
+  { patente: "AC 456 EF", modelo: "Ford Ranger", dueño: "Esteban Q.", telefono: "+54 11 1111-2222", presupuestos: [{ id: "PR-045", detalle: "Service 50.000km", monto: 120000 }] },
+  { patente: "AD 789 GH", modelo: "VW Golf", dueño: "María G.", telefono: "+54 11 3333-4444", presupuestos: [] },
 ]
 
 export function TurnosView() {
   const [fechaActual, setFechaActual] = useState(new Date())
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  
+  // Modales
+  const [isModalOpen, setIsModalOpen] = useState(false) // Nuevo Turno
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false) // Detalle
+  
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<any>(null)
+  const [isReprogramming, setIsReprogramming] = useState(false)
+  const [reprogramData, setReprogramData] = useState({ fecha: "", hora: "" })
   
   const [diasNoLaborables, setDiasNoLaborables] = useState<string[]>([])
-
   const [tipoRegistro, setTipoRegistro] = useState("registrado")
   const [busquedaPatente, setBusquedaPatente] = useState("")
   const [autoEncontrado, setAutoEncontrado] = useState<any>(null)
 
   const [formData, setFormData] = useState({
-    fecha: "",
-    hora: "",
-    servicio: "",
-    patente: "",
-    marcaModelo: "",
-    nombreDueño: "",
-    telefono: "",
-    observaciones: "",
-    presupuestoAsociado: ""
+    fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: ""
   })
 
-  // Turnos simulados (ahora con teléfono)
+  const hoyString = new Date().toISOString().split("T")[0]
   const [turnos, setTurnos] = useState([
-    { id: 1, fecha: new Date().toISOString().split("T")[0], hora: "08:30", cliente: "Juan Martínez", telefono: "+54 11 4567-8901", auto: "Toyota Corolla", patente: "AB 123 CD", servicio: "Frenos", observaciones: "Hace ruido al frenar de golpe", presupuestoAsociado: "PR-001" },
-    { id: 2, fecha: new Date().toISOString().split("T")[0], hora: "08:30", cliente: "Ana Rod.", telefono: "+54 11 9999-8888", auto: "Peugeot 208", patente: "XX 999 YY", servicio: "Tren delantero", observaciones: "Revisar precaps", presupuestoAsociado: "" },
-    { id: 3, fecha: new Date().toISOString().split("T")[0], hora: "10:30", cliente: "María G.", telefono: "+54 11 3333-4444", auto: "VW Golf", patente: "AD 789 GH", servicio: "Alineado + Balanceado", observaciones: "Vibra a 120km/h", presupuestoAsociado: "" },
+    { id: 1, fecha: hoyString, hora: "08:30", cliente: "Juan Martínez", telefono: "+54 11 4567-8901", auto: "Toyota Corolla", patente: "AB 123 CD", servicio: "Frenos", observaciones: "Hace ruido al frenar de golpe", presupuestoAsociado: "PR-001", estado: "pendiente" },
+    { id: 2, fecha: hoyString, hora: "08:30", cliente: "Ana Rod.", telefono: "+54 11 9999-8888", auto: "Peugeot 208", patente: "XX 999 YY", servicio: "Tren delantero", observaciones: "Revisar precaps", presupuestoAsociado: "", estado: "asistio" },
+    { id: 3, fecha: hoyString, hora: "10:30", cliente: "María G.", telefono: "+54 11 3333-4444", auto: "VW Golf", patente: "AD 789 GH", servicio: "Alineado + Balanceado", observaciones: "Vibra a 120km/h", presupuestoAsociado: "", estado: "cancelado" },
   ])
+
+  // --- LOGICA DE FECHAS Y BLOQUEOS ---
+  const fechaHoyReal = new Date()
+  fechaHoyReal.setHours(0, 0, 0, 0)
+  
+  const limitePasado = new Date(fechaHoyReal)
+  limitePasado.setDate(limitePasado.getDate() - 14)
+  const isPrevDisabled = fechaActual <= limitePasado
 
   const obtenerFechasSemana = (fechaBase: Date) => {
     const fechas = []
     const diaSemana = fechaBase.getDay()
     const diff = fechaBase.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1) 
     const lunes = new Date(fechaBase.setDate(diff))
-    
     for (let i = 0; i < 5; i++) {
       const fecha = new Date(lunes)
       fecha.setDate(lunes.getDate() + i)
@@ -111,6 +105,7 @@ export function TurnosView() {
   const fechasSemana = obtenerFechasSemana(new Date(fechaActual))
 
   const prevWeek = () => {
+    if (isPrevDisabled) return
     const newDate = new Date(fechaActual)
     newDate.setDate(newDate.getDate() - 7)
     setFechaActual(newDate)
@@ -122,59 +117,48 @@ export function TurnosView() {
     setFechaActual(newDate)
   }
 
-  const toggleDiaNoLaborable = (fechaString: string) => {
-    if (diasNoLaborables.includes(fechaString)) {
-      setDiasNoLaborables(diasNoLaborables.filter(d => d !== fechaString))
+  const toggleDiaNoLaborable = (fechaStr: string) => {
+    if (diasNoLaborables.includes(fechaStr)) {
+      setDiasNoLaborables(diasNoLaborables.filter(d => d !== fechaStr))
     } else {
-      setDiasNoLaborables([...diasNoLaborables, fechaString])
+      setDiasNoLaborables([...diasNoLaborables, fechaStr])
     }
   }
 
+  // --- LOGICA DE FORMULARIOS Y ESTADOS ---
   const buscarAuto = () => {
     const auto = AUTOS_REGISTRADOS.find(a => a.patente.toLowerCase() === busquedaPatente.toLowerCase())
     if (auto) {
       setAutoEncontrado(auto)
-      setFormData({
-        ...formData,
-        patente: auto.patente,
-        marcaModelo: auto.modelo,
-        nombreDueño: auto.dueño,
-        telefono: auto.telefono,
-        presupuestoAsociado: ""
-      })
+      setFormData({ ...formData, patente: auto.patente, marcaModelo: auto.modelo, nombreDueño: auto.dueño, telefono: auto.telefono, presupuestoAsociado: "" })
     } else {
       alert("Patente no encontrada en el sistema.")
       setAutoEncontrado(null)
     }
   }
 
-  // EL PATOVICA DE LAS FECHAS
-  const handleFechaSeleccionada = (e: any) => {
+  const handleFechaSeleccionada = (e: any, isReprogrammingContext = false) => {
     const selectedDateStr = e.target.value
-    if (!selectedDateStr) {
-      setFormData({ ...formData, fecha: "" })
-      return
-    }
+    if (!selectedDateStr) return
 
-    // Dividimos la fecha para armarla sin problemas de zona horaria
     const [year, month, day] = selectedDateStr.split('-')
     const date = new Date(Number(year), Number(month) - 1, Number(day))
     const dayOfWeek = date.getDay()
 
-    // 0 = Domingo, 6 = Sábado
     if (dayOfWeek === 0 || dayOfWeek === 6) {
-      alert("⚠️ Nuestro taller atiende de Lunes a Viernes. Por favor seleccione un día hábil.")
-      setFormData({ ...formData, fecha: "" })
+      alert("⚠️ El taller atiende de Lunes a Viernes. Seleccione un día hábil.")
       return
     }
-
     if (diasNoLaborables.includes(selectedDateStr)) {
       alert("⚠️ Ese día ha sido marcado como No Laborable en la agenda.")
-      setFormData({ ...formData, fecha: "" })
       return
     }
 
-    setFormData({ ...formData, fecha: selectedDateStr })
+    if (isReprogrammingContext) {
+      setReprogramData({ ...reprogramData, fecha: selectedDateStr })
+    } else {
+      setFormData({ ...formData, fecha: selectedDateStr })
+    }
   }
 
   const handleGuardarTurno = () => {
@@ -182,18 +166,9 @@ export function TurnosView() {
       alert("Faltan completar campos obligatorios.")
       return
     }
-
     const nuevoTurno = {
       id: Math.random(),
-      fecha: formData.fecha,
-      hora: formData.hora,
-      servicio: formData.servicio,
-      cliente: formData.nombreDueño,
-      telefono: formData.telefono,
-      auto: formData.marcaModelo,
-      patente: formData.patente,
-      observaciones: formData.observaciones,
-      presupuestoAsociado: formData.presupuestoAsociado === "ninguno" ? "" : formData.presupuestoAsociado
+      fecha: formData.fecha, hora: formData.hora, servicio: formData.servicio, cliente: formData.nombreDueño, telefono: formData.telefono, auto: formData.marcaModelo, patente: formData.patente, observaciones: formData.observaciones, presupuestoAsociado: formData.presupuestoAsociado === "ninguno" ? "" : formData.presupuestoAsociado, estado: "pendiente"
     }
     setTurnos([...turnos, nuevoTurno])
     setIsModalOpen(false)
@@ -204,7 +179,31 @@ export function TurnosView() {
 
   const abrirDetalleTurno = (turno: any) => {
     setTurnoSeleccionado(turno)
+    setIsReprogramming(false)
+    setReprogramData({ fecha: turno.fecha, hora: turno.hora })
     setIsDetailModalOpen(true)
+  }
+
+  const cambiarEstadoTurno = (id: number, nuevoEstado: string) => {
+    setTurnos(turnos.map(t => t.id === id ? { ...t, estado: nuevoEstado } : t))
+    setIsDetailModalOpen(false)
+  }
+
+  const guardarReprogramacion = () => {
+    if (!reprogramData.fecha || !reprogramData.hora) {
+      alert("Debe seleccionar una fecha y hora válidas.")
+      return
+    }
+    setTurnos(turnos.map(t => t.id === turnoSeleccionado.id ? { ...t, fecha: reprogramData.fecha, hora: reprogramData.hora, estado: "pendiente" } : t))
+    setIsReprogramming(false)
+    setIsDetailModalOpen(false)
+    alert("Turno reprogramado con éxito.")
+  }
+
+  const getTurnoStyle = (estado: string) => {
+    if (estado === "asistio") return "bg-green-100 border-green-500/50 dark:bg-green-900/20 opacity-90"
+    if (estado === "cancelado") return "bg-red-50 border-red-500/30 dark:bg-red-900/10 opacity-50 grayscale"
+    return "bg-card border-border hover:border-primary/50" 
   }
 
   return (
@@ -218,7 +217,7 @@ export function TurnosView() {
         
         <div className="flex items-center gap-4">
           <div className="flex items-center bg-secondary rounded-md border border-border p-1">
-            <Button variant="ghost" size="icon" onClick={prevWeek} className="h-8 w-8 hover:bg-background">
+            <Button variant="ghost" size="icon" onClick={prevWeek} disabled={isPrevDisabled} className="h-8 w-8 hover:bg-background disabled:opacity-30">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div className="flex items-center px-4 text-sm font-medium text-foreground min-w-[140px] justify-center">
@@ -238,65 +237,79 @@ export function TurnosView() {
       </div>
 
       {/* Calendario Semanal */}
-      <Card className="border-border bg-card flex-1 flex flex-col min-h-0">
+      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Cabecera de Días con COLORES */}
         <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0">
           <div className="p-3 text-center border-r border-border flex items-center justify-center">
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
           {fechasSemana.map(fecha => {
             const fechaString = fecha.toISOString().split("T")[0]
+            const esHoy = fechaString === hoyString
+            const esPasado = fechaString < hoyString
             const esNoLaborable = diasNoLaborables.includes(fechaString)
+            
+            let headerBg = "bg-transparent"
+            if (esNoLaborable) headerBg = "bg-destructive/10"
+            else if (esHoy) headerBg = "bg-blue-100 dark:bg-blue-900/30"
+            else if (esPasado) headerBg = "bg-slate-100 dark:bg-slate-800/40"
+
             return (
-              <div key={fechaString} className={`p-2 text-center border-r border-border last:border-0 flex flex-col items-center relative transition-colors ${esNoLaborable ? 'bg-destructive/10' : ''}`}>
-                <span className="text-xs font-semibold text-muted-foreground uppercase">{DIAS_SEMANA[fecha.getDay() - 1]}</span>
-                <span className={`font-bold text-2xl ${esNoLaborable ? 'text-destructive/50' : 'text-card-foreground'}`}>{fecha.getDate()}</span>
+              <div key={fechaString} className={`p-2 text-center border-r border-border last:border-0 flex flex-col items-center relative transition-colors ${headerBg}`}>
+                <span className={`text-xs font-semibold uppercase ${esHoy ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}`}>{DIAS_SEMANA[fecha.getDay() - 1]}</span>
+                <span className={`font-bold text-2xl ${esNoLaborable ? 'text-destructive/50' : esHoy ? 'text-blue-700 dark:text-blue-300' : 'text-card-foreground'}`}>{fecha.getDate()}</span>
                 
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className={`absolute top-1 right-1 h-6 w-6 rounded-full ${esNoLaborable ? 'text-destructive hover:bg-destructive/20' : 'text-muted-foreground hover:bg-secondary'}`}
-                  title={esNoLaborable ? "Habilitar Día" : "Marcar como No Laborable"}
-                  onClick={() => toggleDiaNoLaborable(fechaString)}
-                >
-                  <Ban className="h-3 w-3" />
-                </Button>
+                {!esPasado && (
+                  <Button 
+                    variant="ghost" size="icon" 
+                    className={`absolute top-1 right-1 h-6 w-6 rounded-full ${esNoLaborable ? 'text-destructive hover:bg-destructive/20' : 'text-muted-foreground hover:bg-secondary/50'}`}
+                    title={esNoLaborable ? "Habilitar Día" : "Marcar como No Laborable"}
+                    onClick={() => toggleDiaNoLaborable(fechaString)}
+                  >
+                    <Ban className="h-3 w-3" />
+                  </Button>
+                )}
               </div>
             )
           })}
         </div>
 
+        {/* Celdas del Calendario */}
         <div className="flex-1 overflow-y-auto min-h-0 bg-background/50">
           <div className="min-w-full">
             {HORARIOS.map(hora => (
-              <div key={hora} className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0 hover:bg-secondary/10 transition-colors">
+              <div key={hora} className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0">
                 <div className="p-2 text-center border-r border-border text-xs font-bold text-muted-foreground bg-secondary/20 flex items-start justify-center pt-3">
                   {hora}
                 </div>
                 {fechasSemana.map(fecha => {
                   const fechaString = fecha.toISOString().split("T")[0]
                   const turnosEnCelda = turnos.filter(t => t.fecha === fechaString && t.hora === hora)
+                  const esHoy = fechaString === hoyString
+                  const esPasado = fechaString < hoyString
                   const esNoLaborable = diasNoLaborables.includes(fechaString)
                   
+                  let cellBg = "hover:bg-secondary/10"
+                  if (esNoLaborable) cellBg = "bg-destructive/5 cursor-not-allowed"
+                  else if (esHoy) cellBg = "bg-blue-50/40 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/20"
+                  else if (esPasado) cellBg = "bg-slate-50/50 dark:bg-slate-900/20"
+
                   return (
-                    <div 
-                      key={`${fechaString}-${hora}`} 
-                      className={`p-1 border-r border-border last:border-0 min-h-[90px] flex flex-col gap-1 transition-colors ${esNoLaborable ? 'bg-destructive/5 cursor-not-allowed' : ''}`}
-                    >
+                    <div key={`${fechaString}-${hora}`} className={`p-1 border-r border-border last:border-0 min-h-[90px] flex flex-col gap-1 transition-colors ${cellBg}`}>
                       {!esNoLaborable && turnosEnCelda.map(turno => (
                         <div 
                           key={turno.id} 
                           onClick={() => abrirDetalleTurno(turno)}
-                          className="group relative flex flex-col rounded border border-border bg-card p-1.5 text-xs shadow-sm hover:border-primary/50 transition-colors cursor-pointer overflow-hidden"
+                          className={`group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden ${getTurnoStyle(turno.estado)}`}
                         >
-                          <div className="font-bold text-foreground truncate">{turno.patente}</div>
+                          <div className="font-bold truncate">{turno.patente}</div>
                           <div className="text-muted-foreground truncate text-[10px] mb-1">{turno.auto}</div>
                           <div className="flex items-center gap-1">
                             <Badge variant="outline" className={`text-[9px] px-1 py-0 font-bold border ${SERVICE_UI[turno.servicio]?.color || "bg-secondary text-foreground"}`}>
                               {SERVICE_UI[turno.servicio]?.sigla || "SRV"}
                             </Badge>
-                            {turno.presupuestoAsociado && (
-                              <FileText className="h-3 w-3 text-primary" title="Presupuesto Asociado" />
-                            )}
+                            {turno.presupuestoAsociado && <FileText className="h-3 w-3 text-primary" />}
+                            {turno.estado === "asistio" && <CheckCircle2 className="h-3 w-3 text-green-600 ml-auto" />}
                           </div>
                         </div>
                       ))}
@@ -309,7 +322,119 @@ export function TurnosView() {
         </div>
       </Card>
 
-      {/* Modal de Nuevo Turno */}
+      {/* --- MODAL DETALLE DE TURNO --- */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-card-foreground flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5 text-primary" />
+              {isReprogramming ? "Reprogramar Turno" : "Detalle del Turno"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {turnoSeleccionado && (
+            <div className="space-y-4 py-2">
+              <div className="pb-4 border-b border-border">
+                {isReprogramming ? (
+                  <div className="grid grid-cols-2 gap-4 bg-secondary/30 p-3 rounded-md border border-border">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nueva Fecha</Label>
+                      <Input type="date" className="h-8 text-sm" value={reprogramData.fecha} onChange={(e) => handleFechaSeleccionada(e, true)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nueva Hora</Label>
+                      <Select value={reprogramData.hora} onValueChange={(val: string) => setReprogramData({...reprogramData, hora: val})}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent className="max-h-[200px]">{HORARIOS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-2xl font-bold text-foreground flex items-center gap-2">
+                        {turnoSeleccionado.hora}
+                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Ingresó</Badge>}
+                        {turnoSeleccionado.estado === "cancelado" && <Badge variant="destructive">Cancelado</Badge>}
+                      </div>
+                      <div className="text-sm text-muted-foreground">{turnoSeleccionado.fecha}</div>
+                    </div>
+                    <Badge className={`text-xs px-2 py-1 border ${SERVICE_UI[turnoSeleccionado.servicio]?.color || "bg-secondary"}`}>
+                      {turnoSeleccionado.servicio}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-y-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground mb-1">Vehículo</p>
+                  <p className="font-semibold text-foreground flex items-center gap-2"><Car className="w-4 h-4 text-primary" /> {turnoSeleccionado.auto}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-1">Patente</p>
+                  <p className="font-mono bg-secondary px-2 py-0.5 rounded text-foreground inline-block">{turnoSeleccionado.patente}</p>
+                </div>
+                <div className="col-span-2 flex justify-between items-center bg-secondary/20 p-2 rounded-md border border-border">
+                  <div>
+                    <p className="text-muted-foreground mb-1 text-xs uppercase">Cliente</p>
+                    <p className="font-medium text-foreground flex items-center gap-2 mb-1"><User className="w-4 h-4 text-primary" /> {turnoSeleccionado.cliente}</p>
+                    <p className="text-muted-foreground flex items-center gap-2"><Phone className="w-4 h-4" /> {turnoSeleccionado.telefono || "No registrado"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {turnoSeleccionado.presupuestoAsociado && (
+                <button className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors">
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium"><FileText className="w-4 h-4" /> Presupuesto</div>
+                  <div className="flex items-center gap-2"><span className="font-mono text-xs text-primary font-bold">{turnoSeleccionado.presupuestoAsociado}</span><ExternalLink className="w-4 h-4 text-primary opacity-50" /></div>
+                </button>
+              )}
+
+              {turnoSeleccionado.observaciones && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Observaciones</p>
+                  <p className="text-sm text-foreground bg-secondary/30 p-3 rounded-md italic">"{turnoSeleccionado.observaciones}"</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 mt-4 border-t border-border pt-4">
+            {isReprogramming ? (
+              <>
+                <Button variant="ghost" onClick={() => setIsReprogramming(false)} className="w-full sm:w-auto">Cancelar</Button>
+                <Button onClick={guardarReprogramacion} className="bg-primary text-primary-foreground w-full sm:w-auto">Confirmar Cambios</Button>
+              </>
+            ) : (
+              <div className="flex flex-col w-full gap-2">
+                {turnoSeleccionado?.estado !== "cancelado" && (
+                  <div className="grid grid-cols-2 gap-2 w-full">
+                    {turnoSeleccionado?.estado !== "asistio" && (
+                      <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "asistio")} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
+                        <CheckCircle2 className="w-4 h-4 mr-2" /> Ya Ingresó
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={() => setIsReprogramming(true)} className="border-border text-foreground hover:bg-secondary">
+                      <CalendarClock className="w-4 h-4 mr-2" /> Reprogramar
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-2 mt-2">
+                  <Button variant="ghost" onClick={() => setIsDetailModalOpen(false)} className="flex-1 text-muted-foreground">Cerrar Detalle</Button>
+                  {turnoSeleccionado?.estado !== "cancelado" && (
+                    <Button variant="ghost" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "cancelado")} className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20">
+                      <XCircle className="w-4 h-4 mr-2" /> Cancelar Turno
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL DE NUEVO TURNO --- */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -323,7 +448,6 @@ export function TurnosView() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="text-card-foreground">Fecha</Label>
-                {/* ACÁ APLICAMOS EL PATOVICA */}
                 <Input type="date" className="bg-secondary border-border" 
                   value={formData.fecha} onChange={handleFechaSeleccionada} />
               </div>
@@ -443,7 +567,7 @@ export function TurnosView() {
             <div className="space-y-2">
               <Label className="text-card-foreground">Observaciones del Turno</Label>
               <Textarea 
-                placeholder="Ej: El cliente dice que vibra el volante a los 100km/h. Dejar las llaves al guardia." 
+                placeholder="Ej: El cliente dice que vibra el volante a los 100km/h." 
                 className="bg-secondary border-border resize-none min-h-[80px]"
                 value={formData.observaciones}
                 onChange={(e: any) => setFormData({...formData, observaciones: e.target.value})}
@@ -457,98 +581,6 @@ export function TurnosView() {
             </Button>
             <Button onClick={handleGuardarTurno} className="bg-primary text-primary-foreground hover:bg-primary/90">
               Agendar Turno
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal de Detalle de Turno */}
-      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
-        <DialogContent className="max-w-md border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-card-foreground flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5 text-primary" />
-              Detalle del Turno
-            </DialogTitle>
-          </DialogHeader>
-
-          {turnoSeleccionado && (
-            <div className="space-y-4 py-4">
-              <div className="flex justify-between items-center pb-4 border-b border-border">
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{turnoSeleccionado.hora}</div>
-                  <div className="text-sm text-muted-foreground">{turnoSeleccionado.fecha}</div>
-                </div>
-                <Badge className={`text-xs px-2 py-1 border ${SERVICE_UI[turnoSeleccionado.servicio]?.color || "bg-secondary text-foreground"}`}>
-                  {turnoSeleccionado.servicio}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 gap-y-4 text-sm">
-                <div>
-                  <p className="text-muted-foreground mb-1">Vehículo</p>
-                  <p className="font-semibold text-foreground flex items-center gap-2">
-                    <Car className="w-4 h-4 text-primary" /> {turnoSeleccionado.auto}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground mb-1">Patente</p>
-                  <p className="font-mono bg-secondary px-2 py-0.5 rounded text-foreground inline-block">
-                    {turnoSeleccionado.patente}
-                  </p>
-                </div>
-                <div className="col-span-2 flex justify-between items-center bg-secondary/20 p-2 rounded-md border border-border">
-                  <div>
-                    <p className="text-muted-foreground mb-1 text-xs uppercase">Cliente</p>
-                    <p className="font-medium text-foreground flex items-center gap-2 mb-1">
-                      <User className="w-4 h-4 text-primary" /> {turnoSeleccionado.cliente}
-                    </p>
-                    <p className="text-muted-foreground flex items-center gap-2">
-                      <Phone className="w-4 h-4" /> {turnoSeleccionado.telefono || "No registrado"}
-                    </p>
-                  </div>
-                  {/* BOTÓN PARA VER FICHA (Simulado) */}
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="border-primary/50 text-primary hover:bg-primary/10"
-                    onClick={() => alert(`Próximamente: Redirigiendo a la ficha completa de ${turnoSeleccionado.cliente}`)}
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    Ver Ficha
-                  </Button>
-                </div>
-              </div>
-
-              {turnoSeleccionado.presupuestoAsociado && (
-                <button 
-                  onClick={() => alert(`Próximamente: Abriendo el detalle del presupuesto ${turnoSeleccionado.presupuestoAsociado}`)}
-                  className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors cursor-pointer group"
-                >
-                  <div className="flex items-center gap-2 text-sm text-primary font-medium">
-                    <FileText className="w-4 h-4" /> Presupuesto Asociado
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-primary font-bold">{turnoSeleccionado.presupuestoAsociado}</span>
-                    <ExternalLink className="w-4 h-4 text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
-                  </div>
-                </button>
-              )}
-
-              {turnoSeleccionado.observaciones && (
-                <div className="mt-4 pt-4 border-t border-border">
-                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Observaciones</p>
-                  <p className="text-sm text-foreground bg-secondary/30 p-3 rounded-md italic">
-                    "{turnoSeleccionado.observaciones}"
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsDetailModalOpen(false)} className="text-muted-foreground hover:bg-secondary w-full">
-              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
