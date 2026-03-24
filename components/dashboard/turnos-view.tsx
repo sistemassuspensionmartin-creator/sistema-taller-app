@@ -74,7 +74,10 @@ export function TurnosView() {
     fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: ""
   })
 
+  // Obtener fecha de hoy como string para comparaciones
   const hoyString = new Date().toISOString().split("T")[0]
+
+  // Turnos simulados (Agregamos el campo "estado")
   const [turnos, setTurnos] = useState([
     { id: 1, fecha: hoyString, hora: "08:30", cliente: "Juan Martínez", telefono: "+54 11 4567-8901", auto: "Toyota Corolla", patente: "AB 123 CD", servicio: "Frenos", observaciones: "Hace ruido al frenar de golpe", presupuestoAsociado: "PR-001", estado: "pendiente" },
     { id: 2, fecha: hoyString, hora: "08:30", cliente: "Ana Rod.", telefono: "+54 11 9999-8888", auto: "Peugeot 208", patente: "XX 999 YY", servicio: "Tren delantero", observaciones: "Revisar precaps", presupuestoAsociado: "", estado: "asistio" },
@@ -133,7 +136,7 @@ export function TurnosView() {
       setFormData({ ...formData, patente: auto.patente, marcaModelo: auto.modelo, nombreDueño: auto.dueño, telefono: auto.telefono, presupuestoAsociado: "" })
     } else {
       alert("Patente no encontrada en el sistema.")
-      setAutoEncontrado(null)
+      autoEncontrado(null)
     }
   }
 
@@ -148,7 +151,7 @@ export function TurnosView() {
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       alert("⚠️ El taller atiende de Lunes a Viernes. Seleccione un día hábil.")
       return
-    } 
+    }
     if (diasNoLaborables.includes(selectedDateStr)) {
       alert("⚠️ Ese día ha sido marcado como No Laborable en la agenda.")
       return
@@ -166,6 +169,17 @@ export function TurnosView() {
       alert("Faltan completar campos obligatorios.")
       return
     }
+
+    // Validación de fecha para no permitir días pasados
+    const selectedDate = new Date(formData.fecha + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      alert("❌ No se pueden agendar turnos para fechas pasadas.");
+      return;
+    }
+
     const nuevoTurno = {
       id: Math.random(),
       fecha: formData.fecha, hora: formData.hora, servicio: formData.servicio, cliente: formData.nombreDueño, telefono: formData.telefono, auto: formData.marcaModelo, patente: formData.patente, observaciones: formData.observaciones, presupuestoAsociado: formData.presupuestoAsociado === "ninguno" ? "" : formData.presupuestoAsociado, estado: "pendiente"
@@ -173,7 +187,7 @@ export function TurnosView() {
     setTurnos([...turnos, nuevoTurno])
     setIsModalOpen(false)
     setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: "" })
-    setAutoEncontrado(null)
+    autoEncontrado(null)
     setBusquedaPatente("")
   }
 
@@ -200,10 +214,15 @@ export function TurnosView() {
     alert("Turno reprogramado con éxito.")
   }
 
-  const getTurnoStyle = (estado: string) => {
-    if (estado === "asistio") return "bg-green-100 border-green-500/50 dark:bg-green-900/20 opacity-90"
-    if (estado === "cancelado") return "bg-red-50 border-red-500/30 dark:bg-red-900/10 opacity-50 grayscale"
-    return "bg-card border-border hover:border-primary/50" 
+  // --- RENDERIZADO VISUAL DEL TURNO CON ESTILOS PARA DÍAS PASADOS ---
+  const getTurnoStyle = (estado: string, esPasado: boolean) => {
+    let baseStyle = "group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden";
+    if (esPasado) {
+      return `${baseStyle} bg-slate-100 border-slate-300 dark:bg-slate-800/20 opacity-60 grayscale`;
+    }
+    if (estado === "asistio") return `${baseStyle} bg-green-100 border-green-500/50 dark:bg-green-900/20 opacity-90`;
+    if (estado === "cancelado") return `${baseStyle} bg-red-50 border-red-500/30 dark:bg-red-900/10 opacity-50 grayscale`;
+    return `${baseStyle} bg-card border-border hover:border-primary/50`; // Pendiente (Normal)
   }
 
   return (
@@ -238,8 +257,8 @@ export function TurnosView() {
 
       {/* Calendario Semanal */}
       <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Cabecera de Días con COLORES */}
-        <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0">
+        {/* Cabecera de Días con COLORES Y ESTILOS DE DÍA PASADO */}
+        <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0 relative">
           <div className="p-3 text-center border-r border-border flex items-center justify-center">
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
@@ -249,15 +268,18 @@ export function TurnosView() {
             const esPasado = fechaString < hoyString
             const esNoLaborable = diasNoLaborables.includes(fechaString)
             
+            // Colores de la cabecera
             let headerBg = "bg-transparent"
+            let esHoyStyle = esHoy ? "text-blue-700 dark:text-blue-300" : "text-muted-foreground"
+            let esPasadoStyle = esPasado ? "grayscale opacity-60" : ""
+
             if (esNoLaborable) headerBg = "bg-destructive/10"
-            else if (esHoy) headerBg = "bg-blue-100 dark:bg-blue-900/30"
-            else if (esPasado) headerBg = "bg-slate-100 dark:bg-slate-800/40"
+            // Se eliminaron los fondos de cabecera que interferían con el griseado completo del día pasado
 
             return (
-              <div key={fechaString} className={`p-2 text-center border-r border-border last:border-0 flex flex-col items-center relative transition-colors ${headerBg}`}>
-                <span className={`text-xs font-semibold uppercase ${esHoy ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}`}>{DIAS_SEMANA[fecha.getDay() - 1]}</span>
-                <span className={`font-bold text-2xl ${esNoLaborable ? 'text-destructive/50' : esHoy ? 'text-blue-700 dark:text-blue-300' : 'text-card-foreground'}`}>{fecha.getDate()}</span>
+              <div key={fechaString} className={`p-2 text-center border-r border-border last:border-0 flex flex-col items-center relative transition-colors ${headerBg} ${esPasadoStyle}`}>
+                <span className={`text-xs font-semibold uppercase ${esHoyStyle}`}>{DIAS_SEMANA[fecha.getDay() - 1]}</span>
+                <span className={`font-bold text-2xl ${esNoLaborable ? 'text-destructive/50' : esHoy ? esHoyStyle : 'text-card-foreground'}`}>{fecha.getDate()}</span>
                 
                 {!esPasado && (
                   <Button 
@@ -276,7 +298,7 @@ export function TurnosView() {
 
         {/* Celdas del Calendario */}
         <div className="flex-1 overflow-y-auto min-h-0 bg-background/50">
-          <div className="min-w-full">
+          <div className="min-w-full relative">
             {HORARIOS.map(hora => (
               <div key={hora} className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0">
                 <div className="p-2 text-center border-r border-border text-xs font-bold text-muted-foreground bg-secondary/20 flex items-start justify-center pt-3">
@@ -289,18 +311,19 @@ export function TurnosView() {
                   const esPasado = fechaString < hoyString
                   const esNoLaborable = diasNoLaborables.includes(fechaString)
                   
+                  // Fondo de celda con color para día actual (atrás de los turnos)
                   let cellBg = "hover:bg-secondary/10"
-                  if (esNoLaborable) cellBg = "bg-destructive/5 cursor-not-allowed"
-                  else if (esHoy) cellBg = "bg-blue-50/40 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/20"
-                  else if (esPasado) cellBg = "bg-slate-50/50 dark:bg-slate-900/20"
+                  let esPasadoStyle = esPasado ? "bg-slate-100 dark:bg-slate-900/40 grayscale opacity-60" : ""
+                  if (esHoy) cellBg = "bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                  else if (esNoLaborable) cellBg = "bg-destructive/5 cursor-not-allowed"
 
                   return (
-                    <div key={`${fechaString}-${hora}`} className={`p-1 border-r border-border last:border-0 min-h-[90px] flex flex-col gap-1 transition-colors ${cellBg}`}>
+                    <div key={`${fechaString}-${hora}`} className={`p-1 border-r border-border last:border-0 min-h-[90px] flex flex-col gap-1 transition-colors ${cellBg} ${esPasadoStyle}`}>
                       {!esNoLaborable && turnosEnCelda.map(turno => (
                         <div 
                           key={turno.id} 
                           onClick={() => abrirDetalleTurno(turno)}
-                          className={`group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden ${getTurnoStyle(turno.estado)}`}
+                          className={getTurnoStyle(turno.estado, esPasado)}
                         >
                           <div className="font-bold truncate">{turno.patente}</div>
                           <div className="text-muted-foreground truncate text-[10px] mb-1">{turno.auto}</div>
@@ -408,26 +431,25 @@ export function TurnosView() {
               </>
             ) : (
               <div className="flex flex-col w-full gap-2">
-                {turnoSeleccionado?.estado !== "cancelado" && (
-                  <div className="grid grid-cols-2 gap-2 w-full">
-                    {turnoSeleccionado?.estado !== "asistio" && (
-                      <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "asistio")} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
-                        <CheckCircle2 className="w-4 h-4 mr-2" /> Ya Ingresó
-                      </Button>
+                {/* Acomodar botones en la misma línea: Ingreso (Verde), Reprogramar, Cancelar (Rojo) */}
+                <div className="grid grid-cols-3 gap-2 w-full">
+                    {turnoSeleccionado?.estado !== "cancelado" && turnoSeleccionado?.estado !== "asistio" && (
+                        <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "asistio")} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
+                            <CheckCircle2 className="w-4 h-4 mr-2" /> Ingresó
+                        </Button>
                     )}
-                    <Button variant="outline" onClick={() => setIsReprogramming(true)} className="border-border text-foreground hover:bg-secondary">
-                      <CalendarClock className="w-4 h-4 mr-2" /> Reprogramar
-                    </Button>
-                  </div>
-                )}
-                <div className="flex gap-2 mt-2">
-                  <Button variant="ghost" onClick={() => setIsDetailModalOpen(false)} className="flex-1 text-muted-foreground">Cerrar Detalle</Button>
-                  {turnoSeleccionado?.estado !== "cancelado" && (
-                    <Button variant="ghost" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "cancelado")} className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20">
-                      <XCircle className="w-4 h-4 mr-2" /> Cancelar Turno
-                    </Button>
-                  )}
+                    {turnoSeleccionado?.estado !== "cancelado" && (
+                        <Button variant="outline" onClick={() => setIsReprogramming(true)} className="border-border text-foreground hover:bg-secondary">
+                            <CalendarClock className="w-4 h-4 mr-2" /> Reprogramar
+                        </Button>
+                    )}
+                    {turnoSeleccionado?.estado !== "cancelado" && (
+                        <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "cancelado")} className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                            <XCircle className="w-4 h-4 mr-2" /> Cancelar
+                        </Button>
+                    )}
                 </div>
+                {/* Se eliminó el botón "Cerrar Detalle" */}
               </div>
             )}
           </DialogFooter>
