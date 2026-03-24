@@ -208,6 +208,18 @@ export function TurnosView() {
       alert("Debe seleccionar una fecha y hora válidas.")
       return
     }
+
+    // --- NUEVA VALIDACIÓN: No reprogramar al pasado ---
+    const selectedDate = new Date(reprogramData.fecha + "T00:00:00");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      alert("❌ No se puede reprogramar un turno para una fecha pasada.");
+      return;
+    }
+    // --------------------------------------------------
+
     setTurnos(turnos.map(t => t.id === turnoSeleccionado.id ? { ...t, fecha: reprogramData.fecha, hora: reprogramData.hora, estado: "pendiente" } : t))
     setIsReprogramming(false)
     setIsDetailModalOpen(false)
