@@ -148,7 +148,7 @@ export function TurnosView() {
     if (dayOfWeek === 0 || dayOfWeek === 6) {
       alert("⚠️ El taller atiende de Lunes a Viernes. Seleccione un día hábil.")
       return
-    }
+    } 
     if (diasNoLaborables.includes(selectedDateStr)) {
       alert("⚠️ Ese día ha sido marcado como No Laborable en la agenda.")
       return
