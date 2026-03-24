@@ -1,21 +1,21 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Plus, Search, FileText, Printer, MessageCircle, Trash2, ArrowLeft, Save, Car, User } from "lucide-react"
+import { useState } from "react"
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
@@ -23,397 +23,568 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-// --- DATOS SIMULADOS ---
+const HORARIOS = [
+  "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00",
+  "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30"
+]
+
+const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+
+const SERVICIOS = [
+  "Revisión", "Tren delantero", "Frenos", "Alineado", 
+  "Balanceado", "Alineado + Balanceado", "Cambio de Aceite", "Cubiertas"
+]
+
+const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
+  "Revisión": { sigla: "REV", color: "bg-slate-500/10 text-slate-500 border-slate-500/20" },
+  "Tren delantero": { sigla: "TD", color: "bg-orange-500/10 text-orange-500 border-orange-500/20" },
+  "Frenos": { sigla: "FRE", color: "bg-red-500/10 text-red-500 border-red-500/20" },
+  "Alineado": { sigla: "ALI", color: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
+  "Balanceado": { sigla: "BAL", color: "bg-purple-500/10 text-purple-500 border-purple-500/20" },
+  "Alineado + Balanceado": { sigla: "A+B", color: "bg-fuchsia-500/10 text-fuchsia-500 border-fuchsia-500/20" },
+  "Cambio de Aceite": { sigla: "ACE", color: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+  "Cubiertas": { sigla: "CUB", color: "bg-stone-500/10 text-stone-500 border-stone-500/20" },
+}
+
 const AUTOS_REGISTRADOS = [
-  { patente: "AB 123 CD", modelo: "Toyota Corolla", dueño: "Juan Martínez", telefono: "5491145678901" },
-  { patente: "AC 456 EF", modelo: "Ford Ranger", dueño: "Esteban Q.", telefono: "5491111112222" },
+  { patente: "AB 123 CD", modelo: "Toyota Corolla", dueño: "Juan Martínez", telefono: "+54 11 4567-8901", presupuestos: [{ id: "PR-001", detalle: "Cambio de pastillas y discos", monto: 85000 }] },
+  { patente: "AC 456 EF", modelo: "Ford Ranger", dueño: "Esteban Q.", telefono: "+54 11 1111-2222", presupuestos: [{ id: "PR-045", detalle: "Service 50.000km", monto: 120000 }] },
+  { patente: "AD 789 GH", modelo: "VW Golf", dueño: "María G.", telefono: "+54 11 3333-4444", presupuestos: [] },
 ]
 
-const PRESUPUESTOS_HISTORICOS = [
-  { id: "PR-001", fecha: "2024-04-10", patente: "AB 123 CD", cliente: "Juan Martínez", total: 85000, estado: "Aprobado" },
-  { id: "PR-002", fecha: "2024-04-12", patente: "AC 456 EF", cliente: "Esteban Q.", total: 120000, estado: "Borrador" },
-]
-
-export function PresupuestosView() {
-  // Manejo de pantallas: 'lista' muestra la tabla, 'crear' muestra el formulario
-  const [vistaActual, setVistaActual] = useState<"lista" | "crear">("lista")
-
-  // --- ESTADOS DEL FORMULARIO ---
+export function TurnosView() {
+  const [fechaActual, setFechaActual] = useState(new Date())
+  
+  // Modales
+  const [isModalOpen, setIsModalOpen] = useState(false) // Nuevo Turno
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false) // Detalle
+  
+  const [turnoSeleccionado, setTurnoSeleccionado] = useState<any>(null)
+  const [isReprogramming, setIsReprogramming] = useState(false)
+  const [reprogramData, setReprogramData] = useState({ fecha: "", hora: "" })
+  
+  const [diasNoLaborables, setDiasNoLaborables] = useState<string[]>([])
+  const [tipoRegistro, setTipoRegistro] = useState("registrado")
   const [busquedaPatente, setBusquedaPatente] = useState("")
-  const [datosCabecera, setDatosCabecera] = useState({
-    numero: "PR-003", // Esto en el futuro se genera solo en la BD
-    fecha: new Date().toISOString().split("T")[0],
-    validez: "15",
-    estado: "Borrador",
-    patente: "",
-    auto: "",
-    cliente: "",
-    telefono: "",
-    observacionesPublicas: "Los repuestos pueden sufrir variaciones de precio sin previo aviso. Validez sujeta a stock.",
-    notasInternas: ""
+  const [autoEncontrado, setAutoEncontrado] = useState<any>(null)
+
+  const [formData, setFormData] = useState({
+    fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: ""
   })
 
-  // Filas de repuestos / mano de obra
-  const [items, setItems] = useState([
-    { id: 1, tipo: "Repuesto", detalle: "", cantidad: 1, precioUnitario: 0 }
+  const hoyString = new Date().toISOString().split("T")[0]
+  const [turnos, setTurnos] = useState([
+    { id: 1, fecha: hoyString, hora: "08:30", cliente: "Juan Martínez", telefono: "+54 11 4567-8901", auto: "Toyota Corolla", patente: "AB 123 CD", servicio: "Frenos", observaciones: "Hace ruido al frenar de golpe", presupuestoAsociado: "PR-001", estado: "pendiente" },
+    { id: 2, fecha: hoyString, hora: "08:30", cliente: "Ana Rod.", telefono: "+54 11 9999-8888", auto: "Peugeot 208", patente: "XX 999 YY", servicio: "Tren delantero", observaciones: "Revisar precaps", presupuestoAsociado: "", estado: "asistio" },
+    { id: 3, fecha: hoyString, hora: "10:30", cliente: "María G.", telefono: "+54 11 3333-4444", auto: "VW Golf", patente: "AD 789 GH", servicio: "Alineado + Balanceado", observaciones: "Vibra a 120km/h", presupuestoAsociado: "", estado: "cancelado" },
   ])
 
-  const [descuento, setDescuento] = useState(0)
+  // --- LOGICA DE FECHAS Y BLOQUEOS ---
+  const fechaHoyReal = new Date()
+  fechaHoyReal.setHours(0, 0, 0, 0)
+  
+  const limitePasado = new Date(fechaHoyReal)
+  limitePasado.setDate(limitePasado.getDate() - 14)
+  const isPrevDisabled = fechaActual <= limitePasado
 
-  // --- FUNCIONES MATEMÁTICAS ---
-  const subtotal = items.reduce((acc, item) => acc + (item.cantidad * item.precioUnitario), 0)
-  const totalFinal = subtotal - descuento
+  const obtenerFechasSemana = (fechaBase: Date) => {
+    const fechas = []
+    const diaSemana = fechaBase.getDay()
+    const diff = fechaBase.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1) 
+    const lunes = new Date(fechaBase.setDate(diff))
+    for (let i = 0; i < 5; i++) {
+      const fecha = new Date(lunes)
+      fecha.setDate(lunes.getDate() + i)
+      fechas.push(fecha)
+    }
+    return fechas
+  }
 
-  // --- FUNCIONES DE LA VISTA ---
+  const fechasSemana = obtenerFechasSemana(new Date(fechaActual))
+
+  const prevWeek = () => {
+    if (isPrevDisabled) return
+    const newDate = new Date(fechaActual)
+    newDate.setDate(newDate.getDate() - 7)
+    setFechaActual(newDate)
+  }
+
+  const nextWeek = () => {
+    const newDate = new Date(fechaActual)
+    newDate.setDate(newDate.getDate() + 7)
+    setFechaActual(newDate)
+  }
+
+  const toggleDiaNoLaborable = (fechaStr: string) => {
+    if (diasNoLaborables.includes(fechaStr)) {
+      setDiasNoLaborables(diasNoLaborables.filter(d => d !== fechaStr))
+    } else {
+      setDiasNoLaborables([...diasNoLaborables, fechaStr])
+    }
+  }
+
+  // --- LOGICA DE FORMULARIOS Y ESTADOS ---
   const buscarAuto = () => {
     const auto = AUTOS_REGISTRADOS.find(a => a.patente.toLowerCase() === busquedaPatente.toLowerCase())
     if (auto) {
-      setDatosCabecera({
-        ...datosCabecera,
-        patente: auto.patente,
-        auto: auto.modelo,
-        cliente: auto.dueño,
-        telefono: auto.telefono
-      })
+      setAutoEncontrado(auto)
+      setFormData({ ...formData, patente: auto.patente, marcaModelo: auto.modelo, nombreDueño: auto.dueño, telefono: auto.telefono, presupuestoAsociado: "" })
     } else {
-      alert("Patente no encontrada. Podés cargar los datos a mano.")
+      alert("Patente no encontrada en el sistema.")
+      setAutoEncontrado(null)
     }
   }
 
-  const agregarFila = () => {
-    setItems([...items, { id: Math.random(), tipo: "Repuesto", detalle: "", cantidad: 1, precioUnitario: 0 }])
-  }
+  const handleFechaSeleccionada = (e: any, isReprogrammingContext = false) => {
+    const selectedDateStr = e.target.value
+    if (!selectedDateStr) return
 
-  const eliminarFila = (id: number) => {
-    if (items.length === 1) return // No dejamos que borre la última fila
-    setItems(items.filter(item => item.id !== id))
-  }
+    const [year, month, day] = selectedDateStr.split('-')
+    const date = new Date(Number(year), Number(month) - 1, Number(day))
+    const dayOfWeek = date.getDay()
 
-  const actualizarFila = (id: number, campo: string, valor: string | number) => {
-    setItems(items.map(item => item.id === id ? { ...item, [campo]: valor } : item))
-  }
-
-  // --- ACCIONES MÁGICAS ---
-  const handleImprimir = () => {
-    // Al tocar imprimir, el navegador nativo abre la ventana y permite "Guardar como PDF"
-    window.print()
-  }
-
-  const handleWhatsApp = () => {
-    if (!datosCabecera.telefono) {
-      alert("Falta el teléfono del cliente para enviar el WhatsApp.")
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      alert("⚠️ El taller atiende de Lunes a Viernes. Seleccione un día hábil.")
+      return
+    }
+    if (diasNoLaborables.includes(selectedDateStr)) {
+      alert("⚠️ Ese día ha sido marcado como No Laborable en la agenda.")
       return
     }
 
-    const textoBase = `Hola ${datosCabecera.cliente}! 👋\nTe escribo del taller. Te preparé el presupuesto detallado para tu ${datosCabecera.auto} (${datosCabecera.patente}).\n\nEl total estimado es de *$${totalFinal.toLocaleString()}*.\n\nTe adjunto el PDF con todo el detalle de repuestos y mano de obra. Avisame cualquier duda y coordinamos el turno! 🚗🔧`
-    
-    const url = `https://wa.me/${datosCabecera.telefono}?text=${encodeURIComponent(textoBase)}`
-    
-    alert("TIP: Se va a abrir WhatsApp Web. Acordate de usar el botón de 'Imprimir / PDF' para guardar el archivo y arrastrarlo al chat.")
-    window.open(url, '_blank')
+    if (isReprogrammingContext) {
+      setReprogramData({ ...reprogramData, fecha: selectedDateStr })
+    } else {
+      setFormData({ ...formData, fecha: selectedDateStr })
+    }
   }
 
-  // --- RENDER DE VISTAS ---
-  if (vistaActual === "crear") {
-    return (
-      <div className="space-y-6 pb-12">
-        {/* Barra de herramientas superior */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-secondary/30 p-4 rounded-lg border border-border">
-          <Button variant="ghost" onClick={() => setVistaActual("lista")} className="text-muted-foreground hover:bg-secondary">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Volver a la lista
-          </Button>
-          
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className="bg-background mr-2 text-sm">{datosCabecera.numero}</Badge>
-            <Button variant="outline" onClick={handleImprimir} className="border-border hover:bg-secondary text-foreground">
-              <Printer className="mr-2 h-4 w-4" /> Imprimir / PDF
+  const handleGuardarTurno = () => {
+    if (!formData.fecha || !formData.hora || !formData.servicio || !formData.patente) {
+      alert("Faltan completar campos obligatorios.")
+      return
+    }
+    const nuevoTurno = {
+      id: Math.random(),
+      fecha: formData.fecha, hora: formData.hora, servicio: formData.servicio, cliente: formData.nombreDueño, telefono: formData.telefono, auto: formData.marcaModelo, patente: formData.patente, observaciones: formData.observaciones, presupuestoAsociado: formData.presupuestoAsociado === "ninguno" ? "" : formData.presupuestoAsociado, estado: "pendiente"
+    }
+    setTurnos([...turnos, nuevoTurno])
+    setIsModalOpen(false)
+    setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: "" })
+    setAutoEncontrado(null)
+    setBusquedaPatente("")
+  }
+
+  const abrirDetalleTurno = (turno: any) => {
+    setTurnoSeleccionado(turno)
+    setIsReprogramming(false)
+    setReprogramData({ fecha: turno.fecha, hora: turno.hora })
+    setIsDetailModalOpen(true)
+  }
+
+  const cambiarEstadoTurno = (id: number, nuevoEstado: string) => {
+    setTurnos(turnos.map(t => t.id === id ? { ...t, estado: nuevoEstado } : t))
+    setIsDetailModalOpen(false)
+  }
+
+  const guardarReprogramacion = () => {
+    if (!reprogramData.fecha || !reprogramData.hora) {
+      alert("Debe seleccionar una fecha y hora válidas.")
+      return
+    }
+    setTurnos(turnos.map(t => t.id === turnoSeleccionado.id ? { ...t, fecha: reprogramData.fecha, hora: reprogramData.hora, estado: "pendiente" } : t))
+    setIsReprogramming(false)
+    setIsDetailModalOpen(false)
+    alert("Turno reprogramado con éxito.")
+  }
+
+  const getTurnoStyle = (estado: string) => {
+    if (estado === "asistio") return "bg-green-100 border-green-500/50 dark:bg-green-900/20 opacity-90"
+    if (estado === "cancelado") return "bg-red-50 border-red-500/30 dark:bg-red-900/10 opacity-50 grayscale"
+    return "bg-card border-border hover:border-primary/50" 
+  }
+
+  return (
+    <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 pb-4">
+      {/* Header y Controles */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
+        <div>
+          <h2 className="text-2xl font-semibold text-foreground">Agenda de Turnos</h2>
+          <p className="text-sm text-muted-foreground">Gestión semanal (Lunes a Viernes)</p>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center bg-secondary rounded-md border border-border p-1">
+            <Button variant="ghost" size="icon" onClick={prevWeek} disabled={isPrevDisabled} className="h-8 w-8 hover:bg-background disabled:opacity-30">
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button onClick={handleWhatsApp} className="bg-green-600 text-white hover:bg-green-700">
-              <MessageCircle className="mr-2 h-4 w-4" /> Enviar por WhatsApp
-            </Button>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Save className="mr-2 h-4 w-4" /> Guardar
+            <div className="flex items-center px-4 text-sm font-medium text-foreground min-w-[140px] justify-center">
+              <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+              {fechaActual.toLocaleDateString("es-AR", { month: "long" }).toUpperCase()}
+            </div>
+            <Button variant="ghost" size="icon" onClick={nextWeek} className="h-8 w-8 hover:bg-background">
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
+
+          <Button onClick={() => setIsModalOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo Turno
+          </Button>
+        </div>
+      </div>
+
+      {/* Calendario Semanal */}
+      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Cabecera de Días con COLORES */}
+        <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0">
+          <div className="p-3 text-center border-r border-border flex items-center justify-center">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </div>
+          {fechasSemana.map(fecha => {
+            const fechaString = fecha.toISOString().split("T")[0]
+            const esHoy = fechaString === hoyString
+            const esPasado = fechaString < hoyString
+            const esNoLaborable = diasNoLaborables.includes(fechaString)
+            
+            let headerBg = "bg-transparent"
+            if (esNoLaborable) headerBg = "bg-destructive/10"
+            else if (esHoy) headerBg = "bg-blue-100 dark:bg-blue-900/30"
+            else if (esPasado) headerBg = "bg-slate-100 dark:bg-slate-800/40"
+
+            return (
+              <div key={fechaString} className={`p-2 text-center border-r border-border last:border-0 flex flex-col items-center relative transition-colors ${headerBg}`}>
+                <span className={`text-xs font-semibold uppercase ${esHoy ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}`}>{DIAS_SEMANA[fecha.getDay() - 1]}</span>
+                <span className={`font-bold text-2xl ${esNoLaborable ? 'text-destructive/50' : esHoy ? 'text-blue-700 dark:text-blue-300' : 'text-card-foreground'}`}>{fecha.getDate()}</span>
+                
+                {!esPasado && (
+                  <Button 
+                    variant="ghost" size="icon" 
+                    className={`absolute top-1 right-1 h-6 w-6 rounded-full ${esNoLaborable ? 'text-destructive hover:bg-destructive/20' : 'text-muted-foreground hover:bg-secondary/50'}`}
+                    title={esNoLaborable ? "Habilitar Día" : "Marcar como No Laborable"}
+                    onClick={() => toggleDiaNoLaborable(fechaString)}
+                  >
+                    <Ban className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            )
+          })}
         </div>
 
-        {/* BLOQUE 1: CABECERA Y CLIENTE */}
-        <Card className="border-border bg-card">
-          <CardHeader className="border-b border-border bg-secondary/10 pb-4">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-lg text-card-foreground flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" /> Datos del Presupuesto
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Label className="text-muted-foreground text-xs">Estado:</Label>
-                <Select value={datosCabecera.estado} onValueChange={(val: string) => setDatosCabecera({...datosCabecera, estado: val})}>
-                  <SelectTrigger className="w-[140px] h-8 bg-background border-border">
-                    <SelectValue />
+        {/* Celdas del Calendario */}
+        <div className="flex-1 overflow-y-auto min-h-0 bg-background/50">
+          <div className="min-w-full">
+            {HORARIOS.map(hora => (
+              <div key={hora} className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0">
+                <div className="p-2 text-center border-r border-border text-xs font-bold text-muted-foreground bg-secondary/20 flex items-start justify-center pt-3">
+                  {hora}
+                </div>
+                {fechasSemana.map(fecha => {
+                  const fechaString = fecha.toISOString().split("T")[0]
+                  const turnosEnCelda = turnos.filter(t => t.fecha === fechaString && t.hora === hora)
+                  const esHoy = fechaString === hoyString
+                  const esPasado = fechaString < hoyString
+                  const esNoLaborable = diasNoLaborables.includes(fechaString)
+                  
+                  let cellBg = "hover:bg-secondary/10"
+                  if (esNoLaborable) cellBg = "bg-destructive/5 cursor-not-allowed"
+                  else if (esHoy) cellBg = "bg-blue-50/40 dark:bg-blue-900/10 hover:bg-blue-100 dark:hover:bg-blue-900/20"
+                  else if (esPasado) cellBg = "bg-slate-50/50 dark:bg-slate-900/20"
+
+                  return (
+                    <div key={`${fechaString}-${hora}`} className={`p-1 border-r border-border last:border-0 min-h-[90px] flex flex-col gap-1 transition-colors ${cellBg}`}>
+                      {!esNoLaborable && turnosEnCelda.map(turno => (
+                        <div 
+                          key={turno.id} 
+                          onClick={() => abrirDetalleTurno(turno)}
+                          className={`group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden ${getTurnoStyle(turno.estado)}`}
+                        >
+                          <div className="font-bold truncate">{turno.patente}</div>
+                          <div className="text-muted-foreground truncate text-[10px] mb-1">{turno.auto}</div>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className={`text-[9px] px-1 py-0 font-bold border ${SERVICE_UI[turno.servicio]?.color || "bg-secondary text-foreground"}`}>
+                              {SERVICE_UI[turno.servicio]?.sigla || "SRV"}
+                            </Badge>
+                            {turno.presupuestoAsociado && <FileText className="h-3 w-3 text-primary" />}
+                            {turno.estado === "asistio" && <CheckCircle2 className="h-3 w-3 text-green-600 ml-auto" />}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* --- MODAL DETALLE DE TURNO --- */}
+      <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-card-foreground flex items-center gap-2">
+              <CalendarIcon className="w-5 h-5 text-primary" />
+              {isReprogramming ? "Reprogramar Turno" : "Detalle del Turno"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {turnoSeleccionado && (
+            <div className="space-y-4 py-2">
+              <div className="pb-4 border-b border-border">
+                {isReprogramming ? (
+                  <div className="grid grid-cols-2 gap-4 bg-secondary/30 p-3 rounded-md border border-border">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nueva Fecha</Label>
+                      <Input type="date" className="h-8 text-sm" value={reprogramData.fecha} onChange={(e) => handleFechaSeleccionada(e, true)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Nueva Hora</Label>
+                      <Select value={reprogramData.hora} onValueChange={(val: string) => setReprogramData({...reprogramData, hora: val})}>
+                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent className="max-h-[200px]">{HORARIOS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="text-2xl font-bold text-foreground flex items-center gap-2">
+                        {turnoSeleccionado.hora}
+                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Ingresó</Badge>}
+                        {turnoSeleccionado.estado === "cancelado" && <Badge variant="destructive">Cancelado</Badge>}
+                      </div>
+                      <div className="text-sm text-muted-foreground">{turnoSeleccionado.fecha}</div>
+                    </div>
+                    <Badge className={`text-xs px-2 py-1 border ${SERVICE_UI[turnoSeleccionado.servicio]?.color || "bg-secondary"}`}>
+                      {turnoSeleccionado.servicio}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-y-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground mb-1">Vehículo</p>
+                  <p className="font-semibold text-foreground flex items-center gap-2"><Car className="w-4 h-4 text-primary" /> {turnoSeleccionado.auto}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground mb-1">Patente</p>
+                  <p className="font-mono bg-secondary px-2 py-0.5 rounded text-foreground inline-block">{turnoSeleccionado.patente}</p>
+                </div>
+                <div className="col-span-2 flex justify-between items-center bg-secondary/20 p-2 rounded-md border border-border">
+                  <div>
+                    <p className="text-muted-foreground mb-1 text-xs uppercase">Cliente</p>
+                    <p className="font-medium text-foreground flex items-center gap-2 mb-1"><User className="w-4 h-4 text-primary" /> {turnoSeleccionado.cliente}</p>
+                    <p className="text-muted-foreground flex items-center gap-2"><Phone className="w-4 h-4" /> {turnoSeleccionado.telefono || "No registrado"}</p>
+                  </div>
+                </div>
+              </div>
+
+              {turnoSeleccionado.presupuestoAsociado && (
+                <button className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors">
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium"><FileText className="w-4 h-4" /> Presupuesto</div>
+                  <div className="flex items-center gap-2"><span className="font-mono text-xs text-primary font-bold">{turnoSeleccionado.presupuestoAsociado}</span><ExternalLink className="w-4 h-4 text-primary opacity-50" /></div>
+                </button>
+              )}
+
+              {turnoSeleccionado.observaciones && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Observaciones</p>
+                  <p className="text-sm text-foreground bg-secondary/30 p-3 rounded-md italic">"{turnoSeleccionado.observaciones}"</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 mt-4 border-t border-border pt-4">
+            {isReprogramming ? (
+              <>
+                <Button variant="ghost" onClick={() => setIsReprogramming(false)} className="w-full sm:w-auto">Cancelar</Button>
+                <Button onClick={guardarReprogramacion} className="bg-primary text-primary-foreground w-full sm:w-auto">Confirmar Cambios</Button>
+              </>
+            ) : (
+              <div className="flex flex-col w-full gap-2">
+                {turnoSeleccionado?.estado !== "cancelado" && (
+                  <div className="grid grid-cols-2 gap-2 w-full">
+                    {turnoSeleccionado?.estado !== "asistio" && (
+                      <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "asistio")} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
+                        <CheckCircle2 className="w-4 h-4 mr-2" /> Ya Ingresó
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={() => setIsReprogramming(true)} className="border-border text-foreground hover:bg-secondary">
+                      <CalendarClock className="w-4 h-4 mr-2" /> Reprogramar
+                    </Button>
+                  </div>
+                )}
+                <div className="flex gap-2 mt-2">
+                  <Button variant="ghost" onClick={() => setIsDetailModalOpen(false)} className="flex-1 text-muted-foreground">Cerrar Detalle</Button>
+                  {turnoSeleccionado?.estado !== "cancelado" && (
+                    <Button variant="ghost" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "cancelado")} className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20">
+                      <XCircle className="w-4 h-4 mr-2" /> Cancelar Turno
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL DE NUEVO TURNO --- */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-card-foreground">Agendar Nuevo Turno</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Complete los datos para registrar la cita.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-card-foreground">Fecha</Label>
+                <Input type="date" className="bg-secondary border-border" 
+                  value={formData.fecha} onChange={handleFechaSeleccionada} />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-card-foreground">Hora</Label>
+                <Select value={formData.hora} onValueChange={(val: string) => setFormData({...formData, hora: val})}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-popover max-h-[200px]">
+                    {HORARIOS.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-card-foreground">Servicio</Label>
+                <Select value={formData.servicio} onValueChange={(val: string) => setFormData({...formData, servicio: val})}>
+                  <SelectTrigger className="bg-secondary border-border">
+                    <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent className="border-border bg-popover">
-                    <SelectItem value="Borrador">Borrador</SelectItem>
-                    <SelectItem value="Enviado">Enviado</SelectItem>
-                    <SelectItem value="Aprobado">Aprobado</SelectItem>
-                    <SelectItem value="Rechazado">Rechazado</SelectItem>
+                    {SERVICIOS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="p-6 grid gap-6 sm:grid-cols-2">
-            <div className="space-y-4">
-              <div className="flex gap-2 items-end">
-                <div className="space-y-2 flex-1">
-                  <Label className="text-card-foreground">Buscar Patente</Label>
-                  <Input 
-                    placeholder="Ej: AB 123 CD" 
-                    className="bg-secondary border-border uppercase" 
-                    value={busquedaPatente}
-                    onChange={(e: any) => setBusquedaPatente(e.target.value)}
-                    onKeyDown={(e: any) => e.key === 'Enter' && buscarAuto()}
-                  />
-                </div>
-                <Button onClick={buscarAuto} className="bg-secondary text-foreground hover:bg-secondary/80 border border-border">
-                  <Search className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-card-foreground">Vehículo</Label>
-                  <div className="relative">
-                    <Car className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-9 bg-background border-border" value={datosCabecera.auto} onChange={(e: any) => setDatosCabecera({...datosCabecera, auto: e.target.value})} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-card-foreground">Cliente</Label>
-                  <div className="relative">
-                    <User className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-9 bg-background border-border" value={datosCabecera.cliente} onChange={(e: any) => setDatosCabecera({...datosCabecera, cliente: e.target.value})} />
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-card-foreground">Fecha de Emisión</Label>
-                  <Input type="date" className="bg-background border-border" value={datosCabecera.fecha} onChange={(e: any) => setDatosCabecera({...datosCabecera, fecha: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-card-foreground">Validez (Días)</Label>
-                  <Input type="number" className="bg-background border-border" value={datosCabecera.validez} onChange={(e: any) => setDatosCabecera({...datosCabecera, validez: e.target.value})} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-card-foreground">Teléfono de Contacto (Para WhatsApp)</Label>
-                <Input placeholder="Ej: 5491145678901" className="bg-background border-border" value={datosCabecera.telefono} onChange={(e: any) => setDatosCabecera({...datosCabecera, telefono: e.target.value})} />
-                <p className="text-[10px] text-muted-foreground">Formato internacional sin el "+" (Ej: 549...)</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* BLOQUE 2: LA GRILLA (Items) */}
-        <Card className="border-border bg-card">
-          <CardHeader className="border-b border-border bg-secondary/10 pb-4">
-            <CardTitle className="text-lg text-card-foreground">Detalle de Repuestos y Mano de Obra</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border bg-secondary/20 hover:bg-secondary/20">
-                  <TableHead className="w-[150px]">Tipo</TableHead>
-                  <TableHead>Detalle / Descripción</TableHead>
-                  <TableHead className="w-[100px] text-center">Cant.</TableHead>
-                  <TableHead className="w-[150px] text-right">Precio Unit.</TableHead>
-                  <TableHead className="w-[150px] text-right">Subtotal</TableHead>
-                  <TableHead className="w-[60px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id} className="border-border hover:bg-transparent">
-                    <TableCell>
-                      <Select value={item.tipo} onValueChange={(val: string) => actualizarFila(item.id, "tipo", val)}>
-                        <SelectTrigger className="bg-background border-border h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="border-border bg-popover">
-                          <SelectItem value="Repuesto">Repuesto/Insumo</SelectItem>
-                          <SelectItem value="Mano de Obra">Mano de Obra</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        placeholder={item.tipo === "Repuesto" ? "Ej: Filtro de Aceite" : "Ej: Servicio de Alineado"} 
-                        className="bg-background border-border h-9"
-                        value={item.detalle}
-                        onChange={(e: any) => actualizarFila(item.id, "detalle", e.target.value)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        type="number" min="1" step="0.5"
-                        className="bg-background border-border h-9 text-center"
-                        value={item.cantidad || ""}
-                        onChange={(e: any) => actualizarFila(item.id, "cantidad", parseFloat(e.target.value) || 0)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2 text-muted-foreground">$</span>
+            <div className="border border-border rounded-lg p-1 bg-secondary/30">
+              <Tabs defaultValue="registrado" onValueChange={setTipoRegistro}>
+                <TabsList className="w-full grid grid-cols-2 bg-transparent">
+                  <TabsTrigger value="registrado" className="data-[state=active]:bg-background">
+                    <Search className="w-4 h-4 mr-2" /> Buscar Registrado
+                  </TabsTrigger>
+                  <TabsTrigger value="manual" className="data-[state=active]:bg-background">
+                    <User className="w-4 h-4 mr-2" /> Ingreso Manual
+                  </TabsTrigger>
+                </TabsList>
+                
+                <div className="p-4 mt-2 bg-background rounded-md border border-border">
+                  <TabsContent value="registrado" className="m-0 space-y-4">
+                    <div className="flex gap-2 items-end">
+                      <div className="space-y-2 flex-1">
+                        <Label className="text-card-foreground">Patente del Vehículo</Label>
                         <Input 
-                          type="number" min="0" 
-                          className="bg-background border-border h-9 pl-6 text-right"
-                          value={item.precioUnitario || ""}
-                          onChange={(e: any) => actualizarFila(item.id, "precioUnitario", parseFloat(e.target.value) || 0)}
+                          placeholder="Ej: AB 123 CD" 
+                          className="bg-secondary border-border uppercase" 
+                          value={busquedaPatente} 
+                          onChange={(e: any) => setBusquedaPatente(e.target.value)}
+                          onKeyDown={(e: any) => e.key === 'Enter' && buscarAuto()}
                         />
                       </div>
-                    </TableCell>
-                    <TableCell className="text-right font-medium text-foreground">
-                      ${(item.cantidad * item.precioUnitario).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => eliminarFila(item.id)} className="h-8 w-8 text-destructive hover:bg-destructive/10">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <div className="p-4 border-t border-border">
-              <Button variant="outline" onClick={agregarFila} className="border-dashed border-border text-foreground w-full sm:w-auto hover:bg-secondary">
-                <Plus className="mr-2 h-4 w-4" /> Agregar Fila
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                      <Button onClick={buscarAuto} className="bg-primary text-primary-foreground">Buscar</Button>
+                    </div>
 
-        {/* BLOQUE 3: TOTALES Y OBSERVACIONES */}
-        <div className="grid sm:grid-cols-2 gap-6">
-          {/* Textos */}
-          <div className="space-y-4">
-            <Card className="border-border bg-card">
-              <CardContent className="p-4 space-y-2">
-                <Label className="text-card-foreground">Observaciones para el Cliente (Sale en el PDF)</Label>
-                <Textarea 
-                  className="bg-background border-border min-h-[80px] text-sm" 
-                  value={datosCabecera.observacionesPublicas}
-                  onChange={(e: any) => setDatosCabecera({...datosCabecera, observacionesPublicas: e.target.value})}
-                />
-              </CardContent>
-            </Card>
-            <Card className="border-border bg-card border-dashed">
-              <CardContent className="p-4 space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-2">
-                  Notas Internas <Badge variant="secondary" className="text-[10px]">Oculto</Badge>
-                </Label>
-                <Textarea 
-                  placeholder="Ej: Repuesto consultado en casa de frenos a $45.000..."
-                  className="bg-secondary/30 border-border min-h-[80px] text-sm" 
-                  value={datosCabecera.notasInternas}
-                  onChange={(e: any) => setDatosCabecera({...datosCabecera, notasInternas: e.target.value})}
-                />
-              </CardContent>
-            </Card>
+                    {autoEncontrado && (
+                      <div className="p-3 bg-secondary/50 rounded-md border border-border space-y-3">
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div><span className="text-muted-foreground">Vehículo:</span> <span className="font-semibold text-foreground">{autoEncontrado.modelo}</span></div>
+                          <div><span className="text-muted-foreground">Dueño:</span> <span className="font-semibold text-foreground">{autoEncontrado.dueño}</span></div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Teléfono:</span> <span className="text-foreground">{autoEncontrado.telefono}</span></div>
+                        </div>
+                        
+                        {autoEncontrado.presupuestos.length > 0 ? (
+                          <div className="space-y-2 pt-2 border-t border-border">
+                            <Label className="text-primary font-bold flex items-center gap-2">
+                              <FileText className="w-4 h-4" /> Presupuestos Pendientes
+                            </Label>
+                            <Select value={formData.presupuestoAsociado} onValueChange={(val: string) => setFormData({...formData, presupuestoAsociado: val})}>
+                              <SelectTrigger className="bg-background border-primary/50 text-foreground">
+                                <SelectValue placeholder="Asociar un presupuesto (Opcional)" />
+                              </SelectTrigger>
+                              <SelectContent className="border-border bg-popover">
+                                <SelectItem value="ninguno">No asociar ninguno</SelectItem>
+                                {autoEncontrado.presupuestos.map((p: any) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.id} - {p.detalle} (${p.monto.toLocaleString()})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground pt-2 border-t border-border">No registra presupuestos pendientes.</div>
+                        )}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="manual" className="m-0 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-card-foreground">Patente</Label>
+                        <Input placeholder="Ej: AA 123 BB" className="bg-secondary border-border uppercase" 
+                          value={formData.patente} onChange={(e: any) => setFormData({...formData, patente: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-card-foreground">Marca y Modelo</Label>
+                        <Input placeholder="Ej: VW Gol Trend" className="bg-secondary border-border" 
+                          value={formData.marcaModelo} onChange={(e: any) => setFormData({...formData, marcaModelo: e.target.value})}/>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-card-foreground">Nombre del Dueño</Label>
+                        <Input placeholder="Ej: Carlos López" className="bg-secondary border-border" 
+                          value={formData.nombreDueño} onChange={(e: any) => setFormData({...formData, nombreDueño: e.target.value})}/>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-card-foreground">Teléfono</Label>
+                        <Input placeholder="Ej: +54 11..." className="bg-secondary border-border" 
+                          value={formData.telefono} onChange={(e: any) => setFormData({...formData, telefono: e.target.value})}/>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </div>
+              </Tabs>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-card-foreground">Observaciones del Turno</Label>
+              <Textarea 
+                placeholder="Ej: El cliente dice que vibra el volante a los 100km/h." 
+                className="bg-secondary border-border resize-none min-h-[80px]"
+                value={formData.observaciones}
+                onChange={(e: any) => setFormData({...formData, observaciones: e.target.value})}
+              />
+            </div>
           </div>
 
-          {/* Matemáticas finales */}
-          <Card className="border-border bg-card h-fit">
-            <CardContent className="p-6 space-y-4">
-              <div className="flex justify-between items-center text-sm text-muted-foreground">
-                <span>Subtotal Neto:</span>
-                <span className="font-medium text-foreground">${subtotal.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm text-muted-foreground">
-                <span className="flex items-center gap-2">
-                  Descuento / Atención:
-                </span>
-                <div className="relative w-[120px]">
-                  <span className="absolute left-3 top-2 text-muted-foreground">-$</span>
-                  <Input 
-                    type="number" min="0" 
-                    className="bg-background border-border h-9 pl-8 text-right text-destructive"
-                    value={descuento || ""}
-                    onChange={(e: any) => setDescuento(parseFloat(e.target.value) || 0)}
-                  />
-                </div>
-              </div>
-              <div className="border-t border-border pt-4 flex justify-between items-center">
-                <span className="text-lg font-bold text-card-foreground">Total Final:</span>
-                <span className="text-3xl font-bold text-primary">${totalFinal.toLocaleString()}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  // --- VISTA LISTA PRINCIPAL ---
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">Presupuestos</h2>
-          <p className="text-sm text-muted-foreground">Gestioná cotizaciones para tus clientes</p>
-        </div>
-        <Button onClick={() => setVistaActual("crear")} className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto
-        </Button>
-      </div>
-
-      <Card className="border-border bg-card">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border">
-                <TableHead>Número</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Cliente / Patente</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {PRESUPUESTOS_HISTORICOS.map((p) => (
-                <TableRow key={p.id} className="border-border hover:bg-secondary/50 cursor-pointer" onClick={() => setVistaActual("crear")}>
-                  <TableCell className="font-medium text-card-foreground">{p.id}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.fecha}</TableCell>
-                  <TableCell>
-                    <div className="font-medium text-foreground">{p.cliente}</div>
-                    <div className="text-xs text-muted-foreground">{p.patente}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className={`
-                      ${p.estado === 'Aprobado' ? 'border-green-500/50 text-green-500' : ''}
-                      ${p.estado === 'Borrador' ? 'border-slate-500/50 text-slate-500' : ''}
-                    `}>
-                      {p.estado}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-foreground">
-                    ${p.total.toLocaleString()}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {PRESUPUESTOS_HISTORICOS.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
-                    No hay presupuestos creados todavía.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:bg-secondary">
+              Cancelar
+            </Button>
+            <Button onClick={handleGuardarTurno} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              Agendar Turno
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
