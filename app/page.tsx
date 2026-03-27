@@ -40,11 +40,7 @@ export default function DashboardPage() {
       case "Presupuestos":
         return <PresupuestosView />
       case "Stock/Repuestos":
-        return (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <p className="text-muted-foreground">Sección de Stock/Repuestos - Próximamente</p>
-          </div>
-        )
+        return <CatalogoView />
       default:
         return <ClientsView onNavigateToVehicles={() => setActiveSection("Vehículos")} />
     }
