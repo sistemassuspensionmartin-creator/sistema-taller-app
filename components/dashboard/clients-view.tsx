@@ -1,10 +1,20 @@
 "use client"
 
-import { useState } from "react"
-import { Search, Plus, Phone, Mail, MapPin, FileText, Car, MoreHorizontal, History, Calendar, Pencil, Trash2 } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Plus, Search, User, Phone, Mail, Edit, Trash2, Loader2, Save, Building2, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import {
   Table,
   TableBody,
@@ -14,867 +24,321 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import { Separator } from "@/components/ui/separator"
-import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
-type Vehiculo = {
-  id: number
-  marca: string
-  modelo: string
-  anio: number
-  patente: string
-  color: string
-}
+import { supabase } from "@/lib/supabase"
 
-type Client = {
-  id: number
-  nombre: string
-  apellido: string
-  telefono: string
-  email: string
-  direccion: string
-  calle: string
-  barrio: string
-  ciudad: string
-  cuit: string
-  condicionIva: string
-  razonSocial: string
-  domicilioFiscal: string
-  notas: string
-  fechaAlta: string
-  vehiculos: Vehiculo[]
-}
+export function ClientsView() {
+  const [clientes, setClientes] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [busqueda, setBusqueda] = useState("")
 
-// Mock data for clients
-const initialClientsData: Client[] = [
-  {
-    id: 1,
-    nombre: "Juan Carlos",
-    apellido: "Martínez",
-    telefono: "+54 11 4567-8901",
-    email: "jcmartinez@email.com",
-    direccion: "Av. Corrientes 1234, Almagro, CABA",
-    calle: "Av. Corrientes 1234",
-    barrio: "Almagro",
-    ciudad: "CABA",
-    cuit: "20-12345678-9",
-    condicionIva: "Responsable Inscripto",
-    razonSocial: "Juan Carlos Martínez",
-    domicilioFiscal: "Av. Corrientes 1234, CABA",
-    notas: "Cliente frecuente. Prefiere contacto por WhatsApp.",
-    fechaAlta: "2023-03-15",
-    vehiculos: [
-      { id: 1, marca: "Toyota", modelo: "Corolla", anio: 2020, patente: "AB 123 CD", color: "Blanco" },
-      { id: 2, marca: "Ford", modelo: "Ranger", anio: 2018, patente: "AC 456 EF", color: "Negro" },
-    ],
-  },
-  {
-    id: 2,
-    nombre: "María Laura",
-    apellido: "González",
-    telefono: "+54 11 5678-9012",
-    email: "mlgonzalez@email.com",
-    direccion: "Calle Florida 567, Microcentro, CABA",
-    calle: "Calle Florida 567",
-    barrio: "Microcentro",
-    ciudad: "CABA",
-    cuit: "27-23456789-0",
-    condicionIva: "Monotributista",
-    razonSocial: "María Laura González",
-    domicilioFiscal: "Calle Florida 567, CABA",
-    notas: "",
-    fechaAlta: "2023-06-20",
-    vehiculos: [
-      { id: 3, marca: "Volkswagen", modelo: "Golf", anio: 2021, patente: "AD 789 GH", color: "Gris" },
-    ],
-  },
-  {
-    id: 3,
-    nombre: "Roberto",
-    apellido: "Fernández",
-    telefono: "+54 11 6789-0123",
-    email: "rfernandez@empresa.com",
-    direccion: "Av. Santa Fe 890, Palermo, CABA",
-    calle: "Av. Santa Fe 890",
-    barrio: "Palermo",
-    ciudad: "CABA",
-    cuit: "30-34567890-1",
-    condicionIva: "Responsable Inscripto",
-    razonSocial: "Fernández Transportes SRL",
-    domicilioFiscal: "Av. Santa Fe 890, CABA",
-    notas: "Empresa de transporte. Tiene convenio corporativo.",
-    fechaAlta: "2022-11-05",
-    vehiculos: [
-      { id: 4, marca: "Fiat", modelo: "Cronos", anio: 2022, patente: "AE 012 IJ", color: "Rojo" },
-      { id: 5, marca: "Chevrolet", modelo: "S10", anio: 2019, patente: "AF 345 KL", color: "Plata" },
-      { id: 6, marca: "Renault", modelo: "Kangoo", anio: 2020, patente: "AG 678 MN", color: "Blanco" },
-    ],
-  },
-  {
-    id: 4,
-    nombre: "Ana",
-    apellido: "Rodríguez",
-    telefono: "+54 11 7890-1234",
-    email: "arodriguez@email.com",
-    direccion: "Calle Libertad 123, Recoleta, CABA",
-    calle: "Calle Libertad 123",
-    barrio: "Recoleta",
-    ciudad: "CABA",
-    cuit: "",
-    condicionIva: "Consumidor Final",
-    razonSocial: "",
-    domicilioFiscal: "",
-    notas: "Primera visita en enero 2024.",
-    fechaAlta: "2024-01-10",
-    vehiculos: [
-      { id: 7, marca: "Peugeot", modelo: "208", anio: 2023, patente: "AH 901 OP", color: "Azul" },
-    ],
-  },
-  {
-    id: 5,
-    nombre: "Carlos Eduardo",
-    apellido: "López",
-    telefono: "+54 11 8901-2345",
-    email: "celopez@email.com",
-    direccion: "Av. Rivadavia 4567, Caballito, CABA",
-    calle: "Av. Rivadavia 4567",
-    barrio: "Caballito",
-    ciudad: "CABA",
-    cuit: "20-45678901-2",
-    condicionIva: "Monotributista",
-    razonSocial: "Carlos Eduardo López",
-    domicilioFiscal: "Av. Rivadavia 4567, CABA",
-    notas: "",
-    fechaAlta: "2024-02-28",
-    vehiculos: [
-      { id: 8, marca: "Honda", modelo: "Civic", anio: 2019, patente: "AI 234 QR", color: "Negro" },
-    ],
-  },
-]
-
-const emptyFormData = {
-  nombre: "",
-  apellido: "",
-  telefono: "",
-  email: "",
-  calle: "",
-  barrio: "",
-  ciudad: "",
-  cuit: "",
-  razonSocial: "",
-  condicionIva: "consumidor-final",
-  domicilioFiscal: "",
-  notas: "",
-}
-
-function formatDate(dateString: string) {
-  const date = new Date(dateString)
-  return date.toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+  // ESTADO DEL FORMULARIO CON LOS CAMPOS NUEVOS
+  const [formData, setFormData] = useState({
+    tipo_cliente: "persona", // persona o empresa
+    nombre: "",
+    apellido: "",
+    telefono: "",
+    email: "",
+    calle: "",
+    barrio: "",
+    ciudad: "",
+    documento: "", // Usado para CUIT/DNI
+    razon_social: "",
+    condicion_iva: "Consumidor Final",
+    domicilio_fiscal: "",
+    notas: ""
   })
-}
 
-interface ClientsViewProps {
-  onNavigateToVehicles?: () => void
-}
+  const fetchClientes = async () => {
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase.from('clientes').select('*').order('fecha_registro', { ascending: false })
+      if (error) throw error
+      setClientes(data || [])
+    } catch (error) {
+      console.error("Error al cargar:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-export function ClientsView({ onNavigateToVehicles }: ClientsViewProps) {
-  const [clients, setClients] = useState<Client[]>(initialClientsData)
-  const [searchTerm, setSearchTerm] = useState("")
-  // CORRECCIÓN 1: Ambos arrancan en FALSE para no abrirse solos
-  const [isClientModalOpen, setIsClientModalOpen] = useState(false) 
-  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false)
-  
-  const [isEditMode, setIsEditMode] = useState(false)
-  const [editingClient, setEditingClient] = useState<Client | null>(null)
-  const [selectedClient, setSelectedClient] = useState<Client | null>(clients[0])
-  const [formData, setFormData] = useState(emptyFormData)
-  const [vehicleToDelete, setVehicleToDelete] = useState<Vehiculo | null>(null)
-  const [isDeleteVehicleOpen, setIsDeleteVehicleOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState("datos")
+  useEffect(() => { fetchClientes() }, [])
 
-  const filteredClients = clients.filter(
-    (client) =>
-      client.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.telefono.includes(searchTerm) ||
-      client.email.toLowerCase().includes(searchTerm.toLowerCase())
+  // BOTÓN MÁGICO: Copiar Domicilio a Fiscal
+  const copiarDomicilio = () => {
+    const direccionCompleta = `${formData.calle} ${formData.barrio ? ', ' + formData.barrio : ''} ${formData.ciudad ? ', ' + formData.ciudad : ''}`.trim().replace(/^,|,$/g, '')
+    setFormData({ ...formData, domicilio_fiscal: direccionCompleta })
+  }
+
+  const handleGuardarCliente = async () => {
+    // Validaciones básicas según si es persona o empresa
+    if (formData.tipo_cliente === "persona" && (!formData.nombre.trim() || !formData.apellido.trim() || !formData.telefono.trim())) {
+      alert("Nombre, Apellido y Teléfono son obligatorios para Personas.")
+      return
+    }
+    if (formData.tipo_cliente === "empresa" && (!formData.razon_social.trim() || !formData.documento.trim() || !formData.telefono.trim())) {
+      alert("Razón Social, CUIT y Teléfono son obligatorios para Empresas.")
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const { error } = await supabase.from('clientes').insert([formData])
+      if (error) throw error
+
+      setIsModalOpen(false)
+      setFormData({
+        tipo_cliente: "persona", nombre: "", apellido: "", telefono: "", email: "",
+        calle: "", barrio: "", ciudad: "", documento: "", razon_social: "",
+        condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: ""
+      })
+      fetchClientes() 
+    } catch (error) {
+      console.error("Error al guardar:", error)
+      alert("No se pudo guardar el cliente.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const clientesFiltrados = clientes.filter(c => 
+    (c.nombre && c.nombre.toLowerCase().includes(busqueda.toLowerCase())) || 
+    (c.apellido && c.apellido.toLowerCase().includes(busqueda.toLowerCase())) || 
+    (c.razon_social && c.razon_social.toLowerCase().includes(busqueda.toLowerCase())) || 
+    (c.documento && c.documento.includes(busqueda))
   )
 
-  const handleClientClick = (client: Client) => {
-    setSelectedClient(client)
-    setIsDetailSheetOpen(true)
-  }
-
-  const handleNewClient = () => {
-    setIsEditMode(false)
-    setEditingClient(null)
-    setFormData(emptyFormData)
-    setIsClientModalOpen(true)
-  }
-
-  const handleEditClient = (client: Client) => {
-    setIsEditMode(true)
-    setEditingClient(client)
-    setFormData({
-      nombre: client.nombre,
-      apellido: client.apellido,
-      telefono: client.telefono,
-      email: client.email,
-      calle: client.calle,
-      barrio: client.barrio,
-      ciudad: client.ciudad,
-      cuit: client.cuit,
-      razonSocial: client.razonSocial,
-      condicionIva: client.condicionIva === "Consumidor Final" ? "consumidor-final" : 
-                    client.condicionIva === "Monotributista" ? "monotributista" : "responsable-inscripto",
-      domicilioFiscal: client.domicilioFiscal,
-      notas: client.notas,
-    })
-    setIsClientModalOpen(true)
-  }
-
-  const handleSaveClient = () => {
-    const condicionIvaMap: Record<string, string> = {
-      "consumidor-final": "Consumidor Final",
-      "monotributista": "Monotributista", 
-      "responsable-inscripto": "Responsable Inscripto",
-    }
-
-    if (isEditMode && editingClient) {
-      const updatedClient: Client = {
-        ...editingClient,
-        nombre: formData.nombre,
-        apellido: formData.apellido,
-        telefono: formData.telefono,
-        email: formData.email,
-        calle: formData.calle,
-        barrio: formData.barrio,
-        ciudad: formData.ciudad,
-        direccion: `${formData.calle}, ${formData.barrio}, ${formData.ciudad}`,
-        cuit: formData.cuit,
-        razonSocial: formData.razonSocial,
-        condicionIva: condicionIvaMap[formData.condicionIva],
-        domicilioFiscal: formData.domicilioFiscal,
-        notas: formData.notas,
-      }
-      setClients(clients.map(c => c.id === editingClient.id ? updatedClient : c))
-      if (selectedClient?.id === editingClient.id) {
-        setSelectedClient(updatedClient)
-      }
-    } else {
-      const newClient: Client = {
-        id: Math.max(...clients.map(c => c.id)) + 1,
-        nombre: formData.nombre,
-        apellido: formData.apellido,
-        telefono: formData.telefono,
-        email: formData.email,
-        calle: formData.calle,
-        barrio: formData.barrio,
-        ciudad: formData.ciudad,
-        direccion: `${formData.calle}, ${formData.barrio}, ${formData.ciudad}`,
-        cuit: formData.cuit,
-        razonSocial: formData.razonSocial,
-        condicionIva: condicionIvaMap[formData.condicionIva],
-        domicilioFiscal: formData.domicilioFiscal,
-        notas: formData.notas,
-        fechaAlta: new Date().toISOString().split("T")[0],
-        vehiculos: [],
-      }
-      setClients([...clients, newClient])
-    }
-    setIsClientModalOpen(false)
-    setFormData(emptyFormData)
-    setEditingClient(null)
-    setIsEditMode(false)
-  }
-
-  const handleDeleteVehicle = () => {
-    if (!vehicleToDelete || !selectedClient) return
-    
-    const updatedClient = {
-      ...selectedClient,
-      vehiculos: selectedClient.vehiculos.filter(v => v.id !== vehicleToDelete.id)
-    }
-    setClients(clients.map(c => c.id === selectedClient.id ? updatedClient : c))
-    setSelectedClient(updatedClient)
-    setIsDeleteVehicleOpen(false)
-    setVehicleToDelete(null)
-  }
-
-  const handleFormChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <div className="space-y-6 pb-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-foreground">Clientes</h2>
-          <p className="text-sm text-muted-foreground">
-            Gestiona la información de tus clientes
-          </p>
+          <h2 className="text-2xl font-semibold text-foreground">Directorio de Clientes</h2>
+          <p className="text-sm text-muted-foreground">Administrá los datos y contactos de tu taller.</p>
         </div>
-        <Button 
-          onClick={handleNewClient}
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo Cliente
+        <Button onClick={() => setIsModalOpen(true)} className="bg-primary text-primary-foreground">
+          <Plus className="mr-2 h-4 w-4" /> Nuevo Cliente
         </Button>
       </div>
 
-      {/* Search */}
       <Card className="border-border bg-card">
-        <CardContent className="p-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nombre, teléfono o email..."
-              value={searchTerm}
-              onChange={(e: any) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-secondary border-border"
-            />
+        <CardHeader className="border-b border-border bg-secondary/10 pb-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por nombre, CUIT o teléfono..." className="pl-9" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Clients Table */}
-      <Card className="border-border bg-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg text-card-foreground">
-            Lista de Clientes ({filteredClients.length})
-          </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="text-muted-foreground">Nombre y Apellido</TableHead>
-                <TableHead className="text-muted-foreground">Teléfono</TableHead>
-                <TableHead className="text-muted-foreground">Email</TableHead>
-                <TableHead className="text-right text-muted-foreground">Acciones</TableHead>
+              <TableRow className="bg-secondary/20">
+                <TableHead>Nombre / Razón Social</TableHead>
+                <TableHead>Contacto</TableHead>
+                <TableHead>DNI / CUIT</TableHead>
+                <TableHead>Condición IVA</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClients.map((client) => (
-                <TableRow
-                  key={client.id}
-                  className="border-border cursor-pointer transition-colors hover:bg-secondary/50"
-                  onClick={() => handleClientClick(client)}
-                >
-                  <TableCell className="font-medium text-card-foreground">
-                    {client.nombre} {client.apellido}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{client.telefono}</TableCell>
-                  <TableCell className="text-muted-foreground">{client.email}</TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e: any) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-secondary">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="border-border bg-popover">
-                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); handleClientClick(client); }}>
-                          Ver detalles
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={(e: any) => { e.stopPropagation(); handleEditClient(client); }}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Editar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {isLoading ? (
+                <TableRow><TableCell colSpan={5} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+              ) : clientesFiltrados.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay clientes para mostrar.</TableCell></TableRow>
+              ) : (
+                clientesFiltrados.map((cliente) => (
+                  <TableRow key={cliente.id} className="hover:bg-secondary/50 cursor-pointer">
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="bg-primary/10 p-2 rounded-full">
+                          {cliente.tipo_cliente === 'empresa' ? <Building2 className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-primary" />}
+                        </div>
+                        {cliente.tipo_cliente === 'empresa' ? cliente.razon_social : `${cliente.nombre} ${cliente.apellido || ''}`}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground"/> {cliente.telefono}</div>
+                      {cliente.email && <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><Mail className="h-3 w-3"/> {cliente.email}</div>}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-sm">{cliente.documento || "-"}</TableCell>
+                    <TableCell><span className="text-xs px-2 py-1 bg-secondary rounded-md border border-border">{cliente.condicion_iva}</span></TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* New/Edit Client Modal */}
-      <Dialog open={isClientModalOpen} onOpenChange={setIsClientModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-xl text-card-foreground">
-              {isEditMode ? "Editar Cliente" : "Registrar Nuevo Cliente"}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground">
-              {isEditMode 
-                ? "Modifique los datos del cliente. Los campos marcados con * son obligatorios."
-                : "Complete los datos del nuevo cliente. Los campos marcados con * son obligatorios."}
-            </DialogDescription>
+      {/* MODAL NUEVO CLIENTE (DISEÑO PERSONALIZADO) */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl text-foreground font-bold">Registrar Nuevo Cliente</DialogTitle>
+            <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
-            {/* Datos Personales */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-1 rounded-full bg-primary" />
-                <h3 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">Datos Personales</h3>
+          {/* SELECTOR PERSONA / EMPRESA */}
+          <div className="bg-secondary/30 p-4 rounded-lg mb-6 flex justify-center border border-border">
+            <RadioGroup 
+              defaultValue="persona" 
+              className="flex space-x-6"
+              value={formData.tipo_cliente}
+              onValueChange={(val: string) => setFormData({...formData, tipo_cliente: val})}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="persona" id="persona" />
+                <Label htmlFor="persona" className="font-semibold cursor-pointer">Persona Física</Label>
               </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="nombre" className="text-card-foreground">
-                    Nombre <span className="text-destructive">*</span>
-                  </Label>
-                  <Input 
-                    id="nombre" 
-                    placeholder="Ej: Juan Carlos" 
-                    className="bg-secondary border-border"
-                    value={formData.nombre}
-                    onChange={(e: any) => handleFormChange("nombre", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="apellido" className="text-card-foreground">
-                    Apellido <span className="text-destructive">*</span>
-                  </Label>
-                  <Input 
-                    id="apellido" 
-                    placeholder="Ej: Martínez" 
-                    className="bg-secondary border-border"
-                    value={formData.apellido}
-                    onChange={(e: any) => handleFormChange("apellido", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="telefono" className="text-card-foreground">
-                    Número de Teléfono <span className="text-destructive">*</span>
-                  </Label>
-                  <Input 
-                    id="telefono" 
-                    placeholder="Ej: +54 11 4567-8901" 
-                    className="bg-secondary border-border"
-                    value={formData.telefono}
-                    onChange={(e: any) => handleFormChange("telefono", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-card-foreground">Email</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="Ej: cliente@email.com" 
-                    className="bg-secondary border-border"
-                    value={formData.email}
-                    onChange={(e: any) => handleFormChange("email", e.target.value)}
-                  />
-                </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="empresa" id="empresa" />
+                <Label htmlFor="empresa" className="font-semibold cursor-pointer">Empresa</Label>
               </div>
-            </div>
-
-            <Separator className="bg-border" />
-
-            {/* Domicilio */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-1 rounded-full bg-primary" />
-                <h3 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">Domicilio</h3>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="calle" className="text-card-foreground">Calle y Altura</Label>
-                  <Input 
-                    id="calle" 
-                    placeholder="Ej: Av. Corrientes 1234" 
-                    className="bg-secondary border-border"
-                    value={formData.calle}
-                    onChange={(e: any) => handleFormChange("calle", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="barrio" className="text-card-foreground">Barrio</Label>
-                  <Input 
-                    id="barrio" 
-                    placeholder="Ej: Almagro" 
-                    className="bg-secondary border-border"
-                    value={formData.barrio}
-                    onChange={(e: any) => handleFormChange("barrio", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ciudad" className="text-card-foreground">Ciudad</Label>
-                  <Input 
-                    id="ciudad" 
-                    placeholder="Ej: CABA" 
-                    className="bg-secondary border-border"
-                    value={formData.ciudad}
-                    onChange={(e: any) => handleFormChange("ciudad", e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator className="bg-border" />
-
-            {/* Facturación */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-1 rounded-full bg-primary" />
-                <h3 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">Facturación (ARCA/AFIP)</h3>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="cuit" className="text-card-foreground">CUIT</Label>
-                  <Input 
-                    id="cuit" 
-                    placeholder="Ej: 20-12345678-9" 
-                    className="bg-secondary border-border"
-                    value={formData.cuit}
-                    onChange={(e: any) => handleFormChange("cuit", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="razonSocial" className="text-card-foreground">Razón Social</Label>
-                  <Input 
-                    id="razonSocial" 
-                    placeholder="Ej: Empresa SRL" 
-                    className="bg-secondary border-border"
-                    value={formData.razonSocial}
-                    onChange={(e: any) => handleFormChange("razonSocial", e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="condicionIva" className="text-card-foreground">Condición de IVA</Label>
-                  <Select 
-                    value={formData.condicionIva}
-                    onValueChange={(value: string) => handleFormChange("condicionIva", value)}
-                  >
-                    <SelectTrigger className="w-full bg-secondary border-border">
-                      <SelectValue placeholder="Seleccionar condición" />
-                    </SelectTrigger>
-                    <SelectContent className="border-border bg-popover">
-                      <SelectItem value="consumidor-final">Consumidor Final</SelectItem>
-                      <SelectItem value="monotributista">Monotributista</SelectItem>
-                      <SelectItem value="responsable-inscripto">Responsable Inscripto</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="domicilioFiscal" className="text-card-foreground">Domicilio Fiscal</Label>
-                  <Input 
-                    id="domicilioFiscal" 
-                    placeholder="Ej: Av. Corrientes 1234, CABA" 
-                    className="bg-secondary border-border"
-                    value={formData.domicilioFiscal}
-                    onChange={(e: any) => handleFormChange("domicilioFiscal", e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator className="bg-border" />
-
-            {/* Notas Internas */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-1 rounded-full bg-primary" />
-                <h3 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">Interno</h3>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notas" className="text-card-foreground">Notas del Taller</Label>
-                <Textarea
-                  id="notas"
-                  placeholder="Notas internas sobre el cliente (preferencias, observaciones, etc.)"
-                  className="min-h-[100px] bg-secondary border-border resize-none"
-                  value={formData.notas}
-                  onChange={(e: any) => handleFormChange("notas", e.target.value)}
-                />
-              </div>
-            </div>
+            </RadioGroup>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              variant="ghost"
-              onClick={() => setIsClientModalOpen(false)}
-              className="text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSaveClient}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-            >
-              {isEditMode ? "Guardar Cambios" : "Guardar Cliente"}
+          <div className="space-y-8">
+            
+            {/* BLOQUE PERSONA: DATOS PERSONALES */}
+            {formData.tipo_cliente === "persona" && (
+              <>
+                <section>
+                  <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+                    <h3 className="font-bold text-sm tracking-wide text-foreground uppercase">Datos Personales</h3>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Nombre <span className="text-destructive">*</span></Label>
+                      <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: Juan Carlos" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Apellido <span className="text-destructive">*</span></Label>
+                      <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: Martínez" value={formData.apellido} onChange={(e) => setFormData({...formData, apellido: e.target.value})} />
+                    </div>
+                  </div>
+                </section>
+
+                <section>
+                  <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+                    <h3 className="font-bold text-sm tracking-wide text-foreground uppercase">Domicilio</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Calle y Altura</Label>
+                      <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: Av. Corrientes 1234" value={formData.calle} onChange={(e) => setFormData({...formData, calle: e.target.value})} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Barrio</Label>
+                        <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: Almagro" value={formData.barrio} onChange={(e) => setFormData({...formData, barrio: e.target.value})} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Ciudad</Label>
+                        <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: CABA" value={formData.ciudad} onChange={(e) => setFormData({...formData, ciudad: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* BLOQUE CONTACTO COMÚN A AMBOS */}
+            <section>
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+                <h3 className="font-bold text-sm tracking-wide text-foreground uppercase">Contacto</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Número de Teléfono <span className="text-destructive">*</span></Label>
+                  <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: +54 11 4567-8901" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: cliente@email.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                </div>
+              </div>
+            </section>
+
+            {/* BLOQUE FACTURACIÓN (ARCA/AFIP) */}
+            <section>
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4 flex justify-between items-center">
+                <h3 className="font-bold text-sm tracking-wide text-foreground uppercase">Facturación (ARCA/AFIP)</h3>
+                
+                {/* BOTÓN MÁGICO PARA COPIAR DOMICILIO (Solo se ve si es Persona) */}
+                {formData.tipo_cliente === "persona" && (
+                  <Button variant="ghost" size="sm" onClick={copiarDomicilio} className="text-xs h-7 text-primary hover:bg-primary/10">
+                    <Copy className="h-3 w-3 mr-1" /> Usar mismo domicilio
+                  </Button>
+                )}
+              </div>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>CUIT / DNI {formData.tipo_cliente === "empresa" && <span className="text-destructive">*</span>}</Label>
+                    <Input className="bg-slate-50 dark:bg-slate-900 border-border font-mono text-sm" placeholder="Ej: 20-12345678-9" value={formData.documento} onChange={(e) => setFormData({...formData, documento: e.target.value})} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Razón Social {formData.tipo_cliente === "empresa" && <span className="text-destructive">*</span>}</Label>
+                    <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: Empresa SRL" value={formData.razon_social} onChange={(e) => setFormData({...formData, razon_social: e.target.value})} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Condición de IVA</Label>
+                    <Select value={formData.condicion_iva} onValueChange={(val: string) => setFormData({...formData, condicion_iva: val})}>
+                      <SelectTrigger className="bg-slate-50 dark:bg-slate-900 border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Consumidor Final">Consumidor Final</SelectItem>
+                        <SelectItem value="Responsable Inscripto">Responsable Inscripto</SelectItem>
+                        <SelectItem value="Monotributo">Monotributo</SelectItem>
+                        <SelectItem value="Exento">Exento</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Domicilio Fiscal</Label>
+                    <Input className="bg-slate-50 dark:bg-slate-900 border-border" placeholder="Ej: Av. Corrientes 1234, CABA" value={formData.domicilio_fiscal} onChange={(e) => setFormData({...formData, domicilio_fiscal: e.target.value})} />
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* BLOQUE INTERNO */}
+            <section>
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+                <h3 className="font-bold text-sm tracking-wide text-foreground uppercase">Interno</h3>
+              </div>
+              <div className="space-y-2">
+                <Label>Notas del Taller</Label>
+                <Textarea 
+                  className="bg-slate-50 dark:bg-slate-900 border-border min-h-[80px]" 
+                  placeholder="Notas internas sobre el cliente (preferencias, observaciones, etc.)"
+                  value={formData.notas}
+                  onChange={(e) => setFormData({...formData, notas: e.target.value})}
+                />
+              </div>
+            </section>
+
+          </div>
+          
+          <DialogFooter className="mt-8 border-t border-border pt-4 gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+            <Button onClick={handleGuardarCliente} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : "Guardar Cliente"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Client Detail Sheet */}
-      <Sheet open={isDetailSheetOpen} onOpenChange={setIsDetailSheetOpen}>
-        <SheetContent className="w-full sm:max-w-lg border-border bg-card p-0">
-          <SheetHeader className="p-6 pb-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <SheetTitle className="text-xl text-card-foreground">
-                  {selectedClient?.nombre} {selectedClient?.apellido}
-                </SheetTitle>
-                <SheetDescription className="text-muted-foreground">
-                  Información detallada del cliente
-                </SheetDescription>
-              </div>
-              {activeTab === "datos" && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => selectedClient && handleEditClient(selectedClient)}
-                  className="border-border text-foreground hover:bg-secondary"
-                >
-                  <Pencil className="mr-2 h-4 w-4" />
-                  Editar
-                </Button>
-              )}
-            </div>
-          </SheetHeader>
-
-          <Tabs defaultValue="datos" className="flex flex-col h-[calc(100vh-140px)]" onValueChange={(value: string) => setActiveTab(value)}>
-            <TabsList className="mx-6 bg-secondary">
-              <TabsTrigger value="datos" className="flex-1">Datos</TabsTrigger>
-              <TabsTrigger value="vehiculos" className="flex-1">Vehículos</TabsTrigger>
-            </TabsList>
-
-            <ScrollArea className="flex-1">
-              <TabsContent value="datos" className="p-6 pt-4 space-y-6 mt-0">
-                {/* Registration Date */}
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>Cliente desde {selectedClient?.fechaAlta ? formatDate(selectedClient.fechaAlta) : "fecha no registrada"}</span>
-                </div>
-
-                {/* Contact Info */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">Contacto</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-                        <Phone className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-card-foreground">{selectedClient?.telefono}</p>
-                        <p className="text-xs text-muted-foreground">Teléfono</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-                        <Mail className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-card-foreground">{selectedClient?.email}</p>
-                        <p className="text-xs text-muted-foreground">Email</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-                        <MapPin className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-card-foreground">{selectedClient?.direccion}</p>
-                        <p className="text-xs text-muted-foreground">Dirección</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <Separator className="bg-border" />
-
-                {/* Billing Info */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">Datos de Facturación</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-                        <FileText className="h-4 w-4 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-card-foreground">
-                          {selectedClient?.cuit || "No registrado"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">CUIT</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary shrink-0">
-                        <Badge variant="outline" className="text-[10px] px-1 border-primary text-primary">IVA</Badge>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-card-foreground">{selectedClient?.condicionIva}</p>
-                        <p className="text-xs text-muted-foreground">Condición de IVA</p>
-                      </div>
-                    </div>
-                    {selectedClient?.razonSocial && (
-                      <div className="rounded-lg bg-secondary/50 p-3">
-                        <p className="text-xs text-muted-foreground mb-1">Razón Social</p>
-                        <p className="text-sm font-medium text-card-foreground">{selectedClient.razonSocial}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {selectedClient?.notas && (
-                  <>
-                    <Separator className="bg-border" />
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">Notas</h4>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{selectedClient.notas}</p>
-                    </div>
-                  </>
-                )}
-              </TabsContent>
-
-              <TabsContent value="vehiculos" className="p-6 pt-4 space-y-4 mt-0">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-card-foreground uppercase tracking-wide">
-                    Vehículos ({selectedClient?.vehiculos.length || 0})
-                  </h4>
-                  {/* El botón "Agregar Vehículo" también lo desconecté por si acaso */}
-                  <Button 
-                    size="sm" 
-                    variant="outline" 
-                    className="border-border text-foreground hover:bg-secondary"
-                    onClick={() => alert("Próximamente: Formulario para vincular un auto nuevo")}
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    Agregar Vehículo
-                  </Button>
-                </div>
-
-                <div className="space-y-3">
-                  {selectedClient?.vehiculos.map((vehiculo) => (
-                    <div
-                      key={vehiculo.id}
-                      className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                            <Car className="h-5 w-5 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-card-foreground">
-                              {vehiculo.marca} {vehiculo.modelo}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              {vehiculo.anio} · {vehiculo.color}
-                            </p>
-                          </div>
-                        </div>
-                        <Badge variant="secondary" className="font-mono bg-secondary text-foreground">
-                          {vehiculo.patente}
-                        </Badge>
-                      </div>
-                      <div className="flex gap-2">
-                        {/* CORRECCIÓN 2: El botón ahora hace un alert en vez de mandar a la lista suelta */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 border-border text-foreground hover:bg-secondary"
-                          onClick={() => alert(`Próximamente: Historial de trabajos para la patente ${vehiculo.patente}`)}
-                        >
-                          <History className="mr-2 h-4 w-4" />
-                          Ver Historial de Trabajos
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setVehicleToDelete(vehiculo)
-                            setIsDeleteVehicleOpen(true)
-                          }}
-                          className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {selectedClient?.vehiculos.length === 0 && (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <Car className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">Este cliente no tiene vehículos registrados</p>
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-            </ScrollArea>
-          </Tabs>
-        </SheetContent>
-      </Sheet>
-
-      {/* Delete Vehicle Confirmation */}
-      <AlertDialog open={isDeleteVehicleOpen} onOpenChange={setIsDeleteVehicleOpen}>
-        <AlertDialogContent className="border-border bg-card">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-card-foreground">Eliminar Vehículo</AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              ¿Estás seguro de que deseas eliminar el vehículo{" "}
-              <span className="font-medium text-foreground">
-                {vehicleToDelete?.marca} {vehicleToDelete?.modelo} ({vehicleToDelete?.patente})
-              </span>
-              ? Esta acción no se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border text-foreground hover:bg-secondary">
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteVehicle}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }
