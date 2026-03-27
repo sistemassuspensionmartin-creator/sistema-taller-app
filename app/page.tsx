@@ -13,6 +13,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { CajaView } from "@/components/dashboard/caja-view"
 import { TurnosView } from "@/components/dashboard/turnos-view"
 import { PresupuestosView } from "@/components/dashboard/presupuestos-view"
+import { CatalogoView } from "@/components/dashboard/catalogo-view"
 
 export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState("Vehículos")
