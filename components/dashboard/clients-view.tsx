@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 // Generalmente es en una carpeta "lib" o "utils" en la raíz de tu proyecto.
 import { supabase } from "@/lib/supabase" 
 
-export function ClientesView() {
+export function ClientsView() {
   const [clientesReal, setClientesReal] = useState<any[]>([])
   const [estado, setEstado] = useState("⏳ Tocando la puerta de Supabase...")
 
