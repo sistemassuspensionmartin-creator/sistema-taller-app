@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, User, Phone, Mail, Edit, Trash2, Loader2, Save, Building2, Copy, MapPin, FileText, Car } from "lucide-react"
+import { Plus, Search, User, Phone, Mail, Edit, Loader2, Save, Building2, Copy, MapPin, FileText, Car, Calendar, Palette, Gauge, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -34,33 +35,53 @@ import {
 
 import { supabase } from "@/lib/supabase"
 
+const MARCAS_COMUNES = [
+  "Volkswagen", "Ford", "Chevrolet", "Toyota", "Renault", 
+  "Peugeot", "Fiat", "Honda", "Nissan", "Citroën", 
+  "Jeep", "Audi", "BMW", "Mercedes-Benz", "Hyundai", 
+  "Kia", "Chery", "Suzuki", "Otra"
+]
+
 export function ClientsView() {
   const [clientes, setClientes] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [busqueda, setBusqueda] = useState("")
 
-  // ESTADOS PARA LOS MODALES
-  const [isModalOpen, setIsModalOpen] = useState(false) // Modal de Crear/Editar
-  const [editingId, setEditingId] = useState<string | null>(null) // Para saber si editamos o creamos
-  
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false) // Modal de Ver Detalles
+  // ESTADOS MODALES CLIENTES
+  const [isModalOpen, setIsModalOpen] = useState(false) 
+  const [editingId, setEditingId] = useState<string | null>(null) 
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false) 
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
 
-  const [formData, setFormData] = useState({
-    tipo_cliente: "persona",
-    nombre: "", apellido: "", telefono: "", email: "",
-    calle: "", barrio: "", ciudad: "", documento: "",
-    razon_social: "", condicion_iva: "Consumidor Final",
-    domicilio_fiscal: "", notas: ""
+  // ESTADOS VEHÍCULOS (Adentro de la pestaña)
+  const [isAddingVehicleTab, setIsAddingVehicleTab] = useState(false)
+  const [isSavingVehicle, setIsSavingVehicle] = useState(false)
+  const [vehicleFormData, setVehicleFormData] = useState({
+    patente: "", tipo_vehiculo: "Auto", marca: "", modelo: "", anio: "", color: "", kilometraje: ""
   })
 
+  const [formData, setFormData] = useState({
+    tipo_cliente: "persona", nombre: "", apellido: "", telefono: "", email: "",
+    calle: "", barrio: "", ciudad: "", documento: "", razon_social: "", 
+    condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: ""
+  })
+
+  // 1. CARGA DE CLIENTES (Magia: Trae también los vehículos anidados)
   const fetchClientes = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('clientes').select('*').order('fecha_registro', { ascending: false })
+      // Con ", vehiculos(*)" le decimos que traiga todos los autos de cada cliente
+      const { data, error } = await supabase.from('clientes').select('*, vehiculos(*)').order('fecha_registro', { ascending: false })
       if (error) throw error
+      
       setClientes(data || [])
+
+      // Si teníamos un cliente abierto mirando sus detalles, le actualizamos la info (por si le acabamos de agregar un auto)
+      if (clienteSeleccionado) {
+        const actualizado = data?.find(c => c.id === clienteSeleccionado.id)
+        if (actualizado) setClienteSeleccionado(actualizado)
+      }
     } catch (error) {
       console.error("Error al cargar:", error)
     } finally {
@@ -70,22 +91,32 @@ export function ClientsView() {
 
   useEffect(() => { fetchClientes() }, [])
 
-  // MÁGIA: Formateador de CUIT en tiempo real
+  // --- FORMATEADORES ---
   const handleCuitChange = (e: any) => {
-    // 1. Borramos todo lo que no sea número
     let value = e.target.value.replace(/\D/g, "")
-    // 2. Limitamos a 11 números máximo
     if (value.length > 11) value = value.slice(0, 11)
-    
-    // 3. Le ponemos los guiones
     let formatted = value
-    if (value.length > 2 && value.length <= 10) {
-      formatted = `${value.slice(0, 2)}-${value.slice(2)}`
-    } else if (value.length > 10) {
-      formatted = `${value.slice(0, 2)}-${value.slice(2, 10)}-${value.slice(10)}`
-    }
-    
+    if (value.length > 2 && value.length <= 10) formatted = `${value.slice(0, 2)}-${value.slice(2)}`
+    else if (value.length > 10) formatted = `${value.slice(0, 2)}-${value.slice(2, 10)}-${value.slice(10)}`
     setFormData({ ...formData, documento: formatted })
+  }
+
+  const handlePatenteChange = (e: any) => {
+    let limpia = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase()
+    if (limpia.length > 7) limpia = limpia.slice(0, 7)
+    let formateada = limpia
+    if (limpia.length >= 3) {
+      if (/[A-Z]/.test(limpia[2])) formateada = limpia.slice(0, 3) + (limpia.length > 3 ? " " + limpia.slice(3, 6) : "")
+      else formateada = limpia.slice(0, 2) + " " + limpia.slice(2, 5) + (limpia.length > 5 ? " " + limpia.slice(5, 7) : "")
+    }
+    setVehicleFormData({ ...vehicleFormData, patente: formateada })
+  }
+
+  const formatearPatenteVisual = (patenteDB: string) => {
+    if (!patenteDB) return ""
+    if (patenteDB.length === 6) return `${patenteDB.slice(0,3)} ${patenteDB.slice(3,6)}` 
+    if (patenteDB.length === 7) return `${patenteDB.slice(0,2)} ${patenteDB.slice(2,5)} ${patenteDB.slice(5,7)}` 
+    return patenteDB
   }
 
   const copiarDomicilio = () => {
@@ -93,72 +124,39 @@ export function ClientsView() {
     setFormData({ ...formData, domicilio_fiscal: direccionCompleta })
   }
 
-  // ABRIR MODAL PARA CREAR
+  // --- ACCIONES MODALES CLIENTE ---
   const abrirCrear = () => {
     setEditingId(null)
-    setFormData({
-      tipo_cliente: "persona", nombre: "", apellido: "", telefono: "", email: "",
-      calle: "", barrio: "", ciudad: "", documento: "", razon_social: "",
-      condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: ""
-    })
+    setFormData({ tipo_cliente: "persona", nombre: "", apellido: "", telefono: "", email: "", calle: "", barrio: "", ciudad: "", documento: "", razon_social: "", condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: "" })
     setIsModalOpen(true)
   }
 
-  // ABRIR MODAL PARA EDITAR
   const abrirEditar = (cliente: any, e: any) => {
-    e.stopPropagation() // Evita que se abra también el modal de ver detalles
+    e.stopPropagation() 
     setEditingId(cliente.id)
-    setFormData({
-      tipo_cliente: cliente.tipo_cliente || "persona",
-      nombre: cliente.nombre || "",
-      apellido: cliente.apellido || "",
-      telefono: cliente.telefono || "",
-      email: cliente.email || "",
-      calle: cliente.calle || "",
-      barrio: cliente.barrio || "",
-      ciudad: cliente.ciudad || "",
-      documento: cliente.documento || "",
-      razon_social: cliente.razon_social || "",
-      condicion_iva: cliente.condicion_iva || "Consumidor Final",
-      domicilio_fiscal: cliente.domicilio_fiscal || "",
-      notas: cliente.notas || ""
-    })
+    setFormData({ ...cliente })
     setIsModalOpen(true)
   }
 
-  // ABRIR MODAL DE DETALLES
   const abrirDetalles = (cliente: any) => {
     setClienteSeleccionado(cliente)
+    setIsAddingVehicleTab(false) // Siempre abre mostrando la lista de autos, no el formulario
     setIsViewModalOpen(true)
   }
 
   const handleGuardarCliente = async () => {
-    // Validaciones
-    if (formData.tipo_cliente === "persona" && (!formData.nombre.trim() || !formData.apellido.trim() || !formData.telefono.trim())) {
-      return alert("Nombre, Apellido y Teléfono son obligatorios para Personas.")
-    }
-    if (formData.tipo_cliente === "empresa" && (!formData.razon_social.trim() || !formData.documento.trim() || !formData.telefono.trim())) {
-      return alert("Razón Social, CUIT y Teléfono son obligatorios para Empresas.")
-    }
-
-    // Validación estricta de CUIT (11 números)
-    const rawDocumento = formData.documento.replace(/\D/g, "")
-    if (rawDocumento.length > 0 && rawDocumento.length !== 11) {
-      return alert("El CUIT debe tener exactamente 11 números.")
-    }
-
+    if (formData.tipo_cliente === "persona" && (!formData.nombre.trim() || !formData.apellido.trim() || !formData.telefono.trim())) return alert("Nombre, Apellido y Teléfono son obligatorios para Personas.")
+    if (formData.tipo_cliente === "empresa" && (!formData.razon_social.trim() || !formData.documento.trim() || !formData.telefono.trim())) return alert("Razón Social, CUIT y Teléfono son obligatorios para Empresas.")
+    
     setIsSaving(true)
     try {
       if (editingId) {
-        // ACTUALIZAR (UPDATE)
         const { error } = await supabase.from('clientes').update(formData).eq('id', editingId)
         if (error) throw error
       } else {
-        // CREAR NUEVO (INSERT)
         const { error } = await supabase.from('clientes').insert([formData])
         if (error) throw error
       }
-
       setIsModalOpen(false)
       fetchClientes() 
     } catch (error) {
@@ -166,6 +164,49 @@ export function ClientsView() {
       alert("No se pudo guardar el cliente.")
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  // --- ACCIONES NUEVO VEHÍCULO ---
+  const abrirFormularioVehiculo = () => {
+    setVehicleFormData({ patente: "", tipo_vehiculo: "Auto", marca: "", modelo: "", anio: "", color: "", kilometraje: "" })
+    setIsAddingVehicleTab(true)
+  }
+
+  const handleGuardarVehiculoDesdeCliente = async () => {
+    const patenteLimpia = vehicleFormData.patente.replace(/\s/g, "")
+    if (!patenteLimpia || !vehicleFormData.marca || !vehicleFormData.modelo) {
+      return alert("Patente, Marca y Modelo son obligatorios.")
+    }
+    if (patenteLimpia.length < 6) return alert("La patente debe tener al menos 6 caracteres.")
+
+    setIsSavingVehicle(true)
+    try {
+      const { error } = await supabase.from('vehiculos').insert([{
+        patente: patenteLimpia,
+        tipo_vehiculo: vehicleFormData.tipo_vehiculo,
+        marca: vehicleFormData.marca,
+        modelo: vehicleFormData.modelo,
+        anio: vehicleFormData.anio ? parseInt(vehicleFormData.anio) : null,
+        color: vehicleFormData.color,
+        kilometraje: vehicleFormData.kilometraje ? parseInt(vehicleFormData.kilometraje) : null,
+        cliente_id: clienteSeleccionado.id // ¡Le atamos el auto al cliente que estamos viendo!
+      }])
+
+      if (error) {
+        if (error.code === '23505') alert("Ya existe un vehículo registrado con esta patente.")
+        else throw error
+        return
+      }
+
+      // Si guardó bien, cerramos el formulario interno y recargamos los datos
+      setIsAddingVehicleTab(false)
+      fetchClientes() // Al recargar los clientes, también se recargan sus autos
+    } catch (error) {
+      console.error("Error al guardar:", error)
+      alert("No se pudo guardar el vehículo.")
+    } finally {
+      setIsSavingVehicle(false)
     }
   }
 
@@ -178,6 +219,7 @@ export function ClientsView() {
 
   return (
     <div className="space-y-6 pb-8">
+      {/* CABECERA Y TABLA PRINCIPAL */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Directorio de Clientes</h2>
@@ -201,8 +243,8 @@ export function ClientsView() {
               <TableRow className="bg-secondary/20">
                 <TableHead>Nombre / Razón Social</TableHead>
                 <TableHead>Contacto</TableHead>
-                <TableHead>CUIT</TableHead>
-                <TableHead>Condición IVA</TableHead>
+                <TableHead>DNI / CUIT</TableHead>
+                <TableHead>Flota</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -227,9 +269,13 @@ export function ClientsView() {
                       {cliente.email && <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><Mail className="h-3 w-3"/> {cliente.email}</div>}
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-sm">{cliente.documento || "-"}</TableCell>
-                    <TableCell><span className="text-xs px-2 py-1 bg-secondary rounded-md border border-border">{cliente.condicion_iva}</span></TableCell>
+                    <TableCell>
+                      {/* Magia: Mostramos cuántos autos tiene este cliente en la tabla */}
+                      <Badge variant="secondary" className="flex w-fit items-center gap-1">
+                        <Car className="h-3 w-3" /> {cliente.vehiculos?.length || 0}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right">
-                      {/* Pasamos 'e' a abrirEditar para que no se dispare el click de la fila entera */}
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => abrirEditar(cliente, e)}>
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -242,12 +288,11 @@ export function ClientsView() {
         </CardContent>
       </Card>
 
-      {/* MODAL: VER DETALLES DEL CLIENTE (TIPO FICHA) */}
+      {/* MODAL: VER DETALLES DEL CLIENTE */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto p-0">
+        <DialogContent className="max-w-3xl border-border bg-card max-h-[90vh] overflow-y-auto p-0">
           {clienteSeleccionado && (
             <>
-              {/* Cabecera de la ficha */}
               <div className="bg-secondary/30 p-6 border-b border-border">
                 <div className="flex justify-between items-start">
                   <div>
@@ -262,16 +307,15 @@ export function ClientsView() {
                 </div>
               </div>
 
-              {/* Pestañas (Datos / Vehículos) */}
               <div className="p-6">
                 <Tabs defaultValue="datos" className="w-full">
                   <TabsList className="mb-6 bg-secondary">
                     <TabsTrigger value="datos">Datos Personales</TabsTrigger>
-                    <TabsTrigger value="vehiculos">Vehículos</TabsTrigger>
+                    <TabsTrigger value="vehiculos">Vehículos ({clienteSeleccionado.vehiculos?.length || 0})</TabsTrigger>
                   </TabsList>
 
+                  {/* PESTAÑA 1: DATOS (Igual que antes) */}
                   <TabsContent value="datos" className="space-y-8">
-                    {/* Contacto */}
                     <div className="space-y-4">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Contacto</h3>
                       <div className="grid gap-3">
@@ -299,7 +343,6 @@ export function ClientsView() {
 
                     <div className="border-t border-border"></div>
 
-                    {/* Facturación */}
                     <div className="space-y-4">
                       <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Datos de Facturación</h3>
                       <div className="grid gap-3">
@@ -311,8 +354,6 @@ export function ClientsView() {
                           <div className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 p-2 rounded-full font-bold text-[10px] w-8 h-8 flex items-center justify-center">IVA</div>
                           <div><p className="font-medium">{clienteSeleccionado.condicion_iva}</p><p className="text-xs text-muted-foreground">Condición de IVA</p></div>
                         </div>
-                        
-                        {/* Bloque gris para Razón Social y Domicilio Fiscal */}
                         <div className="bg-secondary/50 p-4 rounded-lg mt-2 border border-border">
                           <div className="grid sm:grid-cols-2 gap-4">
                             <div>
@@ -328,7 +369,6 @@ export function ClientsView() {
                       </div>
                     </div>
 
-                    {/* Notas Internas */}
                     {clienteSeleccionado.notas && (
                       <>
                         <div className="border-t border-border"></div>
@@ -342,13 +382,105 @@ export function ClientsView() {
                     )}
                   </TabsContent>
 
+                  {/* PESTAÑA 2: VEHÍCULOS DEL CLIENTE */}
                   <TabsContent value="vehiculos">
-                    <div className="flex flex-col items-center justify-center h-48 border-2 border-dashed border-border rounded-lg bg-secondary/20">
-                      <Car className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-                      <h3 className="text-lg font-medium">Vehículos del Cliente</h3>
-                      <p className="text-sm text-muted-foreground mb-4">La conexión de vehículos estará disponible en el próximo paso.</p>
-                      <Button disabled variant="outline"><Plus className="w-4 h-4 mr-2"/> Agregar Vehículo</Button>
-                    </div>
+                    
+                    {/* VISTA 1: FORMULARIO DE NUEVO VEHÍCULO */}
+                    {isAddingVehicleTab ? (
+                      <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+                        <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border">
+                          <Button variant="ghost" size="icon" onClick={() => setIsAddingVehicleTab(false)} className="h-8 w-8"><ArrowLeft className="h-4 w-4"/></Button>
+                          <h3 className="text-lg font-bold">Registrar Nuevo Vehículo</h3>
+                        </div>
+
+                        <div className="p-4 bg-secondary/30 rounded-lg border border-border space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Patente <span className="text-destructive">*</span></Label>
+                              <Input placeholder="AA 123 AA" className="bg-white dark:bg-slate-950 font-mono uppercase text-center tracking-widest" value={vehicleFormData.patente} onChange={handlePatenteChange} maxLength={9} />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Tipo <span className="text-destructive">*</span></Label>
+                              <Select value={vehicleFormData.tipo_vehiculo} onValueChange={(val: string) => setVehicleFormData({...vehicleFormData, tipo_vehiculo: val})}>
+                                <SelectTrigger className="bg-white dark:bg-slate-950"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Auto">Auto</SelectItem>
+                                  <SelectItem value="Camioneta">Camioneta</SelectItem>
+                                  <SelectItem value="Furgón">Furgón</SelectItem>
+                                  <SelectItem value="SUV">SUV</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label>Marca <span className="text-destructive">*</span></Label>
+                              <Select value={vehicleFormData.marca} onValueChange={(val: string) => setVehicleFormData({...vehicleFormData, marca: val})}>
+                                <SelectTrigger className="bg-white dark:bg-slate-950"><SelectValue placeholder="Marca..." /></SelectTrigger>
+                                <SelectContent className="max-h-[200px]">{MARCAS_COMUNES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Modelo <span className="text-destructive">*</span></Label>
+                              <Input placeholder="Ej: Amarok" className="bg-white dark:bg-slate-950" value={vehicleFormData.modelo} onChange={(e) => setVehicleFormData({...vehicleFormData, modelo: e.target.value})} />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-4 pt-2">
+                            <div className="space-y-2"><Label>Año</Label><Input type="number" className="bg-white dark:bg-slate-950" value={vehicleFormData.anio} onChange={(e) => setVehicleFormData({...vehicleFormData, anio: e.target.value})} /></div>
+                            <div className="space-y-2"><Label>Color</Label><Input className="bg-white dark:bg-slate-950" value={vehicleFormData.color} onChange={(e) => setVehicleFormData({...vehicleFormData, color: e.target.value})} /></div>
+                            <div className="space-y-2"><Label>Km Act.</Label><Input type="number" className="bg-white dark:bg-slate-950" value={vehicleFormData.kilometraje} onChange={(e) => setVehicleFormData({...vehicleFormData, kilometraje: e.target.value})} /></div>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-4">
+                          <Button variant="ghost" onClick={() => setIsAddingVehicleTab(false)} disabled={isSavingVehicle}>Cancelar</Button>
+                          <Button onClick={handleGuardarVehiculoDesdeCliente} disabled={isSavingVehicle} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                            {isSavingVehicle ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Save className="h-4 w-4 mr-2"/>} Guardar Vehículo
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* VISTA 2: LISTA DE VEHÍCULOS DEL CLIENTE */
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Flota del Cliente</h3>
+                          <Button size="sm" onClick={abrirFormularioVehiculo} className="bg-primary/10 text-primary hover:bg-primary/20 shadow-none border border-primary/20">
+                            <Plus className="w-4 h-4 mr-1"/> Agregar Vehículo
+                          </Button>
+                        </div>
+
+                        {clienteSeleccionado.vehiculos && clienteSeleccionado.vehiculos.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {clienteSeleccionado.vehiculos.map((v: any) => (
+                              <Card key={v.patente} className="border-border bg-secondary/20 hover:border-primary/50 transition-colors shadow-sm">
+                                <CardContent className="p-4">
+                                  <div className="flex justify-between items-start mb-3">
+                                    <span className="font-mono font-bold bg-background px-2 py-1 rounded border border-border tracking-widest text-sm text-foreground shadow-sm">
+                                      {formatearPatenteVisual(v.patente)}
+                                    </span>
+                                    <Badge variant="outline" className="bg-background">{v.tipo_vehiculo}</Badge>
+                                  </div>
+                                  <p className="font-bold text-lg text-foreground mb-1">{v.marca} {v.modelo}</p>
+                                  <div className="flex flex-wrap gap-3 mt-3 text-xs text-muted-foreground">
+                                    {v.anio && <span className="flex items-center"><Calendar className="h-3 w-3 mr-1"/> {v.anio}</span>}
+                                    {v.color && <span className="flex items-center"><Palette className="h-3 w-3 mr-1"/> {v.color}</span>}
+                                    {v.kilometraje && <span className="flex items-center"><Gauge className="h-3 w-3 mr-1"/> {v.kilometraje.toLocaleString()} km</span>}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-border rounded-lg bg-secondary/10">
+                            <Car className="h-12 w-12 text-muted-foreground mb-4 opacity-30" />
+                            <p className="text-muted-foreground mb-4">Este cliente no tiene vehículos registrados.</p>
+                            <Button variant="outline" onClick={abrirFormularioVehiculo}>Registrar el primero</Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </TabsContent>
                 </Tabs>
               </div>
@@ -357,10 +489,11 @@ export function ClientsView() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: FORMULARIO CREAR/EDITAR CLIENTE */}
+      {/* MODAL CREAR/EDITAR CLIENTE (Oculto para ahorrar espacio de código, sigue estando ahí abajo en tu archivo original) */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="mb-4">
+          {/* ... (Todo el formulario de cliente que ya teníamos antes) ... */}
+           <DialogHeader className="mb-4">
             <DialogTitle className="text-2xl text-foreground font-bold">
               {editingId ? "Editar Cliente" : "Registrar Nuevo Cliente"}
             </DialogTitle>
@@ -380,17 +513,17 @@ export function ClientsView() {
                 <section>
                   <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Datos Personales</h3></div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Nombre *</Label><Input className="bg-slate-50 dark:bg-slate-900" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} /></div>
-                    <div className="space-y-2"><Label>Apellido *</Label><Input className="bg-slate-50 dark:bg-slate-900" value={formData.apellido} onChange={(e) => setFormData({...formData, apellido: e.target.value})} /></div>
+                    <div className="space-y-2"><Label>Nombre *</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} /></div>
+                    <div className="space-y-2"><Label>Apellido *</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.apellido} onChange={(e) => setFormData({...formData, apellido: e.target.value})} /></div>
                   </div>
                 </section>
                 <section>
                   <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Domicilio</h3></div>
                   <div className="space-y-4">
-                    <div className="space-y-2"><Label>Calle y Altura</Label><Input className="bg-slate-50 dark:bg-slate-900" value={formData.calle} onChange={(e) => setFormData({...formData, calle: e.target.value})} /></div>
+                    <div className="space-y-2"><Label>Calle y Altura</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.calle} onChange={(e) => setFormData({...formData, calle: e.target.value})} /></div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2"><Label>Barrio</Label><Input className="bg-slate-50 dark:bg-slate-900" value={formData.barrio} onChange={(e) => setFormData({...formData, barrio: e.target.value})} /></div>
-                      <div className="space-y-2"><Label>Ciudad</Label><Input className="bg-slate-50 dark:bg-slate-900" value={formData.ciudad} onChange={(e) => setFormData({...formData, ciudad: e.target.value})} /></div>
+                      <div className="space-y-2"><Label>Barrio</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.barrio} onChange={(e) => setFormData({...formData, barrio: e.target.value})} /></div>
+                      <div className="space-y-2"><Label>Ciudad</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.ciudad} onChange={(e) => setFormData({...formData, ciudad: e.target.value})} /></div>
                     </div>
                   </div>
                 </section>
@@ -400,8 +533,8 @@ export function ClientsView() {
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Contacto</h3></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Número de Teléfono *</Label><Input className="bg-slate-50 dark:bg-slate-900" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Email</Label><Input type="email" className="bg-slate-50 dark:bg-slate-900" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Número de Teléfono *</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Email</Label><Input type="email" className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} /></div>
               </div>
             </section>
 
@@ -416,19 +549,18 @@ export function ClientsView() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>CUIT {formData.tipo_cliente === "empresa" && "*"}</Label>
-                    {/* ACÁ ESTÁ CONECTADA LA FUNCIÓN MÁGICA DEL CUIT */}
-                    <Input className="bg-slate-50 dark:bg-slate-900 font-mono text-sm" placeholder="XX-XXXXXXXX-X" value={formData.documento} onChange={handleCuitChange} />
+                    <Input className="bg-slate-50 dark:bg-slate-900 border-border font-mono text-sm" placeholder="XX-XXXXXXXX-X" value={formData.documento} onChange={handleCuitChange} />
                   </div>
                   <div className="space-y-2">
                     <Label>Razón Social {formData.tipo_cliente === "empresa" && "*"}</Label>
-                    <Input className="bg-slate-50 dark:bg-slate-900" value={formData.razon_social} onChange={(e) => setFormData({...formData, razon_social: e.target.value})} />
+                    <Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.razon_social} onChange={(e) => setFormData({...formData, razon_social: e.target.value})} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Condición de IVA</Label>
                     <Select value={formData.condicion_iva} onValueChange={(val: string) => setFormData({...formData, condicion_iva: val})}>
-                      <SelectTrigger className="bg-slate-50 dark:bg-slate-900"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="bg-slate-50 dark:bg-slate-900 border-border"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Consumidor Final">Consumidor Final</SelectItem>
                         <SelectItem value="Responsable Inscripto">Responsable Inscripto</SelectItem>
@@ -437,14 +569,14 @@ export function ClientsView() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label>Domicilio Fiscal</Label><Input className="bg-slate-50 dark:bg-slate-900" value={formData.domicilio_fiscal} onChange={(e) => setFormData({...formData, domicilio_fiscal: e.target.value})} /></div>
+                  <div className="space-y-2"><Label>Domicilio Fiscal</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.domicilio_fiscal} onChange={(e) => setFormData({...formData, domicilio_fiscal: e.target.value})} /></div>
                 </div>
               </div>
             </section>
 
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Interno</h3></div>
-              <div className="space-y-2"><Label>Notas del Taller</Label><Textarea className="bg-slate-50 dark:bg-slate-900 min-h-[80px]" value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} /></div>
+              <div className="space-y-2"><Label>Notas del Taller</Label><Textarea className="bg-slate-50 dark:bg-slate-900 border-border min-h-[80px]" value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} /></div>
             </section>
           </div>
           
