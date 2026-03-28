@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,8 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 
@@ -33,8 +33,9 @@ export function PresupuestosView() {
 
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
   const [mostrarResultados, setMostrarResultados] = useState(false)
+  const [busquedaLista, setBusquedaLista] = useState("")
 
-  // AHORA VEHICULO_SELECCIONADO GUARDA LA PATENTE (no un ID)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<string>("")
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
@@ -54,8 +55,7 @@ export function PresupuestosView() {
         supabase.from('clientes').select('*').order('nombre'),
         supabase.from('vehiculos').select('*'),
         supabase.from('catalogo').select('*').order('detalle'),
-        // La relación en BD es Presupuestos -> Vehiculos -> Clientes
-        supabase.from('presupuestos').select('*, vehiculos(*, clientes(*))').order('created_at', { ascending: false }),
+        supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
       
@@ -72,21 +72,34 @@ export function PresupuestosView() {
   }
 
   useEffect(() => {
-    if (vista === "lista") cargarDatos()
+    if (vista === "lista") {
+      cargarDatos()
+      setEditandoId(null)
+    }
   }, [vista])
 
-  // VIGILANTE DE AUTOS (Adaptado para usar la Patente)
   useEffect(() => {
-    if (clienteSeleccionado) {
+    if (clienteSeleccionado && !editandoId) {
       const autosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado));
       if (autosDelCliente.length === 1 && vehiculoSeleccionado !== autosDelCliente[0].patente) {
         setVehiculoSeleccionado(autosDelCliente[0].patente);
       }
     }
-  }, [clienteSeleccionado, vehiculos, vehiculoSeleccionado]);
+  }, [clienteSeleccionado, vehiculos, vehiculoSeleccionado, editandoId]);
+
+  const presupuestosFiltrados = presupuestos.filter(p => {
+    if (!busquedaLista) return true;
+    const search = busquedaLista.toLowerCase();
+    const clienteNom = (p.vehiculos?.clientes?.nombre || "").toLowerCase();
+    const clienteApe = (p.vehiculos?.clientes?.apellido || "").toLowerCase();
+    const clienteRazon = (p.vehiculos?.clientes?.razon_social || "").toLowerCase();
+    const patente = (p.vehiculo_patente || "").toLowerCase();
+    const nro = (p.numero_correlativo?.toString() || "");
+
+    return clienteNom.includes(search) || clienteApe.includes(search) || clienteRazon.includes(search) || patente.includes(search) || nro.includes(search);
+  });
 
   const terminoBusqueda = busquedaEntidad.toLowerCase().trim()
-  
   const vehiculosBusqueda = terminoBusqueda === "" ? [] : vehiculos.filter(v => 
     (v.patente && v.patente.toLowerCase().includes(terminoBusqueda.replace(/\s/g, ""))) || 
     (v.marca && v.marca.toLowerCase().includes(terminoBusqueda)) ||
@@ -109,7 +122,7 @@ export function PresupuestosView() {
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    setVehiculoSeleccionado("") // El useEffect se encarga de reasignar si es 1 solo auto.
+    setVehiculoSeleccionado("") 
     setBusquedaEntidad("")
     setMostrarResultados(false)
   }
@@ -141,7 +154,48 @@ export function PresupuestosView() {
   const totalFinal = subtotalNeto - descuento
   const gananciaEstimada = totalFinal - costoTotal
 
-  // ACCIÓN DE GUARDADO (Ahora usando los nombres reales de TU base de datos)
+  const handleEditarPresupuesto = (p: any) => {
+    setEditandoId(p.id)
+    setClienteSeleccionado(p.vehiculos?.cliente_id)
+    setVehiculoSeleccionado(p.vehiculo_patente)
+    setFecha(p.fecha_emision)
+    setValidez(p.validez_dias?.toString() || "15")
+    setDescuento(p.descuento || 0)
+    setNotasCliente(p.observaciones_publicas || "")
+    setNotasInternas(p.notas_internas || "")
+
+    if (p.presupuesto_items && p.presupuesto_items.length > 0) {
+      setFilas(p.presupuesto_items.map((item: any) => ({
+        id: item.id || Date.now().toString() + Math.random(),
+        tipo: item.tipo,
+        detalle: item.detalle,
+        cant: item.cantidad,
+        costo: item.costo_unitario,
+        precio: item.precio_unitario
+      })))
+    } else {
+      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
+    }
+
+    setVista("crear")
+  }
+
+  const handleEliminarPresupuesto = async (id: string) => {
+    if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Esta acción no se puede deshacer.")) return;
+
+    try {
+      await supabase.from('presupuesto_items').delete().eq('presupuesto_id', id);
+      const { error } = await supabase.from('presupuestos').delete().eq('id', id);
+      if (error) throw error;
+      
+      setPresupuestos(presupuestos.filter(p => p.id !== id));
+      alert("Presupuesto eliminado.");
+    } catch (error: any) {
+      console.error("Error al eliminar:", error);
+      alert("Hubo un error al eliminar el presupuesto: " + error.message);
+    }
+  }
+
   const handleGuardarPresupuesto = async () => {
     if (!clienteSeleccionado) return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
     if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
@@ -151,27 +205,44 @@ export function PresupuestosView() {
 
     setIsSaving(true)
     try {
-      const numAleatorio = Math.floor(1000 + Math.random() * 9000);
+      let presId = editandoId;
 
-      const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
-        numero_correlativo: numAleatorio, 
-        vehiculo_patente: vehiculoSeleccionado,
-        fecha_emision: fecha,
-        validez_dias: parseInt(validez) || 15,
-        descuento: descuento,
-        total_final: totalFinal,
-        estado: 'Borrador',
-        observaciones_publicas: notasCliente,
-        notas_internas: notasInternas
-      }]).select()
+      if (editandoId) {
+        const { error: presError } = await supabase.from('presupuestos').update({
+          vehiculo_patente: vehiculoSeleccionado,
+          fecha_emision: fecha,
+          validez_dias: parseInt(validez) || 15,
+          descuento: descuento,
+          total_final: totalFinal,
+          observaciones_publicas: notasCliente,
+          notas_internas: notasInternas
+        }).eq('id', editandoId)
 
-      if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
-      if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
+        if (presError) throw new Error("Error al actualizar presupuesto: " + presError.message)
+        await supabase.from('presupuesto_items').delete().eq('presupuesto_id', editandoId);
+        
+      } else {
+        const numAleatorio = Math.floor(1000 + Math.random() * 9000);
+        const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
+          numero_correlativo: numAleatorio, 
+          vehiculo_patente: vehiculoSeleccionado,
+          fecha_emision: fecha,
+          validez_dias: parseInt(validez) || 15,
+          descuento: descuento,
+          total_final: totalFinal,
+          estado: 'Borrador',
+          observaciones_publicas: notasCliente,
+          notas_internas: notasInternas
+        }]).select()
 
-      // ACÁ ESTÁ EL ARREGLO CONFIRMADO POR TU FOTO: 
-      // Solo mandamos las 5 columnas que realmente existen en tu tabla.
+        if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
+        if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
+        presId = presData[0].id;
+      }
+
+      // ÍTEMS SIN SUBTOTAL
       const itemsToInsert = filasValidas.map(f => ({
-        presupuesto_id: presData[0].id,
+        presupuesto_id: presId,
         tipo: f.tipo,
         detalle: f.detalle,
         cantidad: parseInt(f.cant) || 1,
@@ -182,8 +253,10 @@ export function PresupuestosView() {
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
       if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
-      alert("¡Presupuesto guardado con éxito!")
+      alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
+      
       setVista("lista")
+      setEditandoId(null)
       setClienteSeleccionado("")
       setVehiculoSeleccionado("")
       setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
@@ -210,7 +283,6 @@ export function PresupuestosView() {
 
   const generarDocumento = (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     const esHistorico = !!datosHistoricos;
-    
     const v_cliente = esHistorico ? datosHistoricos.vehiculos?.clientes : clienteActual;
     const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
     
@@ -353,17 +425,20 @@ export function PresupuestosView() {
     }
   }
 
+  // VISTA CREAR / EDITAR
   if (vista === "crear") {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
-          <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
+          <Button variant="ghost" onClick={() => { setVista("lista"); setEditandoId(null); }} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
           
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO</div>
+            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">
+              {editandoId ? "EDITANDO" : "NUEVO"}
+            </div>
             <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
               <ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo
             </Button>
@@ -374,7 +449,7 @@ export function PresupuestosView() {
               <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
             </Button>
             <Button onClick={handleGuardarPresupuesto} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
-              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} Guardar
+              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} {editandoId ? "Actualizar" : "Guardar"}
             </Button>
           </div>
         </div>
@@ -446,7 +521,6 @@ export function PresupuestosView() {
 
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar <span className="text-destructive">*</span></Label>
-                {/* EL MENU NATIVO QUE NO FALLA. EL VALUE AHORA ES LA PATENTE */}
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-white dark:bg-slate-950 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                   value={vehiculoSeleccionado}
@@ -582,7 +656,15 @@ export function PresupuestosView() {
       </div>
       <Card className="border-border bg-card">
         <CardHeader className="border-b border-border bg-secondary/10 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md w-full"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por cliente o patente..." className="pl-9 bg-background" /></div>
+          <div className="relative flex-1 max-w-md w-full">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar por cliente, patente o Nro..." 
+              className="pl-9 bg-background" 
+              value={busquedaLista}
+              onChange={(e) => setBusquedaLista(e.target.value)}
+            />
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -590,10 +672,10 @@ export function PresupuestosView() {
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={6} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-              ) : presupuestos.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No hay presupuestos generados.</TableCell></TableRow>
+              ) : presupuestosFiltrados.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No se encontraron presupuestos.</TableCell></TableRow>
               ) : (
-                presupuestos.map((p) => (
+                presupuestosFiltrados.map((p) => (
                   <TableRow key={p.id} className="hover:bg-secondary/50">
                     <TableCell className="font-mono font-bold">PRE-{p.numero_correlativo}</TableCell>
                     <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
@@ -609,8 +691,10 @@ export function PresupuestosView() {
                     <TableCell className="text-center"><Badge variant="outline">{p.estado}</Badge></TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditarPresupuesto(p)} className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Editar Presupuesto"><Pencil className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => generarDocumento('orden', p)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Orden de Trabajo"><ClipboardList className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => generarDocumento('presupuesto', p)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEliminarPresupuesto(p.id)} className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" title="Eliminar"><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
