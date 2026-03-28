@@ -14,6 +14,7 @@ import { CajaView } from "@/components/dashboard/caja-view"
 import { TurnosView } from "@/components/dashboard/turnos-view"
 import { PresupuestosView } from "@/components/dashboard/presupuestos-view"
 import { CatalogoView } from "@/components/dashboard/catalogo-view"
+import { AjustesView } from "@/components/dashboard/ajustes-view"
 
 export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState("Vehículos")
@@ -43,6 +44,8 @@ export default function DashboardPage() {
         return <CatalogoView />
       default:
         return <ClientsView onNavigateToVehicles={() => setActiveSection("Vehículos")} />
+      case "Configuración":
+        return <AjustesView />
     }
   }
 
