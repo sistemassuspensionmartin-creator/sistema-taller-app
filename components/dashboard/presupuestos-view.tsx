@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone } from "lucide-react"
+import { Search, Printer, Download, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -25,15 +25,18 @@ export function PresupuestosView() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
+  // Datos reales de la BD
   const [clientes, setClientes] = useState<any[]>([])
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [presupuestos, setPresupuestos] = useState<any[]>([])
   const [configuracion, setConfiguracion] = useState<any>({})
 
+  // Estados del Buscador Inteligente
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
   const [mostrarResultados, setMostrarResultados] = useState(false)
 
+  // Estado del Presupuesto Actual
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<string>("")
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
@@ -53,6 +56,7 @@ export function PresupuestosView() {
         supabase.from('clientes').select('*').order('nombre'),
         supabase.from('vehiculos').select('*'),
         supabase.from('catalogo').select('*').order('detalle'),
+        // presupuesto_items(*) PARA QUE TRAIGA EL DETALLE DE LOS HISTÓRICOS
         supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono), vehiculos(patente, marca, modelo), presupuesto_items(*)').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
@@ -73,7 +77,6 @@ export function PresupuestosView() {
     if (vista === "lista") cargarDatos()
   }, [vista])
 
-  // BUSCADOR INTELIGENTE
   const terminoBusqueda = busquedaEntidad.toLowerCase().trim()
   
   const vehiculosBusqueda = terminoBusqueda === "" ? [] : vehiculos.filter(v => 
@@ -98,9 +101,9 @@ export function PresupuestosView() {
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    // AUTO-ASIGNACIÓN DE VEHÍCULO
     const autosDelCliente = vehiculos.filter(v => v.cliente_id === c.id)
-    if (autosDelCliente.length > 0) {
+    // Magia: Si tiene un solo auto, lo elegimos. Si tiene varios o ninguno, forzamos a elegir.
+    if (autosDelCliente.length === 1) {
       setVehiculoSeleccionado(autosDelCliente[0].id)
     } else {
       setVehiculoSeleccionado("") 
@@ -111,7 +114,6 @@ export function PresupuestosView() {
 
   const vehiculosDelCliente = vehiculos.filter(v => v.cliente_id === clienteSeleccionado)
 
-  // Lógica de Ítems
   const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
 
   const actualizarFila = (id: string, campo: string, valor: any) => {
@@ -137,9 +139,9 @@ export function PresupuestosView() {
   const totalFinal = subtotalNeto - descuento
   const gananciaEstimada = totalFinal - costoTotal
 
-  // ACCIONES DE BOTONES
   const handleGuardarPresupuesto = async () => {
-    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo usando el buscador o el desplegable.")
+    // Validación de obligatoriedad (Sigue activa, pero sin el asterisco en el buscador)
+    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo válido de la base de datos (use el buscador o el desplegable de autos).")
     const filasValidas = filas.filter(f => f.detalle.trim() !== "")
     if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
 
@@ -178,6 +180,7 @@ export function PresupuestosView() {
 
       alert("¡Presupuesto guardado con éxito!")
       setVista("lista")
+      // Limpiar formulario
       setClienteSeleccionado("")
       setVehiculoSeleccionado("")
       setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
@@ -202,9 +205,10 @@ export function PresupuestosView() {
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
   }
 
-  // GENERADOR DE PDF PROFESIONAL BLINDADO (A4 y A5 Apaisado)
+  // GENERADOR DE PDF PROFESIONAL BLINDADO
   const generarDocumento = (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     const esHistorico = !!datosHistoricos;
+    
     const v_cliente = esHistorico ? datosHistoricos.clientes : clienteActual;
     const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
     
@@ -220,6 +224,7 @@ export function PresupuestosView() {
       return fechaString;
     }
     const v_fecha = esHistorico ? formatearFecha(datosHistoricos.fecha) : formatearFecha(fecha);
+    
     const v_nro = esHistorico ? datosHistoricos.nro_comprobante : "PRE-BORRADOR";
     const v_notas = esHistorico ? datosHistoricos.notas_cliente : notasCliente;
     const v_notas_int = esHistorico ? datosHistoricos.notas_internas : notasInternas;
@@ -234,8 +239,7 @@ export function PresupuestosView() {
       <head>
         <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
         <style>
-          /* Forzamos el tamaño real de la hoja sin recortes */
-          @page { size: ${tipo === 'orden' ? 'landscape' : 'A4 portrait'}; margin: 15mm; }
+          @page { size: ${tipo === 'orden' ? 'A5 landscape' : 'A4 portrait'}; margin: 15mm; }
           
           * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body { 
@@ -244,37 +248,40 @@ export function PresupuestosView() {
             margin: 0; 
             padding: 0; 
             width: 100%; 
-            max-width: 100%; /* Saca el límite para que ocupe todo el ancho */
+            max-width: 100%;
           }
-          .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; width: 100%; }
+          
+          .header { width: 100%; border-bottom: 2px solid #008A4B; padding-bottom: 10px; margin-bottom: 20px; overflow: hidden; }
+          
           .taller-info { float: left; width: 60%; }
-          .taller-info h1 { margin: 0 0 5px 0; color: #008A4B; font-size: 26px; text-transform: uppercase; }
-          .taller-info p { margin: 2px 0; font-size: 14px; color: #555; }
+          .taller-info h1 { margin: 0; color: #008A4B; font-size: 24px; text-transform: uppercase; }
+          .taller-info p { margin: 2px 0; font-size: 13px; color: #666; }
+          
           .doc-info { float: right; width: 35%; text-align: right; }
-          .doc-info h2 { margin: 0 0 5px 0; font-size: 22px; color: #333; text-transform: uppercase; }
-          .doc-info p { margin: 2px 0; font-size: 14px; color: #444; }
+          .doc-info h2 { margin: 0; font-size: 20px; color: #444; text-transform: uppercase; }
+          .doc-info p { margin: 2px 0; font-size: 13px; color: #444; }
           
-          .box { width: 100%; border: 1px solid #ccc; padding: 15px; border-radius: 4px; margin-bottom: 25px; background: #fafafa; overflow: hidden; }
-          .box-col { float: left; width: 50%; font-size: 14px; line-height: 1.6; }
+          .box { width: 100%; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 20px; background: #f9fafb; display: table; }
+          .box-col { display: table-cell; width: 50%; vertical-align: top; font-size: 14px; line-height: 1.5; }
           
-          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: fixed; }
-          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 14px; border: 1px solid #008A4B; }
-          td { padding: 10px; border-bottom: 1px solid #ddd; border-left: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 14px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }
+          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 13px; }
+          td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
           
           .text-right { text-align: right; }
           .text-center { text-align: center; }
           
-          .totales { width: 350px; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
-          .total-row { overflow: hidden; font-size: 15px; margin-bottom: 8px; }
+          .totales { width: 40%; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
+          .total-row { overflow: hidden; font-size: 14px; margin-bottom: 5px; }
           .total-row span:first-child { float: left; font-weight: bold; }
           .total-row span:last-child { float: right; font-family: monospace; }
-          .total-final { font-size: 22px; color: #008A4B; margin-top: 10px; }
+          .total-final { font-size: 18px; font-weight: bold; color: #008A4B; margin-top: 10px; }
           
-          .notas { clear: both; padding-top: 30px; font-size: 13px; color: #444; }
+          .notas { clear: both; padding-top: 30px; font-size: 12px; color: #555; }
           
-          .orden-box { clear: both; border: 2px dashed #999; padding: 20px; margin-top: 30px; border-radius: 4px; background: #fffdf5; }
-          .firmas { width: 100%; overflow: hidden; margin-top: 50px; padding-top: 20px; }
-          .firma-col { float: left; width: 50%; font-weight: bold; font-size: 14px; }
+          .orden-box { clear: both; border: 2px dashed #ccc; padding: 15px; margin-top: 20px; border-radius: 6px; background: #fffdf5; }
+          .firmas { width: 100%; display: table; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; }
+          .firma-col { display: table-cell; width: 50%; text-align: left; font-weight: bold; font-size: 13px; }
         </style>
       </head>
       <body>
@@ -285,7 +292,7 @@ export function PresupuestosView() {
             <p>📞 ${telTaller || 'Teléfono no configurado'}</p>
           </div>
           <div class="doc-info">
-            <h2>${tipo === 'orden' ? 'ORDEN DE TRABAJO' : 'PRESUPUESTO'}</h2>
+            <h2>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'}</h2>
             <p>Nro: <b>${v_nro}</b></p>
             <p>Fecha: ${v_fecha}</p>
           </div>
@@ -298,7 +305,7 @@ export function PresupuestosView() {
           </div>
           <div class="box-col">
             <strong>Vehículo:</strong> ${v_vehiculo.marca} ${v_vehiculo.modelo}<br>
-            <strong>Patente:</strong> <span style="font-family: monospace; font-size:15px; font-weight:bold;">${v_vehiculo.patente}</span>
+            <strong>Patente:</strong> <span style="font-family: monospace; font-size:14px; font-weight:bold;">${v_vehiculo.patente}</span>
           </div>
         </div>
 
@@ -366,6 +373,7 @@ export function PresupuestosView() {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
         
+        {/* BARRA SUPERIOR DE ACCIONES */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
@@ -390,6 +398,7 @@ export function PresupuestosView() {
           </div>
         </div>
 
+        {/* 1. DATOS DEL PRESUPUESTO */}
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border pb-4">
             <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
@@ -399,10 +408,11 @@ export function PresupuestosView() {
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
               <div className="md:col-span-6 space-y-2 relative">
-                <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span> <span className="text-destructive">*</span></Label>
+                {/* ELIMINADO EL ASTERISCO DE OBLIGATORIEDAD VISUAL */}
+                <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span></Label>
                 <div className="flex">
                   <Input 
-                    placeholder="Escriba aquí para buscar y seleccionar..." 
+                    placeholder="Escriba aquí para buscar..." 
                     className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
                     value={busquedaEntidad}
                     onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
@@ -452,25 +462,46 @@ export function PresupuestosView() {
                   readOnly 
                   placeholder="Se completa al buscar arriba..."
                   value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} 
-                  className="bg-secondary/20 text-foreground font-medium h-10 border-border" 
+                  className="bg-secondary/20 text-foreground font-medium h-10 border-border pointer-events-none" 
                 />
               </div>
 
+              {/* ARREGLO DEL BUG DE SELECCIÓN DE VEHÍCULO */}
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar</Label>
                 {!clienteSeleccionado ? (
-                  <Input readOnly placeholder="-" className="bg-secondary/20 text-foreground font-medium h-10 border-border" />
-                ) : (
+                  // Estado 1: Sin cliente elegido
+                  <Input readOnly placeholder="-" className="bg-secondary/20 text-foreground font-medium h-10 border-border pointer-events-none" />
+                ) : !vehiculoSeleccionado ? (
+                  // Estado 2: Cliente elegido, pero auto no seleccionado (o tiene varios)
                   <Select value={vehiculoSeleccionado} onValueChange={(val: string) => setVehiculoSeleccionado(val)}>
-                    <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border">
-                      <SelectValue placeholder="Seleccione un vehículo de este cliente..." />
+                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
+                      {/* Lógica explícita del placeholder para Radix UI */}
+                      <SelectValue placeholder="⚠️ Cliente con varios autos. Elija uno..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {vehiculosDelCliente.map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                      ))}
+                      {vehiculosDelCliente.length === 0 ? (
+                        <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
+                      ) : (
+                        vehiculosDelCliente.map(v => (
+                          <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
+                ) : (
+                  // Estado 3: VEHÍCULO SELECCIONADO CORRECTAMENTE -> Caja verde de confirmación
+                  <div className="flex gap-2">
+                    <Input 
+                      readOnly 
+                      value={`${vehiculoActual?.marca} ${vehiculoActual?.modelo} (${vehiculoActual?.patente})`} 
+                      className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 text-emerald-900 dark:text-emerald-100 font-medium h-10 pointer-events-none flex-1" 
+                    />
+                    {/* Botón para deseleccionar y elegir otro */}
+                    <Button variant="outline" size="icon" onClick={() => setVehiculoSeleccionado("")} title="Cambiar vehículo" className="h-10 w-10 text-muted-foreground hover:text-destructive shrink-0">
+                      <X className="h-4 w-4"/>
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -480,7 +511,7 @@ export function PresupuestosView() {
                   readOnly 
                   placeholder="-"
                   value={clienteActual?.telefono || ""} 
-                  className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border" 
+                  className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none" 
                 />
               </div>
             </div>
