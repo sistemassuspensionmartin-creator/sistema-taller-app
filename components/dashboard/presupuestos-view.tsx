@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -14,9 +14,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 
 export function PresupuestosView() {
@@ -40,12 +40,15 @@ export function PresupuestosView() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [validez, setValidez] = useState("15")
+  const [estado, setEstado] = useState("Borrador") // Nuevo estado
   const [notasCliente, setNotasCliente] = useState("Los repuestos pueden sufrir variaciones de precio sin previo aviso. Validez sujeta a stock.")
   const [notasInternas, setNotasInternas] = useState("")
-  const [descuento, setDescuento] = useState(0)
+  
+  // Usamos strings para que no se bloquee al borrar el input
+  const [descuento, setDescuento] = useState<string | number>("0")
 
   const [filas, setFilas] = useState<any[]>([
-    { id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }
+    { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0" }
   ])
 
   const cargarDatos = async () => {
@@ -129,19 +132,19 @@ export function PresupuestosView() {
 
   const vehiculosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado))
 
-  const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
+  const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: "1", costo: "0", precio: "0" }])
 
   const actualizarFila = (id: string, campo: string, valor: any) => {
     setFilas(filas.map(f => {
       if (f.id !== id) return f
-      if (campo === 'tipo') return { ...f, tipo: valor, detalle: "", costo: 0, precio: 0 }
+      if (campo === 'tipo') return { ...f, tipo: valor, detalle: "", costo: "0", precio: "0" }
       return { ...f, [campo]: valor }
     }))
   }
 
   const aplicarItemCatalogo = (idFila: string, idCatalogo: string) => {
     const item = catalogo.find(c => c.id === idCatalogo)
-    if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || 0, precio: item.precio_base || 0 } : f))
+    if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0" } : f))
   }
 
   const eliminarFila = (id: string) => setFilas(filas.filter(f => f.id !== id))
@@ -149,9 +152,10 @@ export function PresupuestosView() {
   const vehiculoActual = vehiculos.find(v => v.patente === vehiculoSeleccionado)
   const clienteActual = clientes.find(c => c.id === clienteSeleccionado)
 
-  const subtotalNeto = filas.reduce((acc, fila) => acc + ((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)), 0)
-  const costoTotal = filas.reduce((acc, fila) => acc + ((parseFloat(fila.costo) || 0) * (parseInt(fila.cant) || 1)), 0)
-  const totalFinal = subtotalNeto - descuento
+  // Cálculos matemáticos convertidos al vuelo
+  const subtotalNeto = filas.reduce((acc, fila) => acc + ((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)), 0)
+  const costoTotal = filas.reduce((acc, fila) => acc + ((parseFloat(fila.costo) || 0) * (parseFloat(fila.cant) || 1)), 0)
+  const totalFinal = subtotalNeto - (parseFloat(descuento.toString()) || 0)
   const gananciaEstimada = totalFinal - costoTotal
 
   const handleEditarPresupuesto = (p: any) => {
@@ -160,7 +164,8 @@ export function PresupuestosView() {
     setVehiculoSeleccionado(p.vehiculo_patente)
     setFecha(p.fecha_emision)
     setValidez(p.validez_dias?.toString() || "15")
-    setDescuento(p.descuento || 0)
+    setEstado(p.estado || "Borrador")
+    setDescuento(p.descuento || "0")
     setNotasCliente(p.observaciones_publicas || "")
     setNotasInternas(p.notas_internas || "")
 
@@ -169,12 +174,12 @@ export function PresupuestosView() {
         id: item.id || Date.now().toString() + Math.random(),
         tipo: item.tipo,
         detalle: item.detalle,
-        cant: item.cantidad,
-        costo: item.costo_unitario,
-        precio: item.precio_unitario
+        cant: item.cantidad?.toString() || "1",
+        costo: item.costo_unitario?.toString() || "0",
+        precio: item.precio_unitario?.toString() || "0"
       })))
     } else {
-      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
+      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0" }])
     }
 
     setVista("crear")
@@ -189,10 +194,21 @@ export function PresupuestosView() {
       if (error) throw error;
       
       setPresupuestos(presupuestos.filter(p => p.id !== id));
-      alert("Presupuesto eliminado.");
     } catch (error: any) {
       console.error("Error al eliminar:", error);
       alert("Hubo un error al eliminar el presupuesto: " + error.message);
+    }
+  }
+
+  // Actualiza el estado directamente desde la lista
+  const handleCambiarEstadoRapido = async (id: string, nuevoEstado: string) => {
+    try {
+      const { error } = await supabase.from('presupuestos').update({ estado: nuevoEstado }).eq('id', id);
+      if (error) throw error;
+      
+      setPresupuestos(presupuestos.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
+    } catch (error: any) {
+      alert("Error al actualizar el estado: " + error.message);
     }
   }
 
@@ -206,14 +222,16 @@ export function PresupuestosView() {
     setIsSaving(true)
     try {
       let presId = editandoId;
+      const descParsed = parseFloat(descuento.toString()) || 0;
 
       if (editandoId) {
         const { error: presError } = await supabase.from('presupuestos').update({
           vehiculo_patente: vehiculoSeleccionado,
           fecha_emision: fecha,
           validez_dias: parseInt(validez) || 15,
-          descuento: descuento,
+          descuento: descParsed,
           total_final: totalFinal,
+          estado: estado,
           observaciones_publicas: notasCliente,
           notas_internas: notasInternas
         }).eq('id', editandoId)
@@ -228,9 +246,9 @@ export function PresupuestosView() {
           vehiculo_patente: vehiculoSeleccionado,
           fecha_emision: fecha,
           validez_dias: parseInt(validez) || 15,
-          descuento: descuento,
+          descuento: descParsed,
           total_final: totalFinal,
-          estado: 'Borrador',
+          estado: estado,
           observaciones_publicas: notasCliente,
           notas_internas: notasInternas
         }]).select()
@@ -240,12 +258,11 @@ export function PresupuestosView() {
         presId = presData[0].id;
       }
 
-      // ÍTEMS SIN SUBTOTAL
       const itemsToInsert = filasValidas.map(f => ({
         presupuesto_id: presId,
         tipo: f.tipo,
         detalle: f.detalle,
-        cantidad: parseInt(f.cant) || 1,
+        cantidad: parseFloat(f.cant) || 1,
         costo_unitario: parseFloat(f.costo) || 0,
         precio_unitario: parseFloat(f.precio) || 0
       }))
@@ -259,8 +276,9 @@ export function PresupuestosView() {
       setEditandoId(null)
       setClienteSeleccionado("")
       setVehiculoSeleccionado("")
-      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
-      setDescuento(0)
+      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0" }])
+      setDescuento("0")
+      setEstado("Borrador")
       setNotasInternas("")
       
     } catch (error: any) {
@@ -312,9 +330,10 @@ export function PresupuestosView() {
       <head>
         <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
         <style>
-          @page { size: ${tipo === 'orden' ? 'A5 landscape' : 'A4 portrait'}; margin: 15mm; }
+          /* AMBOS DOCUMENTOS AHORA SON A4 ESTRICTO */
+          @page { size: A4 portrait; margin: 15mm; }
           * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body { font-family: Arial, sans-serif; color: #111; margin: 0 auto; padding: 0; width: 100%; max-width: 900px; }
+          body { font-family: Arial, sans-serif; color: #111; margin: 0 auto; padding: 0; width: 100%; max-width: 800px; }
           .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; width: 100%; }
           .taller-info { float: left; width: 60%; }
           .taller-info h1 { margin: 0 0 5px 0; color: #008A4B; font-size: 26px; text-transform: uppercase; }
@@ -381,8 +400,8 @@ export function PresupuestosView() {
                 <td>${f.detalle}</td>
                 <td class="text-center">${f.cantidad || f.cant || 1}</td>
                 ${tipo === 'presupuesto' ? `
-                  <td class="text-right">$${(f.precio_unitario || f.precio || 0).toLocaleString()}</td>
-                  <td class="text-right font-bold">$${((f.precio_unitario || f.precio || 0) * (f.cantidad || f.cant || 1)).toLocaleString()}</td>
+                  <td class="text-right">$${(f.precio_unitario || parseFloat(f.precio) || 0).toLocaleString()}</td>
+                  <td class="text-right font-bold">$${((f.precio_unitario || parseFloat(f.precio) || 0) * (f.cantidad || parseFloat(f.cant) || 1)).toLocaleString()}</td>
                 ` : ''}
               </tr>
             `).join('') : '<tr><td colspan="5" class="text-center"><i>No hay ítems cargados.</i></td></tr>'}
@@ -498,13 +517,27 @@ export function PresupuestosView() {
                 )}
               </div>
 
-              <div className="md:col-span-3 space-y-2">
+              <div className="md:col-span-2 space-y-2">
                 <Label>Fecha de Emisión</Label>
                 <Input type="date" value={fecha} onChange={(e: any) => setFecha(e.target.value)} className="bg-slate-50 dark:bg-slate-900 h-10" />
               </div>
-              <div className="md:col-span-3 space-y-2">
+              <div className="md:col-span-2 space-y-2">
                 <Label>Validez (Días)</Label>
                 <Input type="number" value={validez} onChange={(e: any) => setValidez(e.target.value)} className="bg-slate-50 dark:bg-slate-900 h-10" />
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <Label>Estado</Label>
+                <Select value={estado} onValueChange={setEstado}>
+                  <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-900 border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Borrador">Borrador</SelectItem>
+                    <SelectItem value="Aprobado">Aprobado</SelectItem>
+                    <SelectItem value="Rechazado">Rechazado</SelectItem>
+                    <SelectItem value="Finalizado">Finalizado</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -607,12 +640,12 @@ export function PresupuestosView() {
                             <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} placeholder="Escriba el detalle..." className="h-10 bg-white dark:bg-slate-950 flex-1" />
                           </div>
                         </TableCell>
-                        <TableCell><Input type="number" min="1" value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} className="h-10 text-center font-mono bg-white dark:bg-slate-950" /></TableCell>
+                        <TableCell><Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} className="h-10 text-center font-mono bg-white dark:bg-slate-950" /></TableCell>
                         {mostrarCostos && (
-                          <TableCell className="print:hidden"><Input type="number" value={fila.costo || ""} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" /></TableCell>
+                          <TableCell className="print:hidden"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" /></TableCell>
                         )}
-                        <TableCell><Input type="number" value={fila.precio || ""} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} className="h-10 text-right font-mono bg-white dark:bg-slate-950" /></TableCell>
-                        <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)).toLocaleString()}</TableCell>
+                        <TableCell><Input value={fila.precio} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} className="h-10 text-right font-mono bg-white dark:bg-slate-950" /></TableCell>
+                        <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)).toLocaleString()}</TableCell>
                         <TableCell className="print:hidden"><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
                       </TableRow>
                     )
@@ -636,7 +669,7 @@ export function PresupuestosView() {
             <Card className="border-border shadow-md h-full">
               <CardContent className="p-6 space-y-4 flex flex-col h-full justify-center">
                 <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
-                <div className="flex justify-between items-center text-muted-foreground"><span>Descuento / Atención:</span><div className="relative w-32"><span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span><Input type="number" value={descuento || ""} onChange={(e: any) => setDescuento(parseFloat(e.target.value) || 0)} className="h-10 pl-7 text-right font-mono bg-slate-50 dark:bg-slate-900" /></div></div>
+                <div className="flex justify-between items-center text-muted-foreground"><span>Descuento / Atención:</span><div className="relative w-32"><span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span><Input value={descuento} onChange={(e: any) => setDescuento(e.target.value)} className="h-10 pl-7 text-right font-mono bg-slate-50 dark:bg-slate-900" /></div></div>
                 <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
                 {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
               </CardContent>
@@ -688,7 +721,21 @@ export function PresupuestosView() {
                       <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
                     </TableCell>
                     <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
-                    <TableCell className="text-center"><Badge variant="outline">{p.estado}</Badge></TableCell>
+                    
+                    <TableCell className="text-center">
+                      <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
+                        <SelectTrigger className="h-8 text-xs w-[130px] mx-auto bg-transparent border-dashed">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Borrador">Borrador</SelectItem>
+                          <SelectItem value="Aprobado">Aprobado</SelectItem>
+                          <SelectItem value="Rechazado">Rechazado</SelectItem>
+                          <SelectItem value="Finalizado">Finalizado</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => handleEditarPresupuesto(p)} className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50" title="Editar Presupuesto"><Pencil className="h-4 w-4" /></Button>
