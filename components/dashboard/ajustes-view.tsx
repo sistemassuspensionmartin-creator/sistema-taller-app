@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Save, Loader2, Store, Phone, MapPin, FileText, Mail, FileSignature } from "lucide-react"
+import { Save, Loader2, Store, Phone, MapPin, FileText, Mail, FileSignature, Clock, Instagram } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -19,18 +19,27 @@ export function AjustesView() {
     direccion: "",
     cuit: "",
     email: "",
+    horario: "",
+    instagram: "",
     terminos_presupuesto: ""
   })
 
-  // 1. CARGAR LA CONFIGURACIÓN ACTUAL
   const fetchConfig = async () => {
     setIsLoading(true)
     try {
-      // Buscamos siempre la fila con id = 1
       const { data, error } = await supabase.from('configuracion').select('*').eq('id', 1).single()
       if (error) throw error
       if (data) {
-        setFormData(data)
+        setFormData({
+          nombre_taller: data.nombre_taller || "",
+          telefono: data.telefono || "",
+          direccion: data.direccion || "",
+          cuit: data.cuit || "",
+          email: data.email || "",
+          horario: data.horario || "",
+          instagram: data.instagram || "",
+          terminos_presupuesto: data.terminos_presupuesto || ""
+        })
       }
     } catch (error) {
       console.error("Error al cargar configuración:", error)
@@ -43,7 +52,6 @@ export function AjustesView() {
     fetchConfig()
   }, [])
 
-  // 2. GUARDAR LOS CAMBIOS
   const handleGuardarCambios = async () => {
     if (!formData.nombre_taller.trim()) {
       return alert("El nombre del taller es obligatorio.")
@@ -82,7 +90,7 @@ export function AjustesView() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Configuración del Taller</h2>
-          <p className="text-sm text-muted-foreground">Administrá los datos de tu empresa para que aparezcan en los presupuestos y facturas.</p>
+          <p className="text-sm text-muted-foreground">Administrá los datos de tu empresa para tus presupuestos y facturas.</p>
         </div>
         <Button onClick={handleGuardarCambios} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md">
           {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
@@ -97,9 +105,10 @@ export function AjustesView() {
             <CardTitle className="text-lg flex items-center gap-2">
               <Store className="w-5 h-5 text-primary" /> Datos del Negocio
             </CardTitle>
-            <CardDescription>Esta información será la cabecera de tus documentos PDF.</CardDescription>
+            <CardDescription>Esta información será la cabecera y el pie de tus documentos PDF.</CardDescription>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label>Nombre del Taller / Razón Social <span className="text-destructive">*</span></Label>
@@ -153,18 +162,49 @@ export function AjustesView() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>Dirección Física</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Ej: Av. Principal 1234, Ciudad" 
-                  className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" 
-                  value={formData.direccion} 
-                  onChange={(e) => setFormData({...formData, direccion: e.target.value})} 
-                />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label>Dirección Física</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Ej: Av. Principal 1234, Ciudad" 
+                    className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" 
+                    value={formData.direccion} 
+                    onChange={(e) => setFormData({...formData, direccion: e.target.value})} 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Horarios de Atención</Label>
+                <div className="relative">
+                  <Clock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Ej: Lun a Vie: 8 a 18hs | Sáb: 9 a 13hs" 
+                    className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" 
+                    value={formData.horario} 
+                    onChange={(e) => setFormData({...formData, horario: e.target.value})} 
+                  />
+                </div>
               </div>
             </div>
+
+            {/* SECCIÓN REDES */}
+            <div className="border-t border-border pt-4">
+              <div className="space-y-2 w-full md:w-1/2 md:pr-3">
+                <Label>Cuenta de Instagram</Label>
+                <div className="relative">
+                  <Instagram className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Ej: @mitaller.auto" 
+                    className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" 
+                    value={formData.instagram} 
+                    onChange={(e) => setFormData({...formData, instagram: e.target.value})} 
+                  />
+                </div>
+              </div>
+            </div>
+
           </CardContent>
         </Card>
 
