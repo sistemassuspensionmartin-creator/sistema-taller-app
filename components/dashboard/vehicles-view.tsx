@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Car, User, Edit, Loader2, Save, Gauge, Palette, Calendar, X, CheckCircle2, ArrowLeft, Phone, UserCheck, UserMinus, FileText } from "lucide-react"
+import { Plus, Search, Car, User, Edit, Loader2, Save, Gauge, Palette, Calendar, X, CheckCircle2, ArrowLeft, Phone, UserCheck, UserMinus, FileText, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -29,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-
+import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
 
 const MARCAS_COMUNES = [
@@ -40,10 +39,8 @@ const MARCAS_COMUNES = [
 ]
 
 export function VehiclesView() {
-  // Estado para controlar qué pantalla vemos
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   
-  // Estados originales
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([]) 
   const [isLoading, setIsLoading] = useState(true)
@@ -65,12 +62,19 @@ export function VehiclesView() {
     cliente_id: ""
   })
 
-  // Nuevos estados para la Vista de Detalle
+  // Estados para la Vista de Detalle
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<any>(null)
   const [historialPresupuestos, setHistorialPresupuestos] = useState<any[]>([])
+  
+  // Novedades: Transferencia, Búsqueda de Dueño y Edición de Km
   const [modoTransferencia, setModoTransferencia] = useState(false)
+  const [busquedaNuevoDueno, setBusquedaNuevoDueno] = useState("")
   const [nuevoDuenoId, setNuevoDuenoId] = useState<string>("")
   const [isTransferring, setIsTransferring] = useState(false)
+  
+  const [editandoKm, setEditandoKm] = useState(false)
+  const [nuevoKm, setNuevoKm] = useState("")
+  const [isUpdatingKm, setIsUpdatingKm] = useState(false)
 
   const fetchVehiculos = async () => {
     setIsLoading(true)
@@ -104,13 +108,14 @@ export function VehiclesView() {
     }
   }, [vista])
 
-  // Lógica de apertura de detalle
   const abrirDetalle = async (vehiculo: any) => {
     setVehiculoSeleccionado(vehiculo)
     setVista("detalle")
     setModoTransferencia(false)
+    setBusquedaNuevoDueno("")
+    setNuevoDuenoId("")
+    setEditandoKm(false)
     
-    // Buscar historial de presupuestos de este auto en la BD
     try {
       const { data, error } = await supabase
         .from('presupuestos')
@@ -125,11 +130,11 @@ export function VehiclesView() {
     }
   }
 
-  // Lógica de transferencia
-  const handleTransferirDueno = async () => {
-    if (!nuevoDuenoId) return alert("Seleccione una opción.");
+  // --- NUEVA LÓGICA DE TRANSFERENCIA ---
+  const handleTransferirDueno = async (accion: "transferir" | "desvincular") => {
+    if (accion === "transferir" && !nuevoDuenoId) return alert("Seleccione un nuevo dueño de la lista.");
     
-    const esDesvinculacion = nuevoDuenoId === "desvincular";
+    const esDesvinculacion = accion === "desvincular";
     const accionTexto = esDesvinculacion ? "desvincular este vehículo" : "transferir este vehículo al nuevo dueño";
     
     if (!confirm(`¿Estás seguro de que querés ${accionTexto}?`)) return;
@@ -143,18 +148,16 @@ export function VehiclesView() {
 
       if (error) throw error;
 
-      alert("¡Cambio de titularidad guardado con éxito!");
+      alert("¡Operación realizada con éxito!");
       
       const clienteNuevo = esDesvinculacion ? null : clientes.find(c => c.id === nuevoDuenoId);
       
-      // Actualizamos la vista de detalle actual
       setVehiculoSeleccionado({
         ...vehiculoSeleccionado,
         cliente_id: esDesvinculacion ? null : nuevoDuenoId,
         clientes: clienteNuevo
       });
 
-      // Actualizamos la tabla principal por si volvemos atrás
       setVehiculos(vehiculos.map(v => 
         v.patente === vehiculoSeleccionado.patente 
           ? { ...v, cliente_id: esDesvinculacion ? null : nuevoDuenoId, clientes: clienteNuevo } 
@@ -163,16 +166,41 @@ export function VehiclesView() {
 
       setModoTransferencia(false);
       setNuevoDuenoId("");
+      setBusquedaNuevoDueno("");
 
     } catch (error: any) {
-      console.error("Error al transferir:", error)
       alert("Error al cambiar titularidad: " + error.message)
     } finally {
       setIsTransferring(false)
     }
   }
 
-  // LÓGICA DE CREACIÓN (Tuya, intacta)
+  // --- NUEVA LÓGICA PARA ACTUALIZAR KM ---
+  const handleActualizarKm = async () => {
+    const kmParseado = parseInt(nuevoKm);
+    if (isNaN(kmParseado) || kmParseado < 0) return alert("Ingrese un kilometraje válido.");
+
+    setIsUpdatingKm(true);
+    try {
+      const { error } = await supabase
+        .from('vehiculos')
+        .update({ kilometraje: kmParseado })
+        .eq('patente', vehiculoSeleccionado.patente);
+
+      if (error) throw error;
+
+      // Actualizar vista local
+      setVehiculoSeleccionado({ ...vehiculoSeleccionado, kilometraje: kmParseado });
+      setVehiculos(vehiculos.map(v => v.patente === vehiculoSeleccionado.patente ? { ...v, kilometraje: kmParseado } : v));
+      setEditandoKm(false);
+    } catch (error: any) {
+      alert("Error al actualizar kilometraje: " + error.message);
+    } finally {
+      setIsUpdatingKm(false);
+    }
+  }
+
+  // LÓGICA DE CREACIÓN (Intacta)
   const abrirModal = () => {
     setFormData({ patente: "", tipo_vehiculo: "Auto", marca: "", modelo: "", anio: "", color: "", kilometraje: "", cliente_id: "" })
     setBusquedaCliente("")
@@ -229,7 +257,6 @@ export function VehiclesView() {
       setIsModalOpen(false)
       fetchVehiculos()
     } catch (error) {
-      console.error("Error al guardar:", error)
       alert("No se pudo guardar el vehículo.")
     } finally {
       setIsSaving(false)
@@ -239,7 +266,9 @@ export function VehiclesView() {
   const vehiculosFiltrados = vehiculos.filter(v => 
     v.patente.includes(busquedaPrincipal.replace(/\s/g, "").toUpperCase()) || 
     v.marca.toLowerCase().includes(busquedaPrincipal.toLowerCase()) ||
-    v.modelo.toLowerCase().includes(busquedaPrincipal.toLowerCase())
+    v.modelo.toLowerCase().includes(busquedaPrincipal.toLowerCase()) ||
+    (v.clientes?.nombre || "").toLowerCase().includes(busquedaPrincipal.toLowerCase()) ||
+    (v.clientes?.apellido || "").toLowerCase().includes(busquedaPrincipal.toLowerCase())
   )
 
   const clientesParaMostrar = busquedaCliente.trim() === "" ? [] : clientes.filter(c => 
@@ -248,6 +277,14 @@ export function VehiclesView() {
     (c.razon_social && c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase())) ||
     (c.documento && c.documento.includes(busquedaCliente))
   ).slice(0, 5)
+
+  // Buscador para transferencia de Dueño
+  const clientesParaTransferir = busquedaNuevoDueno.trim() === "" ? [] : clientes.filter(c => 
+    (c.nombre && c.nombre.toLowerCase().includes(busquedaNuevoDueno.toLowerCase())) ||
+    (c.apellido && c.apellido.toLowerCase().includes(busquedaNuevoDueno.toLowerCase())) ||
+    (c.razon_social && c.razon_social.toLowerCase().includes(busquedaNuevoDueno.toLowerCase())) ||
+    (c.documento && c.documento.includes(busquedaNuevoDueno))
+  ).slice(0, 8)
 
   const seleccionarCliente = (cliente: any) => {
     setFormData({ ...formData, cliente_id: cliente.id })
@@ -279,7 +316,7 @@ export function VehiclesView() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="h-4 w-4 mr-2"/> Volver
+              <ArrowLeft className="h-4 w-4 mr-2"/> Volver a la Flota
             </Button>
             <div>
               <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -290,8 +327,9 @@ export function VehiclesView() {
               </h2>
             </div>
           </div>
+          {/* Este botón podría abrir un modal para editar marca, modelo, etc., pero por ahora se centra en km y dueño */}
           <Button variant="outline" className="bg-background">
-            <Edit className="w-4 h-4 mr-2"/> Editar Datos
+            <Edit className="w-4 h-4 mr-2"/> Editar Datos Principales
           </Button>
         </div>
 
@@ -304,53 +342,118 @@ export function VehiclesView() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+              <div className="grid grid-cols-2 gap-y-6 gap-x-6 text-sm">
                 <div><span className="text-muted-foreground block mb-1">Marca</span><p className="font-medium text-base">{vehiculoSeleccionado.marca}</p></div>
                 <div><span className="text-muted-foreground block mb-1">Modelo</span><p className="font-medium text-base">{vehiculoSeleccionado.modelo}</p></div>
                 <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> Año</span><p className="font-medium">{vehiculoSeleccionado.anio || '-'}</p></div>
                 <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Palette className="w-3 h-3"/> Color</span><p className="font-medium">{vehiculoSeleccionado.color || '-'}</p></div>
-                <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Gauge className="w-3 h-3"/> Kilometraje</span><p className="font-medium">{vehiculoSeleccionado.kilometraje ? `${vehiculoSeleccionado.kilometraje.toLocaleString()} km` : '-'}</p></div>
+                
+                {/* EDICIÓN DE KILOMETRAJE */}
+                <div className="col-span-2 sm:col-span-1">
+                  <span className="text-muted-foreground block mb-1 flex items-center gap-1"><Gauge className="w-3 h-3"/> Kilometraje</span>
+                  {editandoKm ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Input 
+                        type="number" 
+                        className="h-8 w-32 bg-slate-50 dark:bg-slate-900" 
+                        value={nuevoKm} 
+                        onChange={e => setNuevoKm(e.target.value)} 
+                        autoFocus
+                      />
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50" onClick={handleActualizarKm} disabled={isUpdatingKm}>
+                        {isUpdatingKm ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle2 className="w-5 h-5"/>}
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-red-600 hover:bg-red-50" onClick={() => setEditandoKm(false)} disabled={isUpdatingKm}>
+                        <X className="w-5 h-5"/>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 group">
+                      <p className="font-medium text-base">{vehiculoSeleccionado.kilometraje ? `${vehiculoSeleccionado.kilometraje.toLocaleString()} km` : 'Sin registrar'}</p>
+                      <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-emerald-600" onClick={() => {setNuevoKm(vehiculoSeleccionado.kilometraje?.toString() || ""); setEditandoKm(true);}}>
+                        <Pencil className="w-3.5 h-3.5"/>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
                 <div><span className="text-muted-foreground block mb-1">Tipo</span><p className="font-medium capitalize">{vehiculoSeleccionado.tipo_vehiculo || '-'}</p></div>
               </div>
             </CardContent>
           </Card>
 
           {/* DATOS DEL PROPIETARIO & TRANSFERENCIA */}
-          <Card className="border-border shadow-sm">
+          <Card className="border-border shadow-sm flex flex-col">
             <CardHeader className="bg-secondary/10 border-b border-border py-4 flex flex-row items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
                 <User className="w-5 h-5" /> Propietario Actual
               </CardTitle>
-              {!modoTransferencia && (
-                <Button variant="ghost" size="sm" onClick={() => setModoTransferencia(true)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-                  Cambiar Propietario
-                </Button>
-              )}
+              <div className="flex gap-2">
+                {/* BOTÓN PARA EDITAR CLIENTE (TE LLEVARÍA A LA PESTAÑA) */}
+                {c && !modoTransferencia && (
+                  <Button variant="ghost" size="sm" onClick={() => alert("Acá podés usar window.location.href='/clientes?id=' + c.id o el router de Next.js para saltar a editar al cliente " + c.nombre)} className="text-muted-foreground hover:text-primary">
+                    <Edit className="w-4 h-4 mr-2"/> Editar Cliente
+                  </Button>
+                )}
+                {!modoTransferencia && (
+                  <Button variant="outline" size="sm" onClick={() => setModoTransferencia(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
+                    Cambiar Propietario
+                  </Button>
+                )}
+              </div>
             </CardHeader>
-            <CardContent className="p-6">
+            <CardContent className="p-6 flex-1">
               {modoTransferencia ? (
-                <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-border">
+                <div className="space-y-4 animate-in fade-in duration-200 bg-slate-50 dark:bg-slate-900/50 p-5 rounded-lg border border-border h-full flex flex-col">
+                  
+                  {/* BOTÓN SEPARADO PARA DESVINCULAR */}
+                  <div className="mb-4 pb-4 border-b border-border">
+                    <Label className="text-muted-foreground font-semibold mb-2 block">¿El cliente vendió el auto?</Label>
+                    <Button variant="outline" onClick={() => handleTransferirDueno("desvincular")} disabled={isTransferring} className="w-full border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900">
+                      <UserMinus className="w-4 h-4 mr-2"/> Desvincular Vehículo (Dejar sin dueño)
+                    </Button>
+                  </div>
+
+                  {/* BUSCADOR DE NUEVO DUEÑO */}
                   <Label className="text-blue-700 dark:text-blue-400 font-semibold flex items-center gap-2">
-                    <UserCheck className="w-4 h-4"/> Seleccionar Nuevo Propietario
+                    <UserCheck className="w-4 h-4"/> Transferir a otro cliente
                   </Label>
-                  <Select value={nuevoDuenoId} onValueChange={setNuevoDuenoId}>
-                    <SelectTrigger className="bg-white dark:bg-slate-950">
-                      <SelectValue placeholder="Elija un cliente existente..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="desvincular" className="text-red-600 font-medium">
-                        <div className="flex items-center gap-2"><UserMinus className="w-4 h-4"/> Desvincular Vehículo (Dejar sin dueño)</div>
-                      </SelectItem>
-                      {clientes.map(cl => (
-                        <SelectItem key={cl.id} value={cl.id}>
-                          {cl.tipo_cliente === 'empresa' ? cl.razon_social : `${cl.nombre} ${cl.apellido || ''}`} ({cl.documento || 'S/DNI'})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="ghost" onClick={() => {setModoTransferencia(false); setNuevoDuenoId("");}} disabled={isTransferring}>Cancelar</Button>
-                    <Button onClick={handleTransferirDueno} disabled={!nuevoDuenoId || isTransferring} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                      placeholder="Buscar por nombre, apellido o DNI..." 
+                      className="pl-9 bg-white dark:bg-slate-950" 
+                      value={busquedaNuevoDueno}
+                      onChange={(e) => setBusquedaNuevoDueno(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Lista de resultados de transferencia */}
+                  <div className="flex-1 min-h-[120px] max-h-[160px] overflow-y-auto border border-border rounded-md bg-white dark:bg-slate-950 mt-2">
+                    {busquedaNuevoDueno.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-muted-foreground italic mt-4">Escriba para buscar un cliente...</div>
+                    ) : clientesParaTransferir.length === 0 ? (
+                      <div className="p-4 text-center text-sm text-muted-foreground mt-4">No se encontró al cliente.</div>
+                    ) : (
+                      clientesParaTransferir.map(cl => (
+                        <div 
+                          key={cl.id} 
+                          onClick={() => setNuevoDuenoId(cl.id)}
+                          className={`p-3 border-b border-border/50 cursor-pointer flex justify-between items-center transition-colors ${nuevoDuenoId === cl.id ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500' : 'hover:bg-slate-50 dark:hover:bg-slate-900'}`}
+                        >
+                          <div>
+                            <div className="font-medium text-sm">{cl.tipo_cliente === 'empresa' ? cl.razon_social : `${cl.nombre} ${cl.apellido || ''}`}</div>
+                            <div className="text-xs text-muted-foreground">{cl.documento || 'S/DNI'}</div>
+                          </div>
+                          {nuevoDuenoId === cl.id && <CheckCircle2 className="w-4 h-4 text-blue-600"/>}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 mt-auto">
+                    <Button variant="ghost" onClick={() => {setModoTransferencia(false); setNuevoDuenoId(""); setBusquedaNuevoDueno("");}} disabled={isTransferring}>Cancelar</Button>
+                    <Button onClick={() => handleTransferirDueno("transferir")} disabled={!nuevoDuenoId || isTransferring} className="bg-blue-600 hover:bg-blue-700 text-white">
                       {isTransferring ? <Loader2 className="w-4 h-4 animate-spin"/> : "Confirmar Transferencia"}
                     </Button>
                   </div>
@@ -358,14 +461,14 @@ export function VehiclesView() {
               ) : (
                 <>
                   {c ? (
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                    <div className="grid grid-cols-2 gap-y-6 gap-x-6 text-sm">
                       <div className="col-span-2"><span className="text-muted-foreground block mb-1">Nombre / Razón Social</span><p className="font-bold text-lg">{nombreCliente}</p></div>
                       <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</span><p className="font-medium font-mono">{c.telefono || '-'}</p></div>
                       <div><span className="text-muted-foreground block mb-1">DNI / CUIT</span><p className="font-medium">{c.documento || '-'}</p></div>
                       <div className="col-span-2"><span className="text-muted-foreground block mb-1">Email</span><p className="font-medium">{c.email || '-'}</p></div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-6 text-muted-foreground text-center">
+                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center">
                       <UserMinus className="w-12 h-12 mb-3 opacity-20" />
                       <p>Este vehículo no está vinculado a ningún cliente.</p>
                       <Button variant="link" onClick={() => setModoTransferencia(true)} className="text-blue-600 mt-2">Asignar a un cliente</Button>
@@ -377,7 +480,7 @@ export function VehiclesView() {
           </Card>
         </div>
 
-        {/* HISTORIAL DE PRESUPUESTOS */}
+        {/* HISTORIAL DE PRESUPUESTOS Y ORDENES */}
         <div className="pt-4">
           <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
             <FileText className="w-5 h-5 text-emerald-600"/> Historial de Presupuestos y Órdenes
@@ -414,15 +517,14 @@ export function VehiclesView() {
   }
 
   // ==========================================
-  // RENDER: VISTA LISTA PRINCIPAL (Y MODAL)
+  // RENDER: VISTA LISTA PRINCIPAL (FLOTA)
   // ==========================================
   return (
     <div className="space-y-6 pb-8">
-      {/* CABECERA Y TABLA PRINCIPAL */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Flota de Vehículos</h2>
-          <p className="text-sm text-muted-foreground">Administrá los autos de tus clientes.</p>
+          <p className="text-sm text-muted-foreground">Administrá los autos de tus clientes y su historial.</p>
         </div>
         <Button onClick={abrirModal} className="bg-primary text-primary-foreground">
           <Plus className="mr-2 h-4 w-4" /> Nuevo Vehículo
@@ -431,9 +533,14 @@ export function VehiclesView() {
 
       <Card className="border-border bg-card">
         <CardHeader className="border-b border-border bg-secondary/10 pb-4">
-          <div className="relative max-w-md">
+          <div className="relative max-w-md w-full">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por patente, marca o modelo..." className="pl-9" value={busquedaPrincipal} onChange={(e) => setBusquedaPrincipal(e.target.value)} />
+            <Input 
+              placeholder="Buscar por patente, marca, modelo o dueño..." 
+              className="pl-9 bg-background" 
+              value={busquedaPrincipal}
+              onChange={(e) => setBusquedaPrincipal(e.target.value)}
+            />
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -451,45 +558,49 @@ export function VehiclesView() {
               {isLoading ? (
                 <TableRow><TableCell colSpan={5} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
               ) : vehiculosFiltrados.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay vehículos registrados.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No se encontraron vehículos.</TableCell></TableRow>
               ) : (
-                vehiculosFiltrados.map((v) => (
-                  <TableRow key={v.patente} className="hover:bg-secondary/50 cursor-pointer transition-colors" onClick={() => abrirDetalle(v)}>
-                    <TableCell>
-                      <span className="font-mono font-bold bg-secondary px-2 py-1 rounded border border-border tracking-widest text-foreground whitespace-nowrap">
-                        {formatearPatenteVisual(v.patente)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-foreground">{v.marca} {v.modelo}</div>
-                      <div className="text-xs text-muted-foreground">{v.tipo_vehiculo}</div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <User className="h-3 w-3" /> 
-                        {v.clientes?.tipo_cliente === 'empresa' ? v.clientes?.razon_social : `${v.clientes?.nombre} ${v.clientes?.apellido || ''}`}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-                        {v.anio && <span className="flex items-center gap-1"><Calendar className="h-3 w-3"/> Año {v.anio}</span>}
-                        {v.color && <span className="flex items-center gap-1"><Palette className="h-3 w-3"/> {v.color}</span>}
-                        {v.kilometraje && <span className="flex items-center gap-1"><Gauge className="h-3 w-3"/> {v.kilometraje.toLocaleString()} km</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {/* Ojo acá con e.stopPropagation() para que al tocar el botón de editar no te abra el detalle por error */}
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); /* Acá podrías llamar a un modal de edición rápida si querés */ }} className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                vehiculosFiltrados.map((v) => {
+                  const nombreDueno = v.clientes ? (v.clientes.tipo_cliente === 'empresa' ? v.clientes.razon_social : `${v.clientes.nombre} ${v.clientes.apellido || ''}`) : 'Sin dueño';
+                  
+                  return (
+                    <TableRow key={v.patente} className="hover:bg-secondary/50 transition-colors cursor-pointer" onClick={() => abrirDetalle(v)}>
+                      <TableCell>
+                        <span className="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded text-sm font-mono font-bold tracking-widest uppercase">
+                          {formatearPatenteVisual(v.patente)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-semibold text-foreground">{v.marca} {v.modelo}</div>
+                        <div className="text-xs text-muted-foreground capitalize">{v.tipo_vehiculo || 'Vehículo'}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <User className="w-4 h-4" />
+                          <span className={!v.clientes ? 'italic opacity-60' : ''}>{nombreDueno}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          {v.anio && <div className="flex items-center gap-1"><Calendar className="w-3 h-3"/> Año {v.anio}</div>}
+                          {v.kilometraje && <div className="flex items-center gap-1"><Gauge className="w-3 h-3"/> {v.kilometraje.toLocaleString()} km</div>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); alert("Para editar todos los campos (Marca, modelo, etc) podés reutilizar el modal de creación.") }} className="text-muted-foreground hover:text-primary">
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* MODAL NUEVO VEHÍCULO REDISEÑADO */}
+      {/* MODAL NUEVO VEHÍCULO (Intacto) */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-4">
@@ -499,7 +610,6 @@ export function VehiclesView() {
 
           <div className="space-y-8">
             
-            {/* SECCIÓN 1: BUSCADOR DE DUEÑO */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Dueño del Vehículo <span className="text-destructive">*</span></h3>
@@ -514,7 +624,6 @@ export function VehiclesView() {
                     value={busquedaCliente}
                     onChange={(e) => setBusquedaCliente(e.target.value)}
                   />
-                  {/* Lista de resultados desplegable */}
                   {clientesParaMostrar.length > 0 && (
                     <div className="absolute top-11 left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
                       {clientesParaMostrar.map(c => (
@@ -539,7 +648,6 @@ export function VehiclesView() {
                   )}
                 </div>
               ) : (
-                /* TARJETA DE CLIENTE CONFIRMADO */
                 <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-lg">
                   <div className="flex items-center gap-3">
                     <CheckCircle2 className="h-6 w-6 text-emerald-600" />
@@ -557,7 +665,6 @@ export function VehiclesView() {
               )}
             </section>
 
-            {/* SECCIÓN 2: DATOS DEL VEHÍCULO */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Datos del Vehículo</h3>
@@ -602,7 +709,6 @@ export function VehiclesView() {
               </div>
             </section>
 
-            {/* SECCIÓN 3: DETALLES ADICIONALES */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Detalles (Opcional)</h3>
