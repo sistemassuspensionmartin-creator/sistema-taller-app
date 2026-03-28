@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, Download, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -25,18 +25,15 @@ export function PresupuestosView() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
-  // Datos reales de la BD
   const [clientes, setClientes] = useState<any[]>([])
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [presupuestos, setPresupuestos] = useState<any[]>([])
   const [configuracion, setConfiguracion] = useState<any>({})
 
-  // Estados del Buscador Inteligente
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
   const [mostrarResultados, setMostrarResultados] = useState(false)
 
-  // Estado del Presupuesto Actual
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<string>("")
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
@@ -56,7 +53,6 @@ export function PresupuestosView() {
         supabase.from('clientes').select('*').order('nombre'),
         supabase.from('vehiculos').select('*'),
         supabase.from('catalogo').select('*').order('detalle'),
-        // presupuesto_items(*) PARA QUE TRAIGA EL DETALLE DE LOS HISTÓRICOS
         supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono), vehiculos(patente, marca, modelo), presupuesto_items(*)').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
@@ -102,7 +98,6 @@ export function PresupuestosView() {
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
     const autosDelCliente = vehiculos.filter(v => v.cliente_id === c.id)
-    // Magia: Si tiene un solo auto, lo elegimos. Si tiene varios o ninguno, forzamos a elegir.
     if (autosDelCliente.length === 1) {
       setVehiculoSeleccionado(autosDelCliente[0].id)
     } else {
@@ -140,8 +135,7 @@ export function PresupuestosView() {
   const gananciaEstimada = totalFinal - costoTotal
 
   const handleGuardarPresupuesto = async () => {
-    // Validación de obligatoriedad (Sigue activa, pero sin el asterisco en el buscador)
-    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo válido de la base de datos (use el buscador o el desplegable de autos).")
+    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo usando el buscador o el desplegable.")
     const filasValidas = filas.filter(f => f.detalle.trim() !== "")
     if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
 
@@ -180,7 +174,6 @@ export function PresupuestosView() {
 
       alert("¡Presupuesto guardado con éxito!")
       setVista("lista")
-      // Limpiar formulario
       setClienteSeleccionado("")
       setVehiculoSeleccionado("")
       setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
@@ -208,7 +201,6 @@ export function PresupuestosView() {
   // GENERADOR DE PDF PROFESIONAL BLINDADO
   const generarDocumento = (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     const esHistorico = !!datosHistoricos;
-    
     const v_cliente = esHistorico ? datosHistoricos.clientes : clienteActual;
     const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
     
@@ -224,7 +216,6 @@ export function PresupuestosView() {
       return fechaString;
     }
     const v_fecha = esHistorico ? formatearFecha(datosHistoricos.fecha) : formatearFecha(fecha);
-    
     const v_nro = esHistorico ? datosHistoricos.nro_comprobante : "PRE-BORRADOR";
     const v_notas = esHistorico ? datosHistoricos.notas_cliente : notasCliente;
     const v_notas_int = esHistorico ? datosHistoricos.notas_internas : notasInternas;
@@ -239,49 +230,32 @@ export function PresupuestosView() {
       <head>
         <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
         <style>
-          @page { size: ${tipo === 'orden' ? 'A5 landscape' : 'A4 portrait'}; margin: 15mm; }
-          
+          @page { size: ${tipo === 'orden' ? 'landscape' : 'A4 portrait'}; margin: 15mm; }
           * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body { 
-            font-family: Arial, sans-serif; 
-            color: #111; 
-            margin: 0; 
-            padding: 0; 
-            width: 100%; 
-            max-width: 100%;
-          }
-          
-          .header { width: 100%; border-bottom: 2px solid #008A4B; padding-bottom: 10px; margin-bottom: 20px; overflow: hidden; }
-          
+          body { font-family: Arial, sans-serif; color: #111; margin: 0 auto; padding: 0; width: 100%; max-width: 900px; }
+          .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; width: 100%; }
           .taller-info { float: left; width: 60%; }
-          .taller-info h1 { margin: 0; color: #008A4B; font-size: 24px; text-transform: uppercase; }
-          .taller-info p { margin: 2px 0; font-size: 13px; color: #666; }
-          
+          .taller-info h1 { margin: 0 0 5px 0; color: #008A4B; font-size: 26px; text-transform: uppercase; }
+          .taller-info p { margin: 2px 0; font-size: 14px; color: #555; }
           .doc-info { float: right; width: 35%; text-align: right; }
-          .doc-info h2 { margin: 0; font-size: 20px; color: #444; text-transform: uppercase; }
-          .doc-info p { margin: 2px 0; font-size: 13px; color: #444; }
-          
-          .box { width: 100%; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 20px; background: #f9fafb; display: table; }
-          .box-col { display: table-cell; width: 50%; vertical-align: top; font-size: 14px; line-height: 1.5; }
-          
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }
-          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 13px; }
-          td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
-          
+          .doc-info h2 { margin: 0 0 5px 0; font-size: 22px; color: #333; text-transform: uppercase; }
+          .doc-info p { margin: 2px 0; font-size: 14px; color: #444; }
+          .box { width: 100%; border: 1px solid #ccc; padding: 15px; border-radius: 4px; margin-bottom: 25px; background: #fafafa; overflow: hidden; }
+          .box-col { float: left; width: 50%; font-size: 14px; line-height: 1.6; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: fixed; }
+          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 14px; border: 1px solid #008A4B; }
+          td { padding: 10px; border-bottom: 1px solid #ddd; border-left: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 14px; }
           .text-right { text-align: right; }
           .text-center { text-align: center; }
-          
-          .totales { width: 40%; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
-          .total-row { overflow: hidden; font-size: 14px; margin-bottom: 5px; }
+          .totales { width: 350px; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
+          .total-row { overflow: hidden; font-size: 15px; margin-bottom: 8px; }
           .total-row span:first-child { float: left; font-weight: bold; }
           .total-row span:last-child { float: right; font-family: monospace; }
-          .total-final { font-size: 18px; font-weight: bold; color: #008A4B; margin-top: 10px; }
-          
-          .notas { clear: both; padding-top: 30px; font-size: 12px; color: #555; }
-          
-          .orden-box { clear: both; border: 2px dashed #ccc; padding: 15px; margin-top: 20px; border-radius: 6px; background: #fffdf5; }
-          .firmas { width: 100%; display: table; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; }
-          .firma-col { display: table-cell; width: 50%; text-align: left; font-weight: bold; font-size: 13px; }
+          .total-final { font-size: 22px; color: #008A4B; margin-top: 10px; }
+          .notas { clear: both; padding-top: 30px; font-size: 13px; color: #444; }
+          .orden-box { clear: both; border: 2px dashed #999; padding: 20px; margin-top: 30px; border-radius: 4px; background: #fffdf5; }
+          .firmas { width: 100%; overflow: hidden; margin-top: 50px; padding-top: 20px; }
+          .firma-col { float: left; width: 50%; font-weight: bold; font-size: 14px; }
         </style>
       </head>
       <body>
@@ -292,7 +266,7 @@ export function PresupuestosView() {
             <p>📞 ${telTaller || 'Teléfono no configurado'}</p>
           </div>
           <div class="doc-info">
-            <h2>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'}</h2>
+            <h2>${tipo === 'orden' ? 'ORDEN DE TRABAJO' : 'PRESUPUESTO'}</h2>
             <p>Nro: <b>${v_nro}</b></p>
             <p>Fecha: ${v_fecha}</p>
           </div>
@@ -305,7 +279,7 @@ export function PresupuestosView() {
           </div>
           <div class="box-col">
             <strong>Vehículo:</strong> ${v_vehiculo.marca} ${v_vehiculo.modelo}<br>
-            <strong>Patente:</strong> <span style="font-family: monospace; font-size:14px; font-weight:bold;">${v_vehiculo.patente}</span>
+            <strong>Patente:</strong> <span style="font-family: monospace; font-size:15px; font-weight:bold;">${v_vehiculo.patente}</span>
           </div>
         </div>
 
@@ -373,16 +347,13 @@ export function PresupuestosView() {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
         
-        {/* BARRA SUPERIOR DE ACCIONES */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
           
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">
-              NUEVO
-            </div>
+            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO</div>
             <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
               <ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo
             </Button>
@@ -398,7 +369,6 @@ export function PresupuestosView() {
           </div>
         </div>
 
-        {/* 1. DATOS DEL PRESUPUESTO */}
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border pb-4">
             <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
@@ -408,11 +378,10 @@ export function PresupuestosView() {
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
               <div className="md:col-span-6 space-y-2 relative">
-                {/* SIN asterisco, buscar es libre */}
                 <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span></Label>
                 <div className="flex">
                   <Input 
-                    placeholder="Escriba aquí para buscar..." 
+                    placeholder="Escriba aquí para buscar y seleccionar..." 
                     className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
                     value={busquedaEntidad}
                     onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
@@ -454,6 +423,7 @@ export function PresupuestosView() {
               </div>
             </div>
 
+            {/* CAJAS READ-ONLY BLINDADAS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
@@ -465,23 +435,36 @@ export function PresupuestosView() {
                 />
               </div>
 
-              {/* SELECTOR DE VEHÍCULO LIMPIO Y NORMAL */}
               <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar <span className="text-destructive">*</span></Label>
-                <Select value={vehiculoSeleccionado} onValueChange={(val: string) => setVehiculoSeleccionado(val)} disabled={!clienteSeleccionado}>
-                  <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border">
-                    <SelectValue placeholder={clienteSeleccionado ? "Seleccione un vehículo..." : "Esperando cliente..."} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehiculosDelCliente.length === 0 ? (
-                      <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
-                    ) : (
-                      vehiculosDelCliente.map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar</Label>
+                
+                {/* LÓGICA DE ESTADOS DEL VEHÍCULO */}
+                {!clienteSeleccionado ? (
+                  // ESTADO 1: No hay cliente -> Input gris
+                  <Input readOnly placeholder="Esperando cliente..." className="bg-secondary/20 text-foreground font-medium h-10 border-border pointer-events-none" />
+                ) : !vehiculoSeleccionado ? (
+                  // ESTADO 2: Hay cliente pero falta elegir auto -> Select normal
+                  <Select value={vehiculoSeleccionado || undefined} onValueChange={(val: string) => setVehiculoSeleccionado(val)}>
+                    <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border border-emerald-500 ring-1 ring-emerald-500">
+                      <SelectValue placeholder="Elija un vehículo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vehiculosDelCliente.length === 0 ? (
+                        <SelectItem value="none" disabled>No tiene vehículos</SelectItem>
+                      ) : (
+                        vehiculosDelCliente.map(v => (
+                          <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  // ESTADO 3: Vehículo Confirmado -> Input bloqueado con botón para borrar
+                  <div className="flex gap-2">
+                    <Input readOnly value={`${vehiculoActual?.marca} ${vehiculoActual?.modelo} (${vehiculoActual?.patente})`} className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 text-emerald-900 dark:text-emerald-100 font-medium h-10 pointer-events-none flex-1" />
+                    <Button variant="outline" onClick={() => setVehiculoSeleccionado("")} title="Cambiar vehículo" className="px-3 h-10 text-muted-foreground hover:text-destructive"><X className="h-4 w-4"/></Button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
