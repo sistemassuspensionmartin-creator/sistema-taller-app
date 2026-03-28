@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 
 export function PresupuestosView() {
-  const [vista, setVista] = useState<"lista" | "crear">("crear")
+  const [vista, setVista] = useState<"lista" | "crear">("lista")
   const [mostrarCostos, setMostrarCostos] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -30,6 +30,7 @@ export function PresupuestosView() {
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [presupuestos, setPresupuestos] = useState<any[]>([])
+  const [configuracion, setConfiguracion] = useState<any>({})
 
   // Estados del Buscador Inteligente
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
@@ -51,17 +52,20 @@ export function PresupuestosView() {
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
-      const [resClientes, resVehiculos, resCatalogo, resPresupuestos] = await Promise.all([
+      const [resClientes, resVehiculos, resCatalogo, resPresupuestos, resConfig] = await Promise.all([
         supabase.from('clientes').select('*').order('nombre'),
         supabase.from('vehiculos').select('*'),
         supabase.from('catalogo').select('*').order('detalle'),
-        supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente), vehiculos(patente, marca, modelo)').order('created_at', { ascending: false })
+        // ACÁ AGREGUÉ presupuesto_items(*) PARA QUE TRAIGA EL DETALLE DE LOS HISTÓRICOS
+        supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono), vehiculos(patente, marca, modelo), presupuesto_items(*)').order('created_at', { ascending: false }),
+        supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
       
       setClientes(resClientes.data || [])
       setVehiculos(resVehiculos.data || [])
       setCatalogo(resCatalogo.data || [])
       setPresupuestos(resPresupuestos.data || [])
+      if (resConfig.data) setConfiguracion(resConfig.data)
     } catch (error) {
       console.error("Error al cargar datos:", error)
     } finally {
@@ -73,17 +77,20 @@ export function PresupuestosView() {
     if (vista === "lista") cargarDatos()
   }, [vista])
 
-  // LÓGICA DEL BUSCADOR INTELIGENTE
-  const vehiculosBusqueda = busquedaEntidad.trim() === "" ? [] : vehiculos.filter(v => 
-    v.patente.toLowerCase().includes(busquedaEntidad.toLowerCase().replace(/\s/g, "")) || 
-    v.marca.toLowerCase().includes(busquedaEntidad.toLowerCase())
+  const terminoBusqueda = busquedaEntidad.toLowerCase().trim()
+  
+  const vehiculosBusqueda = terminoBusqueda === "" ? [] : vehiculos.filter(v => 
+    (v.patente && v.patente.toLowerCase().includes(terminoBusqueda.replace(/\s/g, ""))) || 
+    (v.marca && v.marca.toLowerCase().includes(terminoBusqueda)) ||
+    (v.modelo && v.modelo.toLowerCase().includes(terminoBusqueda))
   ).slice(0, 4)
 
-  const clientesBusqueda = busquedaEntidad.trim() === "" ? [] : clientes.filter(c => 
-    (c.nombre && c.nombre.toLowerCase().includes(busquedaEntidad.toLowerCase())) ||
-    (c.razon_social && c.razon_social.toLowerCase().includes(busquedaEntidad.toLowerCase())) ||
-    (c.documento && c.documento.includes(busquedaEntidad))
-  ).slice(0, 4)
+  const clientesBusqueda = terminoBusqueda === "" ? [] : clientes.filter(c => {
+    const nombreCompleto = `${c.nombre || ''} ${c.apellido || ''}`.toLowerCase()
+    return nombreCompleto.includes(terminoBusqueda) ||
+      (c.razon_social && c.razon_social.toLowerCase().includes(terminoBusqueda)) ||
+      (c.documento && c.documento.includes(terminoBusqueda))
+  }).slice(0, 4)
 
   const seleccionarVehiculoBuscador = (v: any) => {
     setVehiculoSeleccionado(v.id)
@@ -101,7 +108,6 @@ export function PresupuestosView() {
 
   const vehiculosDelCliente = vehiculos.filter(v => v.cliente_id === clienteSeleccionado)
 
-  // Lógica de Ítems
   const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
 
   const actualizarFila = (id: string, campo: string, valor: any) => {
@@ -127,7 +133,6 @@ export function PresupuestosView() {
   const totalFinal = subtotalNeto - descuento
   const gananciaEstimada = totalFinal - costoTotal
 
-  // ACCIONES DE BOTONES
   const handleGuardarPresupuesto = async () => {
     if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo.")
     const filasValidas = filas.filter(f => f.detalle.trim() !== "")
@@ -187,29 +192,182 @@ export function PresupuestosView() {
     if (!clienteActual.telefono) return alert("El cliente no tiene un número de teléfono registrado.")
     
     const telefonoLimpio = clienteActual.telefono.replace(/\D/g, '')
-    const mensaje = `Hola ${clienteActual.nombre}, te contactamos del taller.\n\nTe comparto el resumen de cotización para tu ${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente}):\n\n*Total estimado: $${totalFinal.toLocaleString()}*\n\nCualquier consulta estamos a disposición.`
+    const mensaje = `Hola ${clienteActual.nombre}, te contactamos de ${configuracion.nombre_taller || 'Taller'}.\n\nTe preparamos el presupuesto para tu ${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente}).\n\n*Total estimado: $${totalFinal.toLocaleString()}*\n\nTe adjunto el PDF con el detalle. ¡Cualquier consulta estamos a disposición!`
     
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
+  }
+
+  // GENERADOR DE PDF PROFESIONAL BLINDADO
+  const generarDocumento = (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
+    const esHistorico = !!datosHistoricos;
+    
+    const v_cliente = esHistorico ? datosHistoricos.clientes : clienteActual;
+    const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
+    
+    if (!v_cliente || !v_vehiculo) return alert("Faltan datos del cliente o vehículo para generar el documento.");
+
+    const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "");
+    const v_total = esHistorico ? datosHistoricos.total : totalFinal;
+    const v_fecha = esHistorico ? new Date(datosHistoricos.fecha).toLocaleDateString('es-AR') : new Date(fecha).toLocaleDateString('es-AR');
+    const v_nro = esHistorico ? datosHistoricos.nro_comprobante : "PRE-BORRADOR";
+    const v_notas = esHistorico ? datosHistoricos.notas_cliente : notasCliente;
+    const v_notas_int = esHistorico ? datosHistoricos.notas_internas : notasInternas;
+
+    const nombreTaller = configuracion.nombre_taller || "Mi Taller Automotor";
+    const telTaller = configuracion.telefono || "";
+    const dirTaller = configuracion.direccion || "";
+
+    // Diseño resistente a navegadores caprichosos
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
+        <style>
+          /* Forzamos el tamaño y orientación de la hoja */
+          @page { size: ${tipo === 'orden' ? 'A5 landscape' : 'A4 portrait'}; margin: 15mm; }
+          
+          * { box-sizing: border-box; }
+          body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; /* Obliga a ocupar todo el ancho */
+            max-width: 100%;
+          }
+          
+          .header { width: 100%; border-bottom: 2px solid #008A4B; padding-bottom: 10px; margin-bottom: 20px; }
+          .header::after { content: ""; display: table; clear: both; }
+          
+          .taller-info { float: left; width: 60%; }
+          .taller-info h1 { margin: 0; color: #008A4B; font-size: 24px; }
+          .taller-info p { margin: 2px 0; font-size: 13px; color: #666; }
+          
+          .doc-info { float: right; width: 35%; text-align: right; }
+          .doc-info h2 { margin: 0; font-size: 20px; color: #444; text-transform: uppercase; }
+          
+          .box { width: 100%; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 20px; background: #f9fafb; display: table; }
+          .box-col { display: table-cell; width: 50%; vertical-align: top; font-size: 14px; line-height: 1.5; }
+          
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }
+          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 13px; }
+          td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+          
+          .text-right { text-align: right; }
+          .text-center { text-align: center; }
+          
+          .totales { width: 40%; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
+          .total-row { display: block; width: 100%; clear: both; font-size: 14px; margin-bottom: 5px; }
+          .total-row span:first-child { float: left; }
+          .total-row span:last-child { float: right; font-family: monospace; }
+          .total-final { font-size: 18px; font-weight: bold; color: #008A4B; margin-top: 10px; }
+          
+          .notas { clear: both; padding-top: 40px; font-size: 12px; color: #555; }
+          
+          .orden-box { clear: both; border: 2px dashed #ccc; padding: 15px; margin-top: 20px; border-radius: 6px; }
+          .firmas { width: 100%; display: table; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; }
+          .firma-col { display: table-cell; width: 50%; text-align: left; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="taller-info">
+            <h1>${nombreTaller}</h1>
+            <p>📍 ${dirTaller}</p>
+            <p>📞 ${telTaller}</p>
+          </div>
+          <div class="doc-info">
+            <h2>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'}</h2>
+            <p>Nro: <b>${v_nro}</b></p>
+            <p>Fecha: ${v_fecha}</p>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="box-col">
+            <strong>Cliente:</strong> ${v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`}<br>
+            <strong>Teléfono:</strong> ${v_cliente.telefono || 'Sin registrar'}
+          </div>
+          <div class="box-col">
+            <strong>Vehículo:</strong> ${v_vehiculo.marca} ${v_vehiculo.modelo}<br>
+            <strong>Patente:</strong> <span style="font-family: monospace; font-size:14px; font-weight:bold;">${v_vehiculo.patente}</span>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th width="15%">Tipo</th>
+              <th width="${tipo === 'presupuesto' ? '45%' : '65%'}">Descripción del Trabajo / Repuesto</th>
+              <th width="10%" class="text-center">Cant.</th>
+              ${tipo === 'presupuesto' ? '<th width="15%" class="text-right">Precio Unit.</th><th width="15%" class="text-right">Subtotal</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${v_filas.length > 0 ? v_filas.map((f:any) => `
+              <tr>
+                <td>${f.tipo}</td>
+                <td>${f.detalle}</td>
+                <td class="text-center">${f.cantidad || f.cant || 1}</td>
+                ${tipo === 'presupuesto' ? `
+                  <td class="text-right">$${(f.precio_unitario || f.precio || 0).toLocaleString()}</td>
+                  <td class="text-right font-bold">$${((f.precio_unitario || f.precio || 0) * (f.cantidad || f.cant || 1)).toLocaleString()}</td>
+                ` : ''}
+              </tr>
+            `).join('') : '<tr><td colspan="5" class="text-center"><i>No hay ítems cargados.</i></td></tr>'}
+          </tbody>
+        </table>
+
+        ${tipo === 'presupuesto' ? `
+          <div class="totales">
+            <div class="total-row total-final">
+              <span>TOTAL FINAL:</span>
+              <span>$${v_total.toLocaleString()}</span>
+            </div>
+          </div>
+          <div class="notas">
+            <strong>Observaciones:</strong><br>
+            ${(v_notas || '').replace(/\n/g, '<br>')}
+          </div>
+        ` : `
+          <div class="orden-box">
+            <strong>Notas y Tareas Internas (Solo Taller):</strong><br><br>
+            ${v_notas_int ? v_notas_int.replace(/\n/g, '<br>') : '<i>Sin instrucciones adicionales.</i>'}
+          </div>
+          <div class="firmas">
+            <div class="firma-col">Firma Mecánico: _____________________</div>
+            <div class="firma-col">Km Ingreso: _____________________</div>
+          </div>
+        `}
+      </body>
+      </html>
+    `;
+
+    const ventana = window.open('', '_blank');
+    if (ventana) {
+      ventana.document.write(html);
+      ventana.document.close();
+      setTimeout(() => {
+        ventana.print();
+        ventana.onafterprint = () => ventana.close();
+      }, 500);
+    }
   }
 
   if (vista === "crear") {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
-        
-        {/* BARRA SUPERIOR DE ACCIONES */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
-          
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">
-              NUEVO
-            </div>
-            <Button variant="outline" onClick={() => window.print()} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO</div>
+            <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
               <ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo
             </Button>
-            <Button variant="outline" onClick={() => window.print()} className="bg-background">
+            <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-background">
               <Printer className="w-4 h-4 mr-2"/> Imprimir / PDF
             </Button>
             <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none">
@@ -239,7 +397,7 @@ export function PresupuestosView() {
                     value={busquedaEntidad}
                     onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
                     onFocus={() => setMostrarResultados(true)}
-                    onBlur={() => setTimeout(() => setMostrarResultados(false), 200)}
+                    onBlur={() => setTimeout(() => setMostrarResultados(false), 300)}
                   />
                   <Button variant="outline" className="rounded-l-none bg-secondary/20 px-4 h-10 border-l-0"><Search className="h-4 w-4 text-muted-foreground"/></Button>
                 </div>
@@ -439,8 +597,8 @@ export function PresupuestosView() {
                     <TableCell className="text-center"><Badge variant="outline">{p.estado}</Badge></TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Orden de Trabajo"><ClipboardList className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => generarDocumento('orden', p)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Orden de Trabajo"><ClipboardList className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => generarDocumento('presupuesto', p)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
