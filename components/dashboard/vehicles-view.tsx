@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,7 @@ const MARCAS_COMUNES = [
 ]
 
 export function VehiclesView() {
+  const router = useRouter()
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   
   const [vehiculos, setVehiculos] = useState<any[]>([])
@@ -430,7 +432,7 @@ export function VehiclesView() {
                 </CardTitle>
                 <div className="flex gap-2">
                   {vehiculoSeleccionado.clientes && !modoTransferencia && (
-                    <Button variant="ghost" size="sm" onClick={() => alert("Para navegar a clientes desde el detalle, usá la función o estado que maneja tu menú lateral (por ejemplo: setActiveTab('clientes'))")} className="text-muted-foreground hover:text-primary">
+                    <Button variant="ghost" size="sm" onClick={() => router.push('/clientes')} className="text-muted-foreground hover:text-primary">
                       <Edit className="w-4 h-4 mr-2"/> Editar Cliente
                     </Button>
                   )}
