@@ -20,31 +20,33 @@ import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 
 export function PresupuestosView() {
-  const [vista, setVista] = useState<"lista" | "crear">("crear") // Arranca en crear para que lo pruebes
+  const [vista, setVista] = useState<"lista" | "crear">("crear")
   const [mostrarCostos, setMostrarCostos] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Datos reales de la BD
+  // Datos de la BD
   const [clientes, setClientes] = useState<any[]>([])
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [presupuestos, setPresupuestos] = useState<any[]>([])
 
+  // Estados del Buscador Inteligente
+  const [busquedaEntidad, setBusquedaEntidad] = useState("")
+  const [mostrarResultados, setMostrarResultados] = useState(false)
+
   // Estado del Presupuesto Actual
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<string>("")
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]) // Fecha del día por defecto
   const [validez, setValidez] = useState("15")
   const [notasCliente, setNotasCliente] = useState("Los repuestos pueden sufrir variaciones de precio sin previo aviso. Validez sujeta a stock.")
   const [notasInternas, setNotasInternas] = useState("")
   const [descuento, setDescuento] = useState(0)
 
-  // Filas del presupuesto (Empieza con UNA fila vacía por defecto)
   const [filas, setFilas] = useState<any[]>([
     { id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }
   ])
 
-  // Cargar datos iniciales
   useEffect(() => {
     const cargarDatos = async () => {
       setIsLoading(true)
@@ -69,14 +71,35 @@ export function PresupuestosView() {
     cargarDatos()
   }, [vista])
 
-  // Lógica de autocompletado al elegir un vehículo/patente
-  const handleSeleccionarPatente = (val: string) => {
-    setVehiculoSeleccionado(val)
-    const veh = vehiculos.find(v => v.id === val)
-    if (veh) setClienteSeleccionado(veh.cliente_id)
+  // LÓGICA DEL BUSCADOR INTELIGENTE
+  const vehiculosBusqueda = busquedaEntidad.trim() === "" ? [] : vehiculos.filter(v => 
+    v.patente.toLowerCase().includes(busquedaEntidad.toLowerCase().replace(/\s/g, "")) || 
+    v.marca.toLowerCase().includes(busquedaEntidad.toLowerCase())
+  ).slice(0, 4)
+
+  const clientesBusqueda = busquedaEntidad.trim() === "" ? [] : clientes.filter(c => 
+    (c.nombre && c.nombre.toLowerCase().includes(busquedaEntidad.toLowerCase())) ||
+    (c.razon_social && c.razon_social.toLowerCase().includes(busquedaEntidad.toLowerCase())) ||
+    (c.documento && c.documento.includes(busquedaEntidad))
+  ).slice(0, 4)
+
+  const seleccionarVehiculoBuscador = (v: any) => {
+    setVehiculoSeleccionado(v.id)
+    setClienteSeleccionado(v.cliente_id)
+    setBusquedaEntidad("")
+    setMostrarResultados(false)
   }
 
-  // Manejar el agregado y edición de ítems
+  const seleccionarClienteBuscador = (c: any) => {
+    setClienteSeleccionado(c.id)
+    setVehiculoSeleccionado("") // Forzamos a que tenga que elegir un auto
+    setBusquedaEntidad("")
+    setMostrarResultados(false)
+  }
+
+  const vehiculosDelCliente = vehiculos.filter(v => v.cliente_id === clienteSeleccionado)
+
+  // Lógica de Ítems
   const agregarFilaVacia = () => {
     setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
   }
@@ -84,7 +107,6 @@ export function PresupuestosView() {
   const actualizarFila = (id: string, campo: string, valor: any) => {
     setFilas(filas.map(f => {
       if (f.id !== id) return f
-      // Si cambia el tipo (ej: de Repuesto a Servicio), limpiamos los datos para que no queden mezclados
       if (campo === 'tipo') return { ...f, tipo: valor, detalle: "", costo: 0, precio: 0 }
       return { ...f, [campo]: valor }
     }))
@@ -93,24 +115,15 @@ export function PresupuestosView() {
   const aplicarItemCatalogo = (idFila: string, idCatalogo: string) => {
     const item = catalogo.find(c => c.id === idCatalogo)
     if (item) {
-      setFilas(filas.map(f => f.id === idFila ? {
-        ...f,
-        detalle: item.detalle,
-        costo: item.costo_base || 0,
-        precio: item.precio_base || 0
-      } : f))
+      setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || 0, precio: item.precio_base || 0 } : f))
     }
   }
 
-  const eliminarFila = (id: string) => {
-    setFilas(filas.filter(f => f.id !== id))
-  }
+  const eliminarFila = (id: string) => setFilas(filas.filter(f => f.id !== id))
 
-  // Datos para mostrar en las cajitas read-only
   const vehiculoActual = vehiculos.find(v => v.id === vehiculoSeleccionado)
   const clienteActual = clientes.find(c => c.id === clienteSeleccionado)
 
-  // Cálculos
   const subtotalNeto = filas.reduce((acc, fila) => acc + ((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)), 0)
   const costoTotal = filas.reduce((acc, fila) => acc + ((parseFloat(fila.costo) || 0) * (parseInt(fila.cant) || 1)), 0)
   const totalFinal = subtotalNeto - descuento
@@ -119,33 +132,20 @@ export function PresupuestosView() {
   if (vista === "crear") {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
-        
-        {/* BARRA SUPERIOR DE ACCIONES */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
-          
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">
-              NUEVO: PR-0014
-            </div>
-            <Button variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
-              <ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo
-            </Button>
-            <Button variant="outline" className="bg-background">
-              <Printer className="w-4 h-4 mr-2"/> Imprimir / PDF
-            </Button>
-            <Button className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none">
-              <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
-            </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
-              <Save className="w-4 h-4 mr-2"/> Guardar
-            </Button>
+            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO: PR-0014</div>
+            <Button variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800"><ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo</Button>
+            <Button variant="outline" className="bg-background"><Printer className="w-4 h-4 mr-2"/> Imprimir / PDF</Button>
+            <Button className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none"><MessageCircle className="w-4 h-4 mr-2"/> WhatsApp</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"><Save className="w-4 h-4 mr-2"/> Guardar</Button>
           </div>
         </div>
 
-        {/* 1. DATOS DEL PRESUPUESTO (ARRIBA COMO PEDISTE) */}
+        {/* 1. DATOS DEL PRESUPUESTO */}
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border pb-4">
             <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
@@ -154,25 +154,45 @@ export function PresupuestosView() {
           </CardHeader>
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6">
-              <div className="md:col-span-6 space-y-2">
+              
+              {/* BUSCADOR INTELIGENTE */}
+              <div className="md:col-span-6 space-y-2 relative">
                 <Label>Buscar Patente o Cliente <span className="text-destructive">*</span></Label>
                 <div className="flex">
-                  <Select value={vehiculoSeleccionado} onValueChange={handleSeleccionarPatente}>
-                    <SelectTrigger className="w-full bg-slate-50 dark:bg-slate-900 h-10 rounded-r-none border-r-0"><SelectValue placeholder="EJ: AB 123 CD..." /></SelectTrigger>
-                    <SelectContent>
-                      {vehiculos.map(v => {
-                        const c = clientes.find(cl => cl.id === v.cliente_id)
-                        return (
-                          <SelectItem key={v.id} value={v.id}>
-                            <span className="font-mono font-bold mr-2">{v.patente}</span> - {c?.tipo_cliente === 'empresa' ? c.razon_social : `${c?.nombre} ${c?.apellido}`} ({v.marca} {v.modelo})
-                          </SelectItem>
-                        )
-                      })}
-                    </SelectContent>
-                  </Select>
+                  <Input 
+                    placeholder="Ej: AB 123 CD o Juan Pérez..." 
+                    className="bg-slate-50 dark:bg-slate-900 h-10 rounded-r-none border-r-0"
+                    value={busquedaEntidad}
+                    onChange={(e) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
+                    onFocus={() => setMostrarResultados(true)}
+                    onBlur={() => setTimeout(() => setMostrarResultados(false), 200)}
+                  />
                   <Button variant="outline" className="rounded-l-none bg-secondary/20 px-4 h-10 border-l-0"><Search className="h-4 w-4 text-muted-foreground"/></Button>
                 </div>
+
+                {/* Resultados Desplegables */}
+                {mostrarResultados && busquedaEntidad.length > 0 && (vehiculosBusqueda.length > 0 || clientesBusqueda.length > 0) && (
+                  <div className="absolute top-[72px] left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
+                    {vehiculosBusqueda.map(v => {
+                      const c = clientes.find(cl => cl.id === v.cliente_id)
+                      return (
+                        <div key={v.id} onClick={() => seleccionarVehiculoBuscador(v)} className="p-2.5 hover:bg-emerald-600 hover:text-white cursor-pointer flex items-center gap-3 border-b border-border/50 text-sm transition-colors group">
+                          <span className="bg-[#008A4B] text-white px-2 py-1 rounded font-mono font-bold tracking-widest">{v.patente}</span>
+                          <span className="font-medium">- {c?.tipo_cliente === 'empresa' ? c.razon_social : `${c?.nombre} ${c?.apellido}`} ({v.marca} {v.modelo})</span>
+                        </div>
+                      )
+                    })}
+                    {clientesBusqueda.map(c => (
+                      <div key={c.id} onClick={() => seleccionarClienteBuscador(c)} className="p-3 hover:bg-secondary cursor-pointer flex items-center gap-2 border-b border-border/50 text-sm transition-colors">
+                        <User className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-bold">{c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido}`}</span>
+                        <span className="text-muted-foreground text-xs">({c.documento || 'Sin DNI'})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+
               <div className="md:col-span-3 space-y-2">
                 <Label>Fecha de Emisión</Label>
                 <Input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="bg-slate-50 dark:bg-slate-900 h-10" />
@@ -184,34 +204,43 @@ export function PresupuestosView() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
+              {/* MAGIA DE ASIGNACIÓN: Si eligió cliente pero no auto, se vuelve un Select obligatorio */}
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo</Label>
-                <Input readOnly value={vehiculoActual ? `${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente})` : ""} className="bg-secondary/30 border-dashed text-foreground font-medium" />
+                {!vehiculoSeleccionado && clienteSeleccionado ? (
+                  <Select value={vehiculoSeleccionado} onValueChange={setVehiculoSeleccionado}>
+                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
+                      <SelectValue placeholder="⚠️ Seleccione el vehículo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vehiculosDelCliente.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input readOnly value={vehiculoActual ? `${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente})` : ""} className="bg-secondary/30 border-dashed text-foreground font-medium h-10" />
+                )}
               </div>
+
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente</Label>
-                <Input readOnly value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} className="bg-secondary/30 border-dashed text-foreground font-medium" />
+                <Input readOnly value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} className="bg-secondary/30 border-dashed text-foreground font-medium h-10" />
               </div>
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</Label>
-                <Input readOnly value={clienteActual?.telefono || ""} className="bg-secondary/30 border-dashed text-foreground font-medium font-mono" />
+                <Input readOnly value={clienteActual?.telefono || ""} className="bg-secondary/30 border-dashed text-foreground font-medium font-mono h-10" />
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* 2. TABLA DE DETALLE (MEDIO) */}
+        {/* 2. TABLA DE DETALLE */}
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Detalle Presupuesto</CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setMostrarCostos(!mostrarCostos)}
-              className={mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}
-            >
-              {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>}
-              {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
+            <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}>
+              {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>} {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
             </Button>
           </CardHeader>
           <CardContent className="p-0">
@@ -230,7 +259,6 @@ export function PresupuestosView() {
                 </TableHeader>
                 <TableBody>
                   {filas.map((fila) => {
-                    // Filtramos el catálogo para mostrar solo lo que coincida con el tipo de esta fila
                     const catalogoFiltrado = catalogo.filter(c => c.tipo === fila.tipo)
 
                     return (
@@ -248,7 +276,6 @@ export function PresupuestosView() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-2">
-                            {/* Desplegable verde del Catálogo */}
                             <Select onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}>
                               <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0">
                                 <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
@@ -257,158 +284,68 @@ export function PresupuestosView() {
                                 {catalogoFiltrado.length === 0 ? (
                                   <SelectItem value="none" disabled>No hay {fila.tipo.toLowerCase()}s</SelectItem>
                                 ) : (
-                                  catalogoFiltrado.map(c => (
-                                    <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>
-                                  ))
+                                  catalogoFiltrado.map(c => <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>)
                                 )}
                               </SelectContent>
                             </Select>
-                            
-                            {/* Input Manual para escribir o modificar */}
-                            <Input 
-                              value={fila.detalle} 
-                              onChange={(e) => actualizarFila(fila.id, 'detalle', e.target.value)} 
-                              placeholder="Escriba el detalle..." 
-                              className="h-10 bg-white dark:bg-slate-950 flex-1" 
-                            />
+                            <Input value={fila.detalle} onChange={(e) => actualizarFila(fila.id, 'detalle', e.target.value)} placeholder="Escriba el detalle..." className="h-10 bg-white dark:bg-slate-950 flex-1" />
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <Input type="number" min="1" value={fila.cant} onChange={(e) => actualizarFila(fila.id, 'cant', e.target.value)} className="h-10 text-center font-mono bg-white dark:bg-slate-950" />
-                        </TableCell>
+                        <TableCell><Input type="number" min="1" value={fila.cant} onChange={(e) => actualizarFila(fila.id, 'cant', e.target.value)} className="h-10 text-center font-mono bg-white dark:bg-slate-950" /></TableCell>
                         {mostrarCostos && (
-                          <TableCell>
-                            <Input type="number" value={fila.costo || ""} onChange={(e) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" />
-                          </TableCell>
+                          <TableCell><Input type="number" value={fila.costo || ""} onChange={(e) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" /></TableCell>
                         )}
-                        <TableCell>
-                          <Input type="number" value={fila.precio || ""} onChange={(e) => actualizarFila(fila.id, 'precio', e.target.value)} className="h-10 text-right font-mono bg-white dark:bg-slate-950" />
-                        </TableCell>
-                        <TableCell className="text-right font-bold font-mono text-base pt-4">
-                          ${((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-                            <Trash2 className="w-4 h-4"/>
-                          </Button>
-                        </TableCell>
+                        <TableCell><Input type="number" value={fila.precio || ""} onChange={(e) => actualizarFila(fila.id, 'precio', e.target.value)} className="h-10 text-right font-mono bg-white dark:bg-slate-950" /></TableCell>
+                        <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)).toLocaleString()}</TableCell>
+                        <TableCell><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
                       </TableRow>
                     )
                   })}
                 </TableBody>
               </Table>
             </div>
-            
             <div className="p-4 border-t border-border bg-slate-50 dark:bg-slate-900/30">
-              <Button variant="outline" size="sm" onClick={agregarFilaVacia} className="bg-background">
-                <Plus className="w-4 h-4 mr-2"/> Agregar Fila
-              </Button>
+              <Button variant="outline" size="sm" onClick={agregarFilaVacia} className="bg-background"><Plus className="w-4 h-4 mr-2"/> Agregar Fila</Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* 3. TOTALES Y NOTAS (ABAJO) */}
+        {/* 3. TOTALES Y NOTAS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
-          {/* Columna Izquierda: Textareas */}
           <div className="space-y-6">
-            <Card className="border-border shadow-sm">
-              <CardContent className="p-4 space-y-2">
-                <Label className="font-semibold text-foreground">Observaciones para el Cliente <span className="text-muted-foreground font-normal text-xs">(Sale en el PDF)</span></Label>
-                <Textarea 
-                  value={notasCliente}
-                  onChange={(e) => setNotasCliente(e.target.value)}
-                  className="min-h-[80px] bg-slate-50 dark:bg-slate-900 border-border"
-                />
-              </CardContent>
-            </Card>
-
-            <Card className="border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm">
-              <CardContent className="p-4 space-y-2">
-                <Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2">
-                  <Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span>
-                </Label>
-                <Textarea 
-                  value={notasInternas}
-                  onChange={(e) => setNotasInternas(e.target.value)}
-                  placeholder="Información solo visible para el taller (ej: comprar filtro en la repuestera de la esquina)..." 
-                  className="min-h-[80px] bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400"
-                />
-              </CardContent>
-            </Card>
+            <Card className="border-border shadow-sm"><CardContent className="p-4 space-y-2"><Label className="font-semibold text-foreground">Observaciones para el Cliente <span className="text-muted-foreground font-normal text-xs">(Sale en el PDF)</span></Label><Textarea value={notasCliente} onChange={(e) => setNotasCliente(e.target.value)} className="min-h-[80px] bg-slate-50 dark:bg-slate-900 border-border" /></CardContent></Card>
+            <Card className="border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm"><CardContent className="p-4 space-y-2"><Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label><Textarea value={notasInternas} onChange={(e) => setNotasInternas(e.target.value)} placeholder="Información solo visible para el taller..." className="min-h-[80px] bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400" /></CardContent></Card>
           </div>
-
-          {/* Columna Derecha: Totales */}
           <div>
             <Card className="border-border shadow-md h-full">
               <CardContent className="p-6 space-y-4 flex flex-col h-full justify-center">
-                <div className="flex justify-between items-center text-muted-foreground">
-                  <span>Subtotal Neto:</span>
-                  <span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span>
-                </div>
-                
-                <div className="flex justify-between items-center text-muted-foreground">
-                  <span>Descuento / Atención:</span>
-                  <div className="relative w-32">
-                    <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span>
-                    <Input type="number" value={descuento || ""} onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)} className="h-10 pl-7 text-right font-mono bg-slate-50 dark:bg-slate-900" />
-                  </div>
-                </div>
-
-                <div className="border-t border-border pt-4 mt-2 flex justify-between items-center">
-                  <span className="text-xl font-bold text-foreground">Total Final:</span>
-                  <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span>
-                </div>
-
-                {/* Info de ganancia (visible solo si los costos están activos) */}
-                {mostrarCostos && (
-                  <div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300">
-                    <span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span>
-                    <span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
+                <div className="flex justify-between items-center text-muted-foreground"><span>Descuento / Atención:</span><div className="relative w-32"><span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span><Input type="number" value={descuento || ""} onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)} className="h-10 pl-7 text-right font-mono bg-slate-50 dark:bg-slate-900" /></div></div>
+                <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
+                {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
               </CardContent>
             </Card>
           </div>
-
         </div>
       </div>
     )
   }
 
-  // VISTA LISTA PRINCIPAL
+  // VISTA LISTA (El resto queda igual...)
   return (
     <div className="space-y-6 pb-8">
       {/* CABECERA LISTA */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2>
-          <p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p>
-        </div>
-        <Button onClick={() => setVista("crear")} className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto
-        </Button>
+        <div><h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2><p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p></div>
+        <Button onClick={() => setVista("crear")} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto</Button>
       </div>
-
       <Card className="border-border bg-card">
         <CardHeader className="border-b border-border bg-secondary/10 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md w-full">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por cliente, patente o Nro..." className="pl-9 bg-background" />
-          </div>
+          <div className="relative flex-1 max-w-md w-full"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Buscar por cliente o patente..." className="pl-9 bg-background" /></div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
-            <TableHeader>
-              <TableRow className="bg-secondary/20">
-                <TableHead>Nro</TableHead>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Cliente y Vehículo</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
+            <TableHeader><TableRow className="bg-secondary/20"><TableHead>Nro</TableHead><TableHead>Fecha</TableHead><TableHead>Cliente y Vehículo</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-center">Estado</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={6} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
