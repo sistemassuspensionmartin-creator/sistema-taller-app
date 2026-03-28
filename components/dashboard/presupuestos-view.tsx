@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, Download, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -25,18 +25,15 @@ export function PresupuestosView() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
-  // Datos reales de la BD
   const [clientes, setClientes] = useState<any[]>([])
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
   const [presupuestos, setPresupuestos] = useState<any[]>([])
   const [configuracion, setConfiguracion] = useState<any>({})
 
-  // Estados del Buscador Inteligente
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
   const [mostrarResultados, setMostrarResultados] = useState(false)
 
-  // Estado del Presupuesto Actual
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<string>("")
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
@@ -101,9 +98,9 @@ export function PresupuestosView() {
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    // Magia: Si el cliente tiene un solo auto, se lo elegimos automáticamente
+    // AUTO-ASIGNACIÓN DE VEHÍCULO
     const autosDelCliente = vehiculos.filter(v => v.cliente_id === c.id)
-    if (autosDelCliente.length === 1) {
+    if (autosDelCliente.length > 0) {
       setVehiculoSeleccionado(autosDelCliente[0].id)
     } else {
       setVehiculoSeleccionado("") 
@@ -142,7 +139,7 @@ export function PresupuestosView() {
 
   // ACCIONES DE BOTONES
   const handleGuardarPresupuesto = async () => {
-    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo de la lista desplegable.")
+    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo usando el buscador o el desplegable.")
     const filasValidas = filas.filter(f => f.detalle.trim() !== "")
     if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
 
@@ -205,10 +202,9 @@ export function PresupuestosView() {
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
   }
 
-  // GENERADOR DE PDF PROFESIONAL BLINDADO
+  // GENERADOR DE PDF PROFESIONAL BLINDADO (A4 y A5 Apaisado)
   const generarDocumento = (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     const esHistorico = !!datosHistoricos;
-    
     const v_cliente = esHistorico ? datosHistoricos.clientes : clienteActual;
     const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
     
@@ -217,7 +213,6 @@ export function PresupuestosView() {
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "");
     const v_total = esHistorico ? datosHistoricos.total : totalFinal;
     
-    // Convertimos la fecha correctamente para que no reste 1 día por zona horaria
     const formatearFecha = (fechaString: string) => {
       if (!fechaString) return "";
       const partes = fechaString.split('T')[0].split('-');
@@ -225,7 +220,6 @@ export function PresupuestosView() {
       return fechaString;
     }
     const v_fecha = esHistorico ? formatearFecha(datosHistoricos.fecha) : formatearFecha(fecha);
-    
     const v_nro = esHistorico ? datosHistoricos.nro_comprobante : "PRE-BORRADOR";
     const v_notas = esHistorico ? datosHistoricos.notas_cliente : notasCliente;
     const v_notas_int = esHistorico ? datosHistoricos.notas_internas : notasInternas;
@@ -240,17 +234,19 @@ export function PresupuestosView() {
       <head>
         <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
         <style>
-          @page { size: A4 portrait; margin: 15mm; }
+          /* Forzamos el tamaño real de la hoja sin recortes */
+          @page { size: ${tipo === 'orden' ? 'landscape' : 'A4 portrait'}; margin: 15mm; }
+          
+          * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body { 
             font-family: Arial, sans-serif; 
             color: #111; 
             margin: 0; 
             padding: 0; 
             width: 100%; 
-            max-width: 800px;
-            margin: 0 auto;
+            max-width: 100%; /* Saca el límite para que ocupe todo el ancho */
           }
-          .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; }
+          .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; width: 100%; }
           .taller-info { float: left; width: 60%; }
           .taller-info h1 { margin: 0 0 5px 0; color: #008A4B; font-size: 26px; text-transform: uppercase; }
           .taller-info p { margin: 2px 0; font-size: 14px; color: #555; }
@@ -258,10 +254,10 @@ export function PresupuestosView() {
           .doc-info h2 { margin: 0 0 5px 0; font-size: 22px; color: #333; text-transform: uppercase; }
           .doc-info p { margin: 2px 0; font-size: 14px; color: #444; }
           
-          .box { width: 100%; border: 1px solid #ccc; padding: 15px; border-radius: 4px; margin-bottom: 25px; background: #fafafa; overflow: hidden; box-sizing: border-box; }
+          .box { width: 100%; border: 1px solid #ccc; padding: 15px; border-radius: 4px; margin-bottom: 25px; background: #fafafa; overflow: hidden; }
           .box-col { float: left; width: 50%; font-size: 14px; line-height: 1.6; }
           
-          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: fixed; }
           th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 14px; border: 1px solid #008A4B; }
           td { padding: 10px; border-bottom: 1px solid #ddd; border-left: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 14px; }
           
@@ -370,7 +366,6 @@ export function PresupuestosView() {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
         
-        {/* BARRA SUPERIOR DE ACCIONES */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
@@ -395,7 +390,6 @@ export function PresupuestosView() {
           </div>
         </div>
 
-        {/* 1. DATOS DEL PRESUPUESTO */}
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border pb-4">
             <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
@@ -408,7 +402,7 @@ export function PresupuestosView() {
                 <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span> <span className="text-destructive">*</span></Label>
                 <div className="flex">
                   <Input 
-                    placeholder="Escriba aquí para buscar..." 
+                    placeholder="Escriba aquí para buscar y seleccionar..." 
                     className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
                     value={busquedaEntidad}
                     onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
@@ -450,26 +444,26 @@ export function PresupuestosView() {
               </div>
             </div>
 
-            {/* CAJAS READ-ONLY ESTRICTAS */}
+            {/* CAJAS READ-ONLY LIMPIAS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
               <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente</Label>
+                <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
                 <Input 
                   readOnly 
-                  placeholder="Use el buscador de arriba..."
+                  placeholder="Se completa al buscar arriba..."
                   value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} 
-                  className="bg-secondary/30 border-dashed text-foreground font-medium h-10 pointer-events-none" 
+                  className="bg-secondary/20 text-foreground font-medium h-10 border-border" 
                 />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo</Label>
+                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar</Label>
                 {!clienteSeleccionado ? (
-                  <Input readOnly placeholder="Esperando cliente..." className="bg-secondary/30 border-dashed text-foreground font-medium h-10 pointer-events-none" />
-                ) : !vehiculoSeleccionado ? (
+                  <Input readOnly placeholder="-" className="bg-secondary/20 text-foreground font-medium h-10 border-border" />
+                ) : (
                   <Select value={vehiculoSeleccionado} onValueChange={(val: string) => setVehiculoSeleccionado(val)}>
-                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
-                      <SelectValue placeholder="⚠️ Cliente con varios autos. Elija uno..." />
+                    <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border">
+                      <SelectValue placeholder="Seleccione un vehículo de este cliente..." />
                     </SelectTrigger>
                     <SelectContent>
                       {vehiculosDelCliente.map(v => (
@@ -477,11 +471,6 @@ export function PresupuestosView() {
                       ))}
                     </SelectContent>
                   </Select>
-                ) : (
-                  <div className="flex gap-2">
-                    <Input readOnly value={`${vehiculoActual?.marca} ${vehiculoActual?.modelo} (${vehiculoActual?.patente})`} className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 text-emerald-900 dark:text-emerald-100 font-medium h-10 pointer-events-none flex-1" />
-                    <Button variant="outline" onClick={() => setVehiculoSeleccionado("")} title="Cambiar vehículo" className="px-3 h-10 text-muted-foreground hover:text-destructive"><X className="h-4 w-4"/></Button>
-                  </div>
                 )}
               </div>
 
@@ -491,7 +480,7 @@ export function PresupuestosView() {
                   readOnly 
                   placeholder="-"
                   value={clienteActual?.telefono || ""} 
-                  className="bg-secondary/30 border-dashed text-foreground font-medium font-mono h-10 pointer-events-none" 
+                  className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border" 
                 />
               </div>
             </div>
