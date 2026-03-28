@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 
 export function PresupuestosView() {
-  const [vista, setVista] = useState<"lista" | "crear">("lista")
+  const [vista, setVista] = useState<"lista" | "crear">("crear")
   const [mostrarCostos, setMostrarCostos] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -135,10 +135,8 @@ export function PresupuestosView() {
 
     setIsSaving(true)
     try {
-      // Generamos un número aleatorio para el presupuesto (Ej: PRE-4921)
       const nroComprobante = "PRE-" + Math.floor(1000 + Math.random() * 9000)
 
-      // 1. Guardar Presupuesto Maestro
       const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
         nro_comprobante: nroComprobante,
         fecha: fecha,
@@ -155,7 +153,6 @@ export function PresupuestosView() {
 
       if (presError) throw presError
 
-      // 2. Guardar las filas (ítems)
       const itemsToInsert = filasValidas.map(f => ({
         presupuesto_id: presData.id,
         tipo: f.tipo,
@@ -171,7 +168,6 @@ export function PresupuestosView() {
 
       alert("¡Presupuesto guardado con éxito!")
       setVista("lista")
-      // Limpiar formulario
       setClienteSeleccionado("")
       setVehiculoSeleccionado("")
       setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
@@ -190,23 +186,26 @@ export function PresupuestosView() {
     if (!clienteActual || !vehiculoActual) return alert("Seleccione un cliente y vehículo para enviar el mensaje.")
     if (!clienteActual.telefono) return alert("El cliente no tiene un número de teléfono registrado.")
     
-    // Limpiamos el teléfono de guiones o espacios
     const telefonoLimpio = clienteActual.telefono.replace(/\D/g, '')
     const mensaje = `Hola ${clienteActual.nombre}, te contactamos del taller.\n\nTe comparto el resumen de cotización para tu ${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente}):\n\n*Total estimado: $${totalFinal.toLocaleString()}*\n\nCualquier consulta estamos a disposición.`
     
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
   }
 
-
   if (vista === "crear") {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
+        
+        {/* BARRA SUPERIOR DE ACCIONES */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
+          
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO</div>
+            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">
+              NUEVO
+            </div>
             <Button variant="outline" onClick={() => window.print()} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
               <ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo
             </Button>
@@ -230,7 +229,7 @@ export function PresupuestosView() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
               <div className="md:col-span-6 space-y-2 relative">
                 <Label>Buscar Patente o Cliente <span className="text-destructive">*</span></Label>
                 <div className="flex">
@@ -238,7 +237,7 @@ export function PresupuestosView() {
                     placeholder="Ej: AB 123 CD o Juan Pérez..." 
                     className="bg-slate-50 dark:bg-slate-900 h-10 rounded-r-none border-r-0"
                     value={busquedaEntidad}
-                    onChange={(e) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
+                    onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
                     onFocus={() => setMostrarResultados(true)}
                     onBlur={() => setTimeout(() => setMostrarResultados(false), 200)}
                   />
@@ -269,32 +268,35 @@ export function PresupuestosView() {
 
               <div className="md:col-span-3 space-y-2">
                 <Label>Fecha de Emisión</Label>
-                <Input type="date" value={fecha} onChange={e => setFecha(e.target.value)} className="bg-slate-50 dark:bg-slate-900 h-10" />
+                <Input type="date" value={fecha} onChange={(e: any) => setFecha(e.target.value)} className="bg-slate-50 dark:bg-slate-900 h-10" />
               </div>
               <div className="md:col-span-3 space-y-2">
                 <Label>Validez (Días)</Label>
-                <Input type="number" value={validez} onChange={e => setValidez(e.target.value)} className="bg-slate-50 dark:bg-slate-900 h-10" />
+                <Input type="number" value={validez} onChange={(e: any) => setValidez(e.target.value)} className="bg-slate-50 dark:bg-slate-900 h-10" />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo</Label>
-                {/* ACÁ ESTÁ EL ARREGLO DEL CARTEL AMARILLO */}
-                <Select value={vehiculoSeleccionado} onValueChange={setVehiculoSeleccionado} disabled={!clienteSeleccionado}>
-                  <SelectTrigger className={!vehiculoSeleccionado && clienteSeleccionado ? "bg-amber-50 dark:bg-amber-900/20 border-amber-300 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all" : "bg-slate-50 dark:bg-slate-900 h-10"}>
-                    <SelectValue placeholder={clienteSeleccionado ? "⚠️ Seleccione el vehículo..." : "Primero elija un cliente"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehiculosDelCliente.length === 0 ? (
-                      <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
-                    ) : (
-                      vehiculosDelCliente.map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                {!vehiculoSeleccionado && clienteSeleccionado ? (
+                  <Select value={vehiculoSeleccionado} onValueChange={(val: string) => setVehiculoSeleccionado(val)}>
+                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
+                      <SelectValue placeholder="⚠️ Seleccione el vehículo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vehiculosDelCliente.length === 0 ? (
+                        <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
+                      ) : (
+                        vehiculosDelCliente.map(v => (
+                          <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input readOnly value={vehiculoActual ? `${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente})` : ""} className="bg-secondary/30 border-dashed text-foreground font-medium h-10" />
+                )}
               </div>
 
               <div className="space-y-2">
@@ -322,8 +324,8 @@ export function PresupuestosView() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-secondary/5 hover:bg-secondary/5">
-                    <TableHead className="w-[160px]">Tipo</TableHead>
-                    <TableHead>Buscar en Catálogo o Cargar Manual</TableHead>
+                    <TableHead className="w-[160px] print:hidden">Tipo</TableHead>
+                    <TableHead>Descripción del Trabajo / Repuesto</TableHead>
                     <TableHead className="w-[80px] text-center">Cant.</TableHead>
                     {mostrarCostos && <TableHead className="w-[120px] text-right text-amber-600 print:hidden">Costo Unit.</TableHead>}
                     <TableHead className="w-[140px] text-right text-emerald-600">Precio Venta</TableHead>
@@ -337,7 +339,7 @@ export function PresupuestosView() {
 
                     return (
                       <TableRow key={fila.id} className="hover:bg-transparent">
-                        <TableCell>
+                        <TableCell className="print:hidden">
                           <Select value={fila.tipo} onValueChange={(v: string) => actualizarFila(fila.id, 'tipo', v)}>
                             <SelectTrigger className="h-10 bg-white dark:bg-slate-950"><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -362,14 +364,14 @@ export function PresupuestosView() {
                                 )}
                               </SelectContent>
                             </Select>
-                            <Input value={fila.detalle} onChange={(e) => actualizarFila(fila.id, 'detalle', e.target.value)} placeholder="Escriba el detalle..." className="h-10 bg-white dark:bg-slate-950 flex-1" />
+                            <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} placeholder="Escriba el detalle..." className="h-10 bg-white dark:bg-slate-950 flex-1" />
                           </div>
                         </TableCell>
-                        <TableCell><Input type="number" min="1" value={fila.cant} onChange={(e) => actualizarFila(fila.id, 'cant', e.target.value)} className="h-10 text-center font-mono bg-white dark:bg-slate-950" /></TableCell>
+                        <TableCell><Input type="number" min="1" value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} className="h-10 text-center font-mono bg-white dark:bg-slate-950" /></TableCell>
                         {mostrarCostos && (
-                          <TableCell className="print:hidden"><Input type="number" value={fila.costo || ""} onChange={(e) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" /></TableCell>
+                          <TableCell className="print:hidden"><Input type="number" value={fila.costo || ""} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" /></TableCell>
                         )}
-                        <TableCell><Input type="number" value={fila.precio || ""} onChange={(e) => actualizarFila(fila.id, 'precio', e.target.value)} className="h-10 text-right font-mono bg-white dark:bg-slate-950" /></TableCell>
+                        <TableCell><Input type="number" value={fila.precio || ""} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} className="h-10 text-right font-mono bg-white dark:bg-slate-950" /></TableCell>
                         <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)).toLocaleString()}</TableCell>
                         <TableCell className="print:hidden"><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
                       </TableRow>
@@ -387,14 +389,14 @@ export function PresupuestosView() {
         {/* 3. TOTALES Y NOTAS */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
-            <Card className="border-border shadow-sm"><CardContent className="p-4 space-y-2"><Label className="font-semibold text-foreground">Observaciones para el Cliente <span className="text-muted-foreground font-normal text-xs">(Sale en el PDF)</span></Label><Textarea value={notasCliente} onChange={(e) => setNotasCliente(e.target.value)} className="min-h-[80px] bg-slate-50 dark:bg-slate-900 border-border" /></CardContent></Card>
-            <Card className="border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm print:hidden"><CardContent className="p-4 space-y-2"><Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label><Textarea value={notasInternas} onChange={(e) => setNotasInternas(e.target.value)} placeholder="Información solo visible para el taller..." className="min-h-[80px] bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400" /></CardContent></Card>
+            <Card className="border-border shadow-sm"><CardContent className="p-4 space-y-2"><Label className="font-semibold text-foreground">Observaciones para el Cliente <span className="text-muted-foreground font-normal text-xs">(Sale en el PDF)</span></Label><Textarea value={notasCliente} onChange={(e: any) => setNotasCliente(e.target.value)} className="min-h-[80px] bg-slate-50 dark:bg-slate-900 border-border" /></CardContent></Card>
+            <Card className="border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm print:hidden"><CardContent className="p-4 space-y-2"><Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label><Textarea value={notasInternas} onChange={(e: any) => setNotasInternas(e.target.value)} placeholder="Información solo visible para el taller..." className="min-h-[80px] bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400" /></CardContent></Card>
           </div>
           <div>
             <Card className="border-border shadow-md h-full">
               <CardContent className="p-6 space-y-4 flex flex-col h-full justify-center">
                 <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
-                <div className="flex justify-between items-center text-muted-foreground"><span>Descuento / Atención:</span><div className="relative w-32"><span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span><Input type="number" value={descuento || ""} onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)} className="h-10 pl-7 text-right font-mono bg-slate-50 dark:bg-slate-900" /></div></div>
+                <div className="flex justify-between items-center text-muted-foreground"><span>Descuento / Atención:</span><div className="relative w-32"><span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span><Input type="number" value={descuento || ""} onChange={(e: any) => setDescuento(parseFloat(e.target.value) || 0)} className="h-10 pl-7 text-right font-mono bg-slate-50 dark:bg-slate-900" /></div></div>
                 <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
                 {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
               </CardContent>
