@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, Download, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone } from "lucide-react"
+import { Search, Printer, Download, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -56,7 +56,6 @@ export function PresupuestosView() {
         supabase.from('clientes').select('*').order('nombre'),
         supabase.from('vehiculos').select('*'),
         supabase.from('catalogo').select('*').order('detalle'),
-        // ACÁ AGREGUÉ presupuesto_items(*) PARA QUE TRAIGA EL DETALLE DE LOS HISTÓRICOS
         supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono), vehiculos(patente, marca, modelo), presupuesto_items(*)').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
@@ -77,6 +76,7 @@ export function PresupuestosView() {
     if (vista === "lista") cargarDatos()
   }, [vista])
 
+  // BUSCADOR INTELIGENTE
   const terminoBusqueda = busquedaEntidad.toLowerCase().trim()
   
   const vehiculosBusqueda = terminoBusqueda === "" ? [] : vehiculos.filter(v => 
@@ -101,13 +101,20 @@ export function PresupuestosView() {
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    setVehiculoSeleccionado("") 
+    // Magia: Si el cliente tiene un solo auto, se lo elegimos automáticamente
+    const autosDelCliente = vehiculos.filter(v => v.cliente_id === c.id)
+    if (autosDelCliente.length === 1) {
+      setVehiculoSeleccionado(autosDelCliente[0].id)
+    } else {
+      setVehiculoSeleccionado("") 
+    }
     setBusquedaEntidad("")
     setMostrarResultados(false)
   }
 
   const vehiculosDelCliente = vehiculos.filter(v => v.cliente_id === clienteSeleccionado)
 
+  // Lógica de Ítems
   const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
 
   const actualizarFila = (id: string, campo: string, valor: any) => {
@@ -133,8 +140,9 @@ export function PresupuestosView() {
   const totalFinal = subtotalNeto - descuento
   const gananciaEstimada = totalFinal - costoTotal
 
+  // ACCIONES DE BOTONES
   const handleGuardarPresupuesto = async () => {
-    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo.")
+    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo de la lista desplegable.")
     const filasValidas = filas.filter(f => f.detalle.trim() !== "")
     if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
 
@@ -208,7 +216,16 @@ export function PresupuestosView() {
 
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "");
     const v_total = esHistorico ? datosHistoricos.total : totalFinal;
-    const v_fecha = esHistorico ? new Date(datosHistoricos.fecha).toLocaleDateString('es-AR') : new Date(fecha).toLocaleDateString('es-AR');
+    
+    // Convertimos la fecha correctamente para que no reste 1 día por zona horaria
+    const formatearFecha = (fechaString: string) => {
+      if (!fechaString) return "";
+      const partes = fechaString.split('T')[0].split('-');
+      if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
+      return fechaString;
+    }
+    const v_fecha = esHistorico ? formatearFecha(datosHistoricos.fecha) : formatearFecha(fecha);
+    
     const v_nro = esHistorico ? datosHistoricos.nro_comprobante : "PRE-BORRADOR";
     const v_notas = esHistorico ? datosHistoricos.notas_cliente : notasCliente;
     const v_notas_int = esHistorico ? datosHistoricos.notas_internas : notasInternas;
@@ -217,68 +234,62 @@ export function PresupuestosView() {
     const telTaller = configuracion.telefono || "";
     const dirTaller = configuracion.direccion || "";
 
-    // Diseño resistente a navegadores caprichosos
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
         <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
         <style>
-          /* Forzamos el tamaño y orientación de la hoja */
-          @page { size: ${tipo === 'orden' ? 'A5 landscape' : 'A4 portrait'}; margin: 15mm; }
-          
-          * { box-sizing: border-box; }
+          @page { size: A4 portrait; margin: 15mm; }
           body { 
-            font-family: 'Segoe UI', Arial, sans-serif; 
-            color: #333; 
+            font-family: Arial, sans-serif; 
+            color: #111; 
             margin: 0; 
             padding: 0; 
-            width: 100%; /* Obliga a ocupar todo el ancho */
-            max-width: 100%;
+            width: 100%; 
+            max-width: 800px;
+            margin: 0 auto;
           }
-          
-          .header { width: 100%; border-bottom: 2px solid #008A4B; padding-bottom: 10px; margin-bottom: 20px; }
-          .header::after { content: ""; display: table; clear: both; }
-          
+          .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; }
           .taller-info { float: left; width: 60%; }
-          .taller-info h1 { margin: 0; color: #008A4B; font-size: 24px; }
-          .taller-info p { margin: 2px 0; font-size: 13px; color: #666; }
-          
+          .taller-info h1 { margin: 0 0 5px 0; color: #008A4B; font-size: 26px; text-transform: uppercase; }
+          .taller-info p { margin: 2px 0; font-size: 14px; color: #555; }
           .doc-info { float: right; width: 35%; text-align: right; }
-          .doc-info h2 { margin: 0; font-size: 20px; color: #444; text-transform: uppercase; }
+          .doc-info h2 { margin: 0 0 5px 0; font-size: 22px; color: #333; text-transform: uppercase; }
+          .doc-info p { margin: 2px 0; font-size: 14px; color: #444; }
           
-          .box { width: 100%; border: 1px solid #ddd; padding: 15px; border-radius: 6px; margin-bottom: 20px; background: #f9fafb; display: table; }
-          .box-col { display: table-cell; width: 50%; vertical-align: top; font-size: 14px; line-height: 1.5; }
+          .box { width: 100%; border: 1px solid #ccc; padding: 15px; border-radius: 4px; margin-bottom: 25px; background: #fafafa; overflow: hidden; box-sizing: border-box; }
+          .box-col { float: left; width: 50%; font-size: 14px; line-height: 1.6; }
           
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }
-          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 13px; }
-          td { padding: 10px; border-bottom: 1px solid #eee; font-size: 13px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 14px; border: 1px solid #008A4B; }
+          td { padding: 10px; border-bottom: 1px solid #ddd; border-left: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 14px; }
           
           .text-right { text-align: right; }
           .text-center { text-align: center; }
           
-          .totales { width: 40%; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
-          .total-row { display: block; width: 100%; clear: both; font-size: 14px; margin-bottom: 5px; }
-          .total-row span:first-child { float: left; }
+          .totales { width: 350px; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
+          .total-row { overflow: hidden; font-size: 15px; margin-bottom: 8px; }
+          .total-row span:first-child { float: left; font-weight: bold; }
           .total-row span:last-child { float: right; font-family: monospace; }
-          .total-final { font-size: 18px; font-weight: bold; color: #008A4B; margin-top: 10px; }
+          .total-final { font-size: 22px; color: #008A4B; margin-top: 10px; }
           
-          .notas { clear: both; padding-top: 40px; font-size: 12px; color: #555; }
+          .notas { clear: both; padding-top: 30px; font-size: 13px; color: #444; }
           
-          .orden-box { clear: both; border: 2px dashed #ccc; padding: 15px; margin-top: 20px; border-radius: 6px; }
-          .firmas { width: 100%; display: table; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; }
-          .firma-col { display: table-cell; width: 50%; text-align: left; font-weight: bold; }
+          .orden-box { clear: both; border: 2px dashed #999; padding: 20px; margin-top: 30px; border-radius: 4px; background: #fffdf5; }
+          .firmas { width: 100%; overflow: hidden; margin-top: 50px; padding-top: 20px; }
+          .firma-col { float: left; width: 50%; font-weight: bold; font-size: 14px; }
         </style>
       </head>
       <body>
         <div class="header">
           <div class="taller-info">
             <h1>${nombreTaller}</h1>
-            <p>📍 ${dirTaller}</p>
-            <p>📞 ${telTaller}</p>
+            <p>📍 ${dirTaller || 'Dirección no configurada'}</p>
+            <p>📞 ${telTaller || 'Teléfono no configurado'}</p>
           </div>
           <div class="doc-info">
-            <h2>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'}</h2>
+            <h2>${tipo === 'orden' ? 'ORDEN DE TRABAJO' : 'PRESUPUESTO'}</h2>
             <p>Nro: <b>${v_nro}</b></p>
             <p>Fecha: ${v_fecha}</p>
           </div>
@@ -291,7 +302,7 @@ export function PresupuestosView() {
           </div>
           <div class="box-col">
             <strong>Vehículo:</strong> ${v_vehiculo.marca} ${v_vehiculo.modelo}<br>
-            <strong>Patente:</strong> <span style="font-family: monospace; font-size:14px; font-weight:bold;">${v_vehiculo.patente}</span>
+            <strong>Patente:</strong> <span style="font-family: monospace; font-size:15px; font-weight:bold;">${v_vehiculo.patente}</span>
           </div>
         </div>
 
@@ -299,7 +310,7 @@ export function PresupuestosView() {
           <thead>
             <tr>
               <th width="15%">Tipo</th>
-              <th width="${tipo === 'presupuesto' ? '45%' : '65%'}">Descripción del Trabajo / Repuesto</th>
+              <th width="${tipo === 'presupuesto' ? '45%' : '70%'}">Descripción del Trabajo / Repuesto</th>
               <th width="10%" class="text-center">Cant.</th>
               ${tipo === 'presupuesto' ? '<th width="15%" class="text-right">Precio Unit.</th><th width="15%" class="text-right">Subtotal</th>' : ''}
             </tr>
@@ -327,17 +338,17 @@ export function PresupuestosView() {
             </div>
           </div>
           <div class="notas">
-            <strong>Observaciones:</strong><br>
+            <strong>Condiciones / Observaciones:</strong><br><br>
             ${(v_notas || '').replace(/\n/g, '<br>')}
           </div>
         ` : `
           <div class="orden-box">
-            <strong>Notas y Tareas Internas (Solo Taller):</strong><br><br>
-            ${v_notas_int ? v_notas_int.replace(/\n/g, '<br>') : '<i>Sin instrucciones adicionales.</i>'}
+            <strong>📋 Tareas y Notas Internas para el Taller:</strong><br><br>
+            ${v_notas_int ? v_notas_int.replace(/\n/g, '<br>') : '<i>(Sin instrucciones adicionales cargadas)</i>'}
           </div>
           <div class="firmas">
-            <div class="firma-col">Firma Mecánico: _____________________</div>
-            <div class="firma-col">Km Ingreso: _____________________</div>
+            <div class="firma-col">Firma Mecánico: ________________________</div>
+            <div class="firma-col">Km Ingreso: ________________________</div>
           </div>
         `}
       </body>
@@ -351,19 +362,24 @@ export function PresupuestosView() {
       setTimeout(() => {
         ventana.print();
         ventana.onafterprint = () => ventana.close();
-      }, 500);
+      }, 300);
     }
   }
 
   if (vista === "crear") {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
+        
+        {/* BARRA SUPERIOR DE ACCIONES */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
+          
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO</div>
+            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">
+              NUEVO
+            </div>
             <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
               <ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo
             </Button>
@@ -389,17 +405,17 @@ export function PresupuestosView() {
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
               <div className="md:col-span-6 space-y-2 relative">
-                <Label>Buscar Patente o Cliente <span className="text-destructive">*</span></Label>
+                <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span> <span className="text-destructive">*</span></Label>
                 <div className="flex">
                   <Input 
-                    placeholder="Ej: AB 123 CD o Juan Pérez..." 
-                    className="bg-slate-50 dark:bg-slate-900 h-10 rounded-r-none border-r-0"
+                    placeholder="Escriba aquí para buscar..." 
+                    className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
                     value={busquedaEntidad}
                     onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
                     onFocus={() => setMostrarResultados(true)}
                     onBlur={() => setTimeout(() => setMostrarResultados(false), 300)}
                   />
-                  <Button variant="outline" className="rounded-l-none bg-secondary/20 px-4 h-10 border-l-0"><Search className="h-4 w-4 text-muted-foreground"/></Button>
+                  <Button variant="outline" className="rounded-l-none bg-emerald-50 border-emerald-500 text-emerald-700 hover:bg-emerald-100 px-4 h-10 border-l-0"><Search className="h-4 w-4"/></Button>
                 </div>
 
                 {mostrarResultados && busquedaEntidad.length > 0 && (vehiculosBusqueda.length > 0 || clientesBusqueda.length > 0) && (
@@ -434,36 +450,49 @@ export function PresupuestosView() {
               </div>
             </div>
 
+            {/* CAJAS READ-ONLY ESTRICTAS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
               <div className="space-y-2">
+                <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente</Label>
+                <Input 
+                  readOnly 
+                  placeholder="Use el buscador de arriba..."
+                  value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} 
+                  className="bg-secondary/30 border-dashed text-foreground font-medium h-10 pointer-events-none" 
+                />
+              </div>
+
+              <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo</Label>
-                {!vehiculoSeleccionado && clienteSeleccionado ? (
+                {!clienteSeleccionado ? (
+                  <Input readOnly placeholder="Esperando cliente..." className="bg-secondary/30 border-dashed text-foreground font-medium h-10 pointer-events-none" />
+                ) : !vehiculoSeleccionado ? (
                   <Select value={vehiculoSeleccionado} onValueChange={(val: string) => setVehiculoSeleccionado(val)}>
-                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
-                      <SelectValue placeholder="⚠️ Seleccione el vehículo..." />
+                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
+                      <SelectValue placeholder="⚠️ Cliente con varios autos. Elija uno..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {vehiculosDelCliente.length === 0 ? (
-                        <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
-                      ) : (
-                        vehiculosDelCliente.map(v => (
-                          <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                        ))
-                      )}
+                      {vehiculosDelCliente.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <Input readOnly value={vehiculoActual ? `${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente})` : ""} className="bg-secondary/30 border-dashed text-foreground font-medium h-10" />
+                  <div className="flex gap-2">
+                    <Input readOnly value={`${vehiculoActual?.marca} ${vehiculoActual?.modelo} (${vehiculoActual?.patente})`} className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 text-emerald-900 dark:text-emerald-100 font-medium h-10 pointer-events-none flex-1" />
+                    <Button variant="outline" onClick={() => setVehiculoSeleccionado("")} title="Cambiar vehículo" className="px-3 h-10 text-muted-foreground hover:text-destructive"><X className="h-4 w-4"/></Button>
+                  </div>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente</Label>
-                <Input readOnly value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} className="bg-secondary/30 border-dashed text-foreground font-medium h-10" />
-              </div>
-              <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</Label>
-                <Input readOnly value={clienteActual?.telefono || ""} className="bg-secondary/30 border-dashed text-foreground font-medium font-mono h-10" />
+                <Input 
+                  readOnly 
+                  placeholder="-"
+                  value={clienteActual?.telefono || ""} 
+                  className="bg-secondary/30 border-dashed text-foreground font-medium font-mono h-10 pointer-events-none" 
+                />
               </div>
             </div>
           </CardContent>
