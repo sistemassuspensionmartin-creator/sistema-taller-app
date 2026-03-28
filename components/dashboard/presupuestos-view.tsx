@@ -153,10 +153,9 @@ export function PresupuestosView() {
     try {
       const numAleatorio = Math.floor(1000 + Math.random() * 9000);
 
-      // INSERTANDO CON LOS NOMBRES EXACTOS DE TU TABLA (Basado en el diagrama)
       const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
         numero_correlativo: numAleatorio, 
-        vehiculo_patente: vehiculoSeleccionado, // Usa la patente como foreign key
+        vehiculo_patente: vehiculoSeleccionado,
         fecha_emision: fecha,
         validez_dias: parseInt(validez) || 15,
         descuento: descuento,
@@ -169,17 +168,17 @@ export function PresupuestosView() {
       if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
       if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
 
+      // ACÁ ESTÁ EL ARREGLO CONFIRMADO POR TU FOTO: 
+      // Solo mandamos las 5 columnas que realmente existen en tu tabla.
       const itemsToInsert = filasValidas.map(f => ({
         presupuesto_id: presData[0].id,
         tipo: f.tipo,
         detalle: f.detalle,
         cantidad: parseInt(f.cant) || 1,
         costo_unitario: parseFloat(f.costo) || 0,
-        precio_unitario: parseFloat(f.precio) || 0,
-        subtotal: (parseFloat(f.precio) || 0) * (parseInt(f.cant) || 1)
+        precio_unitario: parseFloat(f.precio) || 0
       }))
 
-      // Guardamos ítems (asumiendo que tenés la tabla presupuesto_items)
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
       if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
