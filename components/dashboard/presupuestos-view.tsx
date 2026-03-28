@@ -435,27 +435,24 @@ export function PresupuestosView() {
                 />
               </div>
 
+              {/* SELECTOR NATIVO DE HTML: A prueba de errores y bugs visuales */}
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar <span className="text-destructive">*</span></Label>
-                {/* SOLUCIÓN AL BUG DE TEXTO PEGADO: value={vehiculoSeleccionado || undefined} */}
-                <Select 
-                  value={vehiculoSeleccionado || undefined} 
-                  onValueChange={(val: string) => setVehiculoSeleccionado(val)} 
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-white dark:bg-slate-950 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={vehiculoSeleccionado}
+                  onChange={(e) => setVehiculoSeleccionado(e.target.value)}
                   disabled={!clienteSeleccionado}
                 >
-                  <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border">
-                    <SelectValue placeholder={clienteSeleccionado ? "Seleccione un vehículo..." : "Esperando cliente..."} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehiculosDelCliente.length === 0 ? (
-                      <SelectItem value="none" disabled>No tiene vehículos</SelectItem>
-                    ) : (
-                      vehiculosDelCliente.map(v => (
-                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                  <option value="" disabled>
+                    {clienteSeleccionado ? "Seleccione un vehículo..." : "Esperando cliente..."}
+                  </option>
+                  {vehiculosDelCliente.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.marca} {v.modelo} ({v.patente})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">
