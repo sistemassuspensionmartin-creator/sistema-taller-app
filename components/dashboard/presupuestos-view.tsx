@@ -369,6 +369,7 @@ export function PresupuestosView() {
           </div>
         </div>
 
+        {/* 1. DATOS DEL PRESUPUESTO */}
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border pb-4">
             <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
@@ -381,7 +382,7 @@ export function PresupuestosView() {
                 <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span></Label>
                 <div className="flex">
                   <Input 
-                    placeholder="Escriba aquí para buscar y seleccionar..." 
+                    placeholder="Escriba aquí para buscar..." 
                     className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
                     value={busquedaEntidad}
                     onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
@@ -396,14 +397,14 @@ export function PresupuestosView() {
                     {vehiculosBusqueda.map(v => {
                       const c = clientes.find(cl => cl.id === v.cliente_id)
                       return (
-                        <div key={v.id} onClick={() => seleccionarVehiculoBuscador(v)} className="p-2.5 hover:bg-emerald-600 hover:text-white cursor-pointer flex items-center gap-3 border-b border-border/50 text-sm transition-colors group">
+                        <div key={v.id} onMouseDown={() => seleccionarVehiculoBuscador(v)} className="p-2.5 hover:bg-emerald-600 hover:text-white cursor-pointer flex items-center gap-3 border-b border-border/50 text-sm transition-colors group">
                           <span className="bg-[#008A4B] text-white px-2 py-1 rounded font-mono font-bold tracking-widest">{v.patente}</span>
                           <span className="font-medium">- {c?.tipo_cliente === 'empresa' ? c.razon_social : `${c?.nombre} ${c?.apellido}`} ({v.marca} {v.modelo})</span>
                         </div>
                       )
                     })}
                     {clientesBusqueda.map(c => (
-                      <div key={c.id} onClick={() => seleccionarClienteBuscador(c)} className="p-3 hover:bg-secondary cursor-pointer flex items-center gap-2 border-b border-border/50 text-sm transition-colors">
+                      <div key={c.id} onMouseDown={() => seleccionarClienteBuscador(c)} className="p-3 hover:bg-secondary cursor-pointer flex items-center gap-2 border-b border-border/50 text-sm transition-colors">
                         <User className="w-4 h-4 text-muted-foreground" />
                         <span className="font-bold">{c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido}`}</span>
                         <span className="text-muted-foreground text-xs">({c.documento || 'Sin DNI'})</span>
@@ -423,7 +424,6 @@ export function PresupuestosView() {
               </div>
             </div>
 
-            {/* CAJAS READ-ONLY BLINDADAS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
@@ -436,35 +436,26 @@ export function PresupuestosView() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar</Label>
-                
-                {/* LÓGICA DE ESTADOS DEL VEHÍCULO */}
-                {!clienteSeleccionado ? (
-                  // ESTADO 1: No hay cliente -> Input gris
-                  <Input readOnly placeholder="Esperando cliente..." className="bg-secondary/20 text-foreground font-medium h-10 border-border pointer-events-none" />
-                ) : !vehiculoSeleccionado ? (
-                  // ESTADO 2: Hay cliente pero falta elegir auto -> Select normal
-                  <Select value={vehiculoSeleccionado || undefined} onValueChange={(val: string) => setVehiculoSeleccionado(val)}>
-                    <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border border-emerald-500 ring-1 ring-emerald-500">
-                      <SelectValue placeholder="Elija un vehículo..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vehiculosDelCliente.length === 0 ? (
-                        <SelectItem value="none" disabled>No tiene vehículos</SelectItem>
-                      ) : (
-                        vehiculosDelCliente.map(v => (
-                          <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  // ESTADO 3: Vehículo Confirmado -> Input bloqueado con botón para borrar
-                  <div className="flex gap-2">
-                    <Input readOnly value={`${vehiculoActual?.marca} ${vehiculoActual?.modelo} (${vehiculoActual?.patente})`} className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 text-emerald-900 dark:text-emerald-100 font-medium h-10 pointer-events-none flex-1" />
-                    <Button variant="outline" onClick={() => setVehiculoSeleccionado("")} title="Cambiar vehículo" className="px-3 h-10 text-muted-foreground hover:text-destructive"><X className="h-4 w-4"/></Button>
-                  </div>
-                )}
+                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar <span className="text-destructive">*</span></Label>
+                {/* SOLUCIÓN AL BUG DE TEXTO PEGADO: value={vehiculoSeleccionado || undefined} */}
+                <Select 
+                  value={vehiculoSeleccionado || undefined} 
+                  onValueChange={(val: string) => setVehiculoSeleccionado(val)} 
+                  disabled={!clienteSeleccionado}
+                >
+                  <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border">
+                    <SelectValue placeholder={clienteSeleccionado ? "Seleccione un vehículo..." : "Esperando cliente..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehiculosDelCliente.length === 0 ? (
+                      <SelectItem value="none" disabled>No tiene vehículos</SelectItem>
+                    ) : (
+                      vehiculosDelCliente.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
