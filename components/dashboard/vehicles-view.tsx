@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Plus, Search, Car, User, Edit, Loader2, Save, Gauge, Palette, Calendar, X, CheckCircle2, ArrowLeft, Phone, UserCheck, UserMinus, FileText, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -39,6 +40,7 @@ const MARCAS_COMUNES = [
 ]
 
 export function VehiclesView() {
+  const router = useRouter()
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   
   const [vehiculos, setVehiculos] = useState<any[]>([])
@@ -50,6 +52,8 @@ export function VehiclesView() {
 
   const [busquedaCliente, setBusquedaCliente] = useState("")
   const [clienteSeleccionadoInfo, setClienteSeleccionadoInfo] = useState<any>(null)
+
+  const [isEditingCar, setIsEditingCar] = useState(false)
 
   const [formData, setFormData] = useState({
     patente: "",
@@ -66,7 +70,7 @@ export function VehiclesView() {
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<any>(null)
   const [historialPresupuestos, setHistorialPresupuestos] = useState<any[]>([])
   
-  // Novedades: Transferencia, Búsqueda de Dueño y Edición de Km
+  // Estados de Transferencia y Edición de Km
   const [modoTransferencia, setModoTransferencia] = useState(false)
   const [busquedaNuevoDueno, setBusquedaNuevoDueno] = useState("")
   const [nuevoDuenoId, setNuevoDuenoId] = useState<string>("")
@@ -130,7 +134,6 @@ export function VehiclesView() {
     }
   }
 
-  // --- NUEVA LÓGICA DE TRANSFERENCIA ---
   const handleTransferirDueno = async (accion: "transferir" | "desvincular") => {
     if (accion === "transferir" && !nuevoDuenoId) return alert("Seleccione un nuevo dueño de la lista.");
     
@@ -175,7 +178,6 @@ export function VehiclesView() {
     }
   }
 
-  // --- NUEVA LÓGICA PARA ACTUALIZAR KM ---
   const handleActualizarKm = async () => {
     const kmParseado = parseInt(nuevoKm);
     if (isNaN(kmParseado) || kmParseado < 0) return alert("Ingrese un kilometraje válido.");
@@ -189,7 +191,6 @@ export function VehiclesView() {
 
       if (error) throw error;
 
-      // Actualizar vista local
       setVehiculoSeleccionado({ ...vehiculoSeleccionado, kilometraje: kmParseado });
       setVehiculos(vehiculos.map(v => v.patente === vehiculoSeleccionado.patente ? { ...v, kilometraje: kmParseado } : v));
       setEditandoKm(false);
@@ -200,15 +201,33 @@ export function VehiclesView() {
     }
   }
 
-  // LÓGICA DE CREACIÓN (Intacta)
-  const abrirModal = () => {
+  const abrirModalCrear = () => {
     setFormData({ patente: "", tipo_vehiculo: "Auto", marca: "", modelo: "", anio: "", color: "", kilometraje: "", cliente_id: "" })
     setBusquedaCliente("")
     setClienteSeleccionadoInfo(null)
+    setIsEditingCar(false)
+    setIsModalOpen(true)
+  }
+
+  const abrirModalEditar = () => {
+    setFormData({
+      patente: vehiculoSeleccionado.patente,
+      tipo_vehiculo: vehiculoSeleccionado.tipo_vehiculo || "Auto",
+      marca: vehiculoSeleccionado.marca || "",
+      modelo: vehiculoSeleccionado.modelo || "",
+      anio: vehiculoSeleccionado.anio?.toString() || "",
+      color: vehiculoSeleccionado.color || "",
+      kilometraje: vehiculoSeleccionado.kilometraje?.toString() || "",
+      cliente_id: vehiculoSeleccionado.cliente_id || ""
+    })
+    setClienteSeleccionadoInfo(vehiculoSeleccionado.clientes)
+    setBusquedaCliente("")
+    setIsEditingCar(true)
     setIsModalOpen(true)
   }
 
   const handlePatenteChange = (e: any) => {
+    if (isEditingCar) return; 
     let limpia = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase()
     if (limpia.length > 7) limpia = limpia.slice(0, 7)
     let formateada = limpia
@@ -225,8 +244,8 @@ export function VehiclesView() {
   const handleGuardarVehiculo = async () => {
     const patenteLimpiaDB = formData.patente.replace(/\s/g, "")
 
-    if (!patenteLimpiaDB || !formData.marca || !formData.modelo || !formData.cliente_id || !formData.tipo_vehiculo) {
-      alert("Patente, Tipo, Marca, Modelo y Dueño son obligatorios.")
+    if (!patenteLimpiaDB || !formData.marca || !formData.modelo || !formData.tipo_vehiculo) {
+      alert("Patente, Tipo, Marca y Modelo son obligatorios.")
       return
     }
 
@@ -237,27 +256,56 @@ export function VehiclesView() {
 
     setIsSaving(true)
     try {
-      const { error } = await supabase.from('vehiculos').insert([{
-        patente: patenteLimpiaDB,
-        tipo_vehiculo: formData.tipo_vehiculo,
-        marca: formData.marca,
-        modelo: formData.modelo,
-        anio: formData.anio ? parseInt(formData.anio) : null,
-        color: formData.color,
-        kilometraje: formData.kilometraje ? parseInt(formData.kilometraje) : null,
-        cliente_id: formData.cliente_id
-      }])
+      if (isEditingCar) {
+        const { error } = await supabase.from('vehiculos').update({
+          tipo_vehiculo: formData.tipo_vehiculo,
+          marca: formData.marca,
+          modelo: formData.modelo,
+          anio: formData.anio ? parseInt(formData.anio) : null,
+          color: formData.color,
+          kilometraje: formData.kilometraje ? parseInt(formData.kilometraje) : null,
+          cliente_id: formData.cliente_id || null
+        }).eq('patente', vehiculoSeleccionado.patente)
 
-      if (error) {
-        if (error.code === '23505') alert("Ya existe un vehículo registrado con esta patente en el taller.")
-        else throw error
-        return
+        if (error) throw error
+
+        setVehiculoSeleccionado({
+          ...vehiculoSeleccionado,
+          tipo_vehiculo: formData.tipo_vehiculo,
+          marca: formData.marca,
+          modelo: formData.modelo,
+          anio: formData.anio,
+          color: formData.color,
+          kilometraje: formData.kilometraje,
+          cliente_id: formData.cliente_id,
+          clientes: clienteSeleccionadoInfo
+        })
+        alert("¡Datos del vehículo actualizados!")
+
+      } else {
+        const { error } = await supabase.from('vehiculos').insert([{
+          patente: patenteLimpiaDB,
+          tipo_vehiculo: formData.tipo_vehiculo,
+          marca: formData.marca,
+          modelo: formData.modelo,
+          anio: formData.anio ? parseInt(formData.anio) : null,
+          color: formData.color,
+          kilometraje: formData.kilometraje ? parseInt(formData.kilometraje) : null,
+          cliente_id: formData.cliente_id || null
+        }])
+
+        if (error) {
+          if (error.code === '23505') alert("Ya existe un vehículo registrado con esta patente en el taller.")
+          else throw error
+          return
+        }
       }
 
       setIsModalOpen(false)
       fetchVehiculos()
     } catch (error) {
-      alert("No se pudo guardar el vehículo.")
+      console.error("Error al guardar:", error)
+      alert("No se pudo guardar la información del vehículo.")
     } finally {
       setIsSaving(false)
     }
@@ -278,13 +326,12 @@ export function VehiclesView() {
     (c.documento && c.documento.includes(busquedaCliente))
   ).slice(0, 5)
 
-  // Buscador para transferencia de Dueño
   const clientesParaTransferir = busquedaNuevoDueno.trim() === "" ? [] : clientes.filter(c => 
     (c.nombre && c.nombre.toLowerCase().includes(busquedaNuevoDueno.toLowerCase())) ||
     (c.apellido && c.apellido.toLowerCase().includes(busquedaNuevoDueno.toLowerCase())) ||
     (c.razon_social && c.razon_social.toLowerCase().includes(busquedaNuevoDueno.toLowerCase())) ||
     (c.documento && c.documento.includes(busquedaNuevoDueno))
-  ).slice(0, 8)
+  ).slice(0, 5)
 
   const seleccionarCliente = (cliente: any) => {
     setFormData({ ...formData, cliente_id: cliente.id })
@@ -327,8 +374,7 @@ export function VehiclesView() {
               </h2>
             </div>
           </div>
-          {/* Este botón podría abrir un modal para editar marca, modelo, etc., pero por ahora se centra en km y dueño */}
-          <Button variant="outline" className="bg-background">
+          <Button variant="outline" onClick={abrirModalEditar} className="bg-background hover:bg-secondary">
             <Edit className="w-4 h-4 mr-2"/> Editar Datos Principales
           </Button>
         </div>
@@ -348,7 +394,6 @@ export function VehiclesView() {
                 <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> Año</span><p className="font-medium">{vehiculoSeleccionado.anio || '-'}</p></div>
                 <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Palette className="w-3 h-3"/> Color</span><p className="font-medium">{vehiculoSeleccionado.color || '-'}</p></div>
                 
-                {/* EDICIÓN DE KILOMETRAJE */}
                 <div className="col-span-2 sm:col-span-1">
                   <span className="text-muted-foreground block mb-1 flex items-center gap-1"><Gauge className="w-3 h-3"/> Kilometraje</span>
                   {editandoKm ? (
@@ -389,9 +434,9 @@ export function VehiclesView() {
                 <User className="w-5 h-5" /> Propietario Actual
               </CardTitle>
               <div className="flex gap-2">
-                {/* BOTÓN PARA EDITAR CLIENTE (TE LLEVARÍA A LA PESTAÑA) */}
+                {/* ACÁ USAMOS EL ENRUTADOR PROFESIONAL DE NEXT.JS */}
                 {c && !modoTransferencia && (
-                  <Button variant="ghost" size="sm" onClick={() => alert("Acá podés usar window.location.href='/clientes?id=' + c.id o el router de Next.js para saltar a editar al cliente " + c.nombre)} className="text-muted-foreground hover:text-primary">
+                  <Button variant="ghost" size="sm" onClick={() => router.push('/clientes')} className="text-muted-foreground hover:text-primary">
                     <Edit className="w-4 h-4 mr-2"/> Editar Cliente
                   </Button>
                 )}
@@ -406,7 +451,6 @@ export function VehiclesView() {
               {modoTransferencia ? (
                 <div className="space-y-4 animate-in fade-in duration-200 bg-slate-50 dark:bg-slate-900/50 p-5 rounded-lg border border-border h-full flex flex-col">
                   
-                  {/* BOTÓN SEPARADO PARA DESVINCULAR */}
                   <div className="mb-4 pb-4 border-b border-border">
                     <Label className="text-muted-foreground font-semibold mb-2 block">¿El cliente vendió el auto?</Label>
                     <Button variant="outline" onClick={() => handleTransferirDueno("desvincular")} disabled={isTransferring} className="w-full border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900">
@@ -414,42 +458,51 @@ export function VehiclesView() {
                     </Button>
                   </div>
 
-                  {/* BUSCADOR DE NUEVO DUEÑO */}
                   <Label className="text-blue-700 dark:text-blue-400 font-semibold flex items-center gap-2">
                     <UserCheck className="w-4 h-4"/> Transferir a otro cliente
                   </Label>
-                  <div className="relative">
+                  
+                  <div className="relative mt-2">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input 
                       placeholder="Buscar por nombre, apellido o DNI..." 
                       className="pl-9 bg-white dark:bg-slate-950" 
                       value={busquedaNuevoDueno}
-                      onChange={(e) => setBusquedaNuevoDueno(e.target.value)}
+                      onChange={(e) => {
+                        setBusquedaNuevoDueno(e.target.value);
+                        setNuevoDuenoId(""); 
+                      }}
                     />
-                  </div>
-
-                  {/* Lista de resultados de transferencia */}
-                  <div className="flex-1 min-h-[120px] max-h-[160px] overflow-y-auto border border-border rounded-md bg-white dark:bg-slate-950 mt-2">
-                    {busquedaNuevoDueno.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground italic mt-4">Escriba para buscar un cliente...</div>
-                    ) : clientesParaTransferir.length === 0 ? (
-                      <div className="p-4 text-center text-sm text-muted-foreground mt-4">No se encontró al cliente.</div>
-                    ) : (
-                      clientesParaTransferir.map(cl => (
-                        <div 
-                          key={cl.id} 
-                          onClick={() => setNuevoDuenoId(cl.id)}
-                          className={`p-3 border-b border-border/50 cursor-pointer flex justify-between items-center transition-colors ${nuevoDuenoId === cl.id ? 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-l-blue-500' : 'hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-                        >
-                          <div>
-                            <div className="font-medium text-sm">{cl.tipo_cliente === 'empresa' ? cl.razon_social : `${cl.nombre} ${cl.apellido || ''}`}</div>
-                            <div className="text-xs text-muted-foreground">{cl.documento || 'S/DNI'}</div>
-                          </div>
-                          {nuevoDuenoId === cl.id && <CheckCircle2 className="w-4 h-4 text-blue-600"/>}
-                        </div>
-                      ))
+                    {busquedaNuevoDueno.length > 0 && !nuevoDuenoId && (
+                      <div className="absolute top-11 left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 max-h-[160px] overflow-y-auto">
+                        {clientesParaTransferir.length === 0 ? (
+                          <div className="p-3 text-center text-sm text-muted-foreground">No se encontró al cliente.</div>
+                        ) : (
+                          clientesParaTransferir.map(cl => (
+                            <div 
+                              key={cl.id} 
+                              onClick={() => { 
+                                setNuevoDuenoId(cl.id); 
+                                setBusquedaNuevoDueno(cl.tipo_cliente === 'empresa' ? cl.razon_social : `${cl.nombre} ${cl.apellido || ''}`); 
+                              }}
+                              className="p-3 border-b border-border/50 cursor-pointer flex justify-between items-center transition-colors hover:bg-secondary"
+                            >
+                              <div>
+                                <div className="font-medium text-sm">{cl.tipo_cliente === 'empresa' ? cl.razon_social : `${cl.nombre} ${cl.apellido || ''}`}</div>
+                                <div className="text-xs text-muted-foreground">{cl.documento || 'S/DNI'}</div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
                     )}
                   </div>
+
+                  {nuevoDuenoId && (
+                    <div className="flex items-center gap-2 text-sm text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded border border-emerald-200 dark:border-emerald-800">
+                      <CheckCircle2 className="w-4 h-4"/> Cliente listo para asignar.
+                    </div>
+                  )}
 
                   <div className="flex justify-end gap-2 pt-2 mt-auto">
                     <Button variant="ghost" onClick={() => {setModoTransferencia(false); setNuevoDuenoId(""); setBusquedaNuevoDueno("");}} disabled={isTransferring}>Cancelar</Button>
@@ -526,7 +579,7 @@ export function VehiclesView() {
           <h2 className="text-2xl font-semibold text-foreground">Flota de Vehículos</h2>
           <p className="text-sm text-muted-foreground">Administrá los autos de tus clientes y su historial.</p>
         </div>
-        <Button onClick={abrirModal} className="bg-primary text-primary-foreground">
+        <Button onClick={abrirModalCrear} className="bg-primary text-primary-foreground">
           <Plus className="mr-2 h-4 w-4" /> Nuevo Vehículo
         </Button>
       </div>
@@ -576,20 +629,19 @@ export function VehiclesView() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <User className="w-4 h-4" />
+                          <User className="h-3 w-3" />
                           <span className={!v.clientes ? 'italic opacity-60' : ''}>{nombreDueno}</span>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="text-xs text-muted-foreground space-y-1">
-                          {v.anio && <div className="flex items-center gap-1"><Calendar className="w-3 h-3"/> Año {v.anio}</div>}
-                          {v.kilometraje && <div className="flex items-center gap-1"><Gauge className="w-3 h-3"/> {v.kilometraje.toLocaleString()} km</div>}
+                          {v.anio && <span className="flex items-center gap-1"><Calendar className="h-3 w-3"/> Año {v.anio}</span>}
+                          {v.color && <span className="flex items-center gap-1"><Palette className="h-3 w-3"/> {v.color}</span>}
+                          {v.kilometraje && <span className="flex items-center gap-1"><Gauge className="h-3 w-3"/> {v.kilometraje.toLocaleString()} km</span>}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); alert("Para editar todos los campos (Marca, modelo, etc) podés reutilizar el modal de creación.") }} className="text-muted-foreground hover:text-primary">
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setVehiculoSeleccionado(v); abrirModalEditar(); }} className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
                       </TableCell>
                     </TableRow>
                   )
@@ -600,19 +652,20 @@ export function VehiclesView() {
         </CardContent>
       </Card>
 
-      {/* MODAL NUEVO VEHÍCULO (Intacto) */}
+      {/* MODAL NUEVO / EDITAR VEHÍCULO */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-4">
-            <DialogTitle className="text-2xl text-foreground font-bold">Registrar Vehículo</DialogTitle>
-            <p className="text-sm text-muted-foreground">Vincule un nuevo vehículo a un cliente del taller.</p>
+            <DialogTitle className="text-2xl text-foreground font-bold">{isEditingCar ? "Editar Vehículo" : "Registrar Vehículo"}</DialogTitle>
+            <p className="text-sm text-muted-foreground">{isEditingCar ? "Actualice la información principal del vehículo." : "Vincule un nuevo vehículo a un cliente del taller."}</p>
           </DialogHeader>
 
           <div className="space-y-8">
             
+            {/* SECCIÓN 1: BUSCADOR DE DUEÑO */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
-                <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Dueño del Vehículo <span className="text-destructive">*</span></h3>
+                <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Dueño del Vehículo</h3>
               </div>
               
               {!clienteSeleccionadoInfo ? (
@@ -655,7 +708,7 @@ export function VehiclesView() {
                       <p className="font-bold text-emerald-900 dark:text-emerald-100">
                         {clienteSeleccionadoInfo.tipo_cliente === 'empresa' ? clienteSeleccionadoInfo.razon_social : `${clienteSeleccionadoInfo.nombre} ${clienteSeleccionadoInfo.apellido || ''}`}
                       </p>
-                      <p className="text-xs text-emerald-700 dark:text-emerald-400">Cliente confirmado</p>
+                      <p className="text-xs text-emerald-700 dark:text-emerald-400">Cliente asignado</p>
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={deseleccionarCliente} className="h-8 bg-white dark:bg-slate-950 hover:bg-red-50 hover:text-red-600 hover:border-red-200">
@@ -665,6 +718,7 @@ export function VehiclesView() {
               )}
             </section>
 
+            {/* SECCIÓN 2: DATOS DEL VEHÍCULO */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Datos del Vehículo</h3>
@@ -675,10 +729,11 @@ export function VehiclesView() {
                   <Label>Patente <span className="text-destructive">*</span></Label>
                   <Input 
                     placeholder="AA 123 AA" 
-                    className="bg-slate-50 dark:bg-slate-900 font-mono text-center uppercase tracking-widest" 
+                    className="bg-slate-50 dark:bg-slate-900 font-mono text-center uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed" 
                     value={formData.patente} 
                     onChange={handlePatenteChange}
                     maxLength={9}
+                    disabled={isEditingCar} 
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-1">
@@ -709,6 +764,7 @@ export function VehiclesView() {
               </div>
             </section>
 
+            {/* SECCIÓN 3: DETALLES ADICIONALES */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Detalles (Opcional)</h3>
@@ -733,7 +789,7 @@ export function VehiclesView() {
           <DialogFooter className="mt-8 border-t border-border pt-4 gap-2 sm:gap-0">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleGuardarVehiculo} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
-              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> Guardar Vehículo</>}
+              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> {isEditingCar ? "Actualizar Vehículo" : "Guardar Vehículo"}</>}
             </Button>
           </DialogFooter>
         </DialogContent>
