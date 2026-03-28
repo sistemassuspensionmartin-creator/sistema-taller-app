@@ -14,8 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 
@@ -34,6 +34,7 @@ export function PresupuestosView() {
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
   const [mostrarResultados, setMostrarResultados] = useState(false)
 
+  // AHORA VEHICULO_SELECCIONADO GUARDA LA PATENTE (no un ID)
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<string>("")
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
@@ -53,7 +54,8 @@ export function PresupuestosView() {
         supabase.from('clientes').select('*').order('nombre'),
         supabase.from('vehiculos').select('*'),
         supabase.from('catalogo').select('*').order('detalle'),
-        supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono), vehiculos(patente, marca, modelo), presupuesto_items(*)').order('created_at', { ascending: false }),
+        // La relación en BD es Presupuestos -> Vehiculos -> Clientes
+        supabase.from('presupuestos').select('*, vehiculos(*, clientes(*))').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
       
@@ -73,12 +75,12 @@ export function PresupuestosView() {
     if (vista === "lista") cargarDatos()
   }, [vista])
 
-  // VIGILANTE: Si el cliente seleccionado tiene solo 1 auto, se lo auto-asigna al 100% de seguridad
+  // VIGILANTE DE AUTOS (Adaptado para usar la Patente)
   useEffect(() => {
     if (clienteSeleccionado) {
       const autosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado));
-      if (autosDelCliente.length === 1 && vehiculoSeleccionado !== autosDelCliente[0].id) {
-        setVehiculoSeleccionado(autosDelCliente[0].id);
+      if (autosDelCliente.length === 1 && vehiculoSeleccionado !== autosDelCliente[0].patente) {
+        setVehiculoSeleccionado(autosDelCliente[0].patente);
       }
     }
   }, [clienteSeleccionado, vehiculos, vehiculoSeleccionado]);
@@ -99,7 +101,7 @@ export function PresupuestosView() {
   }).slice(0, 4)
 
   const seleccionarVehiculoBuscador = (v: any) => {
-    setVehiculoSeleccionado(v.id)
+    setVehiculoSeleccionado(v.patente)
     setClienteSeleccionado(v.cliente_id)
     setBusquedaEntidad("")
     setMostrarResultados(false)
@@ -107,7 +109,7 @@ export function PresupuestosView() {
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    setVehiculoSeleccionado("") // Lo reseteamos por seguridad, el useEffect se encarga de reasignar si es 1 solo.
+    setVehiculoSeleccionado("") // El useEffect se encarga de reasignar si es 1 solo auto.
     setBusquedaEntidad("")
     setMostrarResultados(false)
   }
@@ -131,7 +133,7 @@ export function PresupuestosView() {
 
   const eliminarFila = (id: string) => setFilas(filas.filter(f => f.id !== id))
 
-  const vehiculoActual = vehiculos.find(v => v.id === vehiculoSeleccionado)
+  const vehiculoActual = vehiculos.find(v => v.patente === vehiculoSeleccionado)
   const clienteActual = clientes.find(c => c.id === clienteSeleccionado)
 
   const subtotalNeto = filas.reduce((acc, fila) => acc + ((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)), 0)
@@ -139,6 +141,7 @@ export function PresupuestosView() {
   const totalFinal = subtotalNeto - descuento
   const gananciaEstimada = totalFinal - costoTotal
 
+  // ACCIÓN DE GUARDADO (Ahora usando los nombres reales de TU base de datos)
   const handleGuardarPresupuesto = async () => {
     if (!clienteSeleccionado) return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
     if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
@@ -148,24 +151,23 @@ export function PresupuestosView() {
 
     setIsSaving(true)
     try {
-      const nroComprobante = "PRE-" + Math.floor(1000 + Math.random() * 9000)
+      const numAleatorio = Math.floor(1000 + Math.random() * 9000);
 
+      // INSERTANDO CON LOS NOMBRES EXACTOS DE TU TABLA (Basado en el diagrama)
       const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
-        nro_comprobante: nroComprobante,
-        fecha: fecha,
+        numero_correlativo: numAleatorio, 
+        vehiculo_patente: vehiculoSeleccionado, // Usa la patente como foreign key
+        fecha_emision: fecha,
         validez_dias: parseInt(validez) || 15,
-        cliente_id: clienteSeleccionado, // <- OJO: ESTE ES EL NOMBRE QUE SUPABASE PIDE QUE VERIFIQUES
-        vehiculo_id: vehiculoSeleccionado, // <- IGUAL QUE ESTE
-        subtotal: subtotalNeto,
         descuento: descuento,
-        total: totalFinal,
+        total_final: totalFinal,
         estado: 'Borrador',
-        notas_cliente: notasCliente,
+        observaciones_publicas: notasCliente,
         notas_internas: notasInternas
       }]).select()
 
-      if (presError) throw new Error("Error de Base de Datos (Presupuestos): " + presError.message)
-      if (!presData || presData.length === 0) throw new Error("El presupuesto se guardó, pero hubo un error leyendo el ID.")
+      if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
+      if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
 
       const itemsToInsert = filasValidas.map(f => ({
         presupuesto_id: presData[0].id,
@@ -177,8 +179,9 @@ export function PresupuestosView() {
         subtotal: (parseFloat(f.precio) || 0) * (parseInt(f.cant) || 1)
       }))
 
+      // Guardamos ítems (asumiendo que tenés la tabla presupuesto_items)
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
-      if (itemsError) throw new Error("Error de Base de Datos (Items): " + itemsError.message)
+      if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
       alert("¡Presupuesto guardado con éxito!")
       setVista("lista")
@@ -190,7 +193,7 @@ export function PresupuestosView() {
       
     } catch (error: any) {
       console.error("Error al guardar:", error)
-      alert(error.message || "Hubo un error desconocido al guardar.")
+      alert(error.message)
     } finally {
       setIsSaving(false)
     }
@@ -208,13 +211,14 @@ export function PresupuestosView() {
 
   const generarDocumento = (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     const esHistorico = !!datosHistoricos;
-    const v_cliente = esHistorico ? datosHistoricos.clientes : clienteActual;
+    
+    const v_cliente = esHistorico ? datosHistoricos.vehiculos?.clientes : clienteActual;
     const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
     
     if (!v_cliente || !v_vehiculo) return alert("Faltan datos del cliente o vehículo para generar el documento.");
 
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "");
-    const v_total = esHistorico ? datosHistoricos.total : totalFinal;
+    const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
     
     const formatearFecha = (fechaString: string) => {
       if (!fechaString) return "";
@@ -222,9 +226,9 @@ export function PresupuestosView() {
       if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
       return fechaString;
     }
-    const v_fecha = esHistorico ? formatearFecha(datosHistoricos.fecha) : formatearFecha(fecha);
-    const v_nro = esHistorico ? datosHistoricos.nro_comprobante : "PRE-BORRADOR";
-    const v_notas = esHistorico ? datosHistoricos.notas_cliente : notasCliente;
+    const v_fecha = esHistorico ? formatearFecha(datosHistoricos.fecha_emision) : formatearFecha(fecha);
+    const v_nro = esHistorico ? `PRE-${datosHistoricos.numero_correlativo}` : "PRE-BORRADOR";
+    const v_notas = esHistorico ? datosHistoricos.observaciones_publicas : notasCliente;
     const v_notas_int = esHistorico ? datosHistoricos.notas_internas : notasInternas;
 
     const nombreTaller = configuracion.nombre_taller || "Mi Taller Automotor";
@@ -318,7 +322,7 @@ export function PresupuestosView() {
           <div class="totales">
             <div class="total-row total-final">
               <span>TOTAL FINAL:</span>
-              <span>$${v_total.toLocaleString()}</span>
+              <span>$${(v_total || 0).toLocaleString()}</span>
             </div>
           </div>
           <div class="notas">
@@ -443,6 +447,7 @@ export function PresupuestosView() {
 
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar <span className="text-destructive">*</span></Label>
+                {/* EL MENU NATIVO QUE NO FALLA. EL VALUE AHORA ES LA PATENTE */}
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-white dark:bg-slate-950 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
                   value={vehiculoSeleccionado}
@@ -453,7 +458,7 @@ export function PresupuestosView() {
                     {clienteSeleccionado ? "Seleccione un vehículo..." : "Esperando cliente..."}
                   </option>
                   {vehiculosDelCliente.map(v => (
-                    <option key={v.id} value={v.id}>
+                    <option key={v.patente} value={v.patente}>
                       {v.marca} {v.modelo} ({v.patente})
                     </option>
                   ))}
@@ -591,13 +596,17 @@ export function PresupuestosView() {
               ) : (
                 presupuestos.map((p) => (
                   <TableRow key={p.id} className="hover:bg-secondary/50">
-                    <TableCell className="font-mono font-bold">{p.nro_comprobante}</TableCell>
-                    <TableCell>{new Date(p.fecha).toLocaleDateString('es-AR')}</TableCell>
+                    <TableCell className="font-mono font-bold">PRE-{p.numero_correlativo}</TableCell>
+                    <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
                     <TableCell>
-                      <div className="font-medium text-foreground">{p.clientes?.tipo_cliente === 'empresa' ? p.clientes.razon_social : `${p.clientes?.nombre} ${p.clientes?.apellido}`}</div>
-                      <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculos?.patente})</div>
+                      <div className="font-medium text-foreground">
+                        {p.vehiculos?.clientes?.tipo_cliente === 'empresa' 
+                          ? p.vehiculos?.clientes?.razon_social 
+                          : `${p.vehiculos?.clientes?.nombre || ''} ${p.vehiculos?.clientes?.apellido || ''}`}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
                     </TableCell>
-                    <TableCell className="text-right font-bold font-mono">${p.total?.toLocaleString()}</TableCell>
+                    <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
                     <TableCell className="text-center"><Badge variant="outline">{p.estado}</Badge></TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
