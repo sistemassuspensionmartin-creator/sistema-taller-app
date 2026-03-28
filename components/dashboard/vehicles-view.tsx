@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Car, User, Edit, Loader2, Save, Gauge, Palette, Calendar, X, CheckCircle2 } from "lucide-react"
+import { Plus, Search, Car, User, Edit, Loader2, Save, Gauge, Palette, Calendar, X, CheckCircle2, ArrowLeft, Phone, UserCheck, UserMinus, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,10 @@ const MARCAS_COMUNES = [
 ]
 
 export function VehiclesView() {
+  // Estado para controlar qué pantalla vemos
+  const [vista, setVista] = useState<"lista" | "detalle">("lista")
+  
+  // Estados originales
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([]) 
   const [isLoading, setIsLoading] = useState(true)
@@ -46,7 +51,6 @@ export function VehiclesView() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [busquedaPrincipal, setBusquedaPrincipal] = useState("")
 
-  // Estados para el BUSCADOR INTELIGENTE de clientes
   const [busquedaCliente, setBusquedaCliente] = useState("")
   const [clienteSeleccionadoInfo, setClienteSeleccionadoInfo] = useState<any>(null)
 
@@ -61,10 +65,17 @@ export function VehiclesView() {
     cliente_id: ""
   })
 
+  // Nuevos estados para la Vista de Detalle
+  const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<any>(null)
+  const [historialPresupuestos, setHistorialPresupuestos] = useState<any[]>([])
+  const [modoTransferencia, setModoTransferencia] = useState(false)
+  const [nuevoDuenoId, setNuevoDuenoId] = useState<string>("")
+  const [isTransferring, setIsTransferring] = useState(false)
+
   const fetchVehiculos = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento )`)
+      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email )`)
       if (error) throw error
       setVehiculos(data || [])
     } catch (error) {
@@ -76,7 +87,7 @@ export function VehiclesView() {
 
   const fetchClientesParaSelect = async () => {
     try {
-      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento').order('nombre')
+      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email').order('nombre')
       if (error) throw error
       setClientes(data || [])
     } catch (error) {
@@ -85,11 +96,83 @@ export function VehiclesView() {
   }
 
   useEffect(() => {
-    fetchVehiculos()
-    fetchClientesParaSelect()
-  }, [])
+    if (vista === "lista") {
+      fetchVehiculos()
+      fetchClientesParaSelect()
+      setVehiculoSeleccionado(null)
+      setModoTransferencia(false)
+    }
+  }, [vista])
 
-  // ABRIR MODAL LIMPIO
+  // Lógica de apertura de detalle
+  const abrirDetalle = async (vehiculo: any) => {
+    setVehiculoSeleccionado(vehiculo)
+    setVista("detalle")
+    setModoTransferencia(false)
+    
+    // Buscar historial de presupuestos de este auto en la BD
+    try {
+      const { data, error } = await supabase
+        .from('presupuestos')
+        .select('*')
+        .eq('vehiculo_patente', vehiculo.patente)
+        .order('fecha_emision', { ascending: false })
+
+      if (error) throw error;
+      setHistorialPresupuestos(data || [])
+    } catch (error) {
+      console.error("Error al cargar historial:", error)
+    }
+  }
+
+  // Lógica de transferencia
+  const handleTransferirDueno = async () => {
+    if (!nuevoDuenoId) return alert("Seleccione una opción.");
+    
+    const esDesvinculacion = nuevoDuenoId === "desvincular";
+    const accionTexto = esDesvinculacion ? "desvincular este vehículo" : "transferir este vehículo al nuevo dueño";
+    
+    if (!confirm(`¿Estás seguro de que querés ${accionTexto}?`)) return;
+
+    setIsTransferring(true)
+    try {
+      const { error } = await supabase
+        .from('vehiculos')
+        .update({ cliente_id: esDesvinculacion ? null : nuevoDuenoId })
+        .eq('patente', vehiculoSeleccionado.patente);
+
+      if (error) throw error;
+
+      alert("¡Cambio de titularidad guardado con éxito!");
+      
+      const clienteNuevo = esDesvinculacion ? null : clientes.find(c => c.id === nuevoDuenoId);
+      
+      // Actualizamos la vista de detalle actual
+      setVehiculoSeleccionado({
+        ...vehiculoSeleccionado,
+        cliente_id: esDesvinculacion ? null : nuevoDuenoId,
+        clientes: clienteNuevo
+      });
+
+      // Actualizamos la tabla principal por si volvemos atrás
+      setVehiculos(vehiculos.map(v => 
+        v.patente === vehiculoSeleccionado.patente 
+          ? { ...v, cliente_id: esDesvinculacion ? null : nuevoDuenoId, clientes: clienteNuevo } 
+          : v
+      ));
+
+      setModoTransferencia(false);
+      setNuevoDuenoId("");
+
+    } catch (error: any) {
+      console.error("Error al transferir:", error)
+      alert("Error al cambiar titularidad: " + error.message)
+    } finally {
+      setIsTransferring(false)
+    }
+  }
+
+  // LÓGICA DE CREACIÓN (Tuya, intacta)
   const abrirModal = () => {
     setFormData({ patente: "", tipo_vehiculo: "Auto", marca: "", modelo: "", anio: "", color: "", kilometraje: "", cliente_id: "" })
     setBusquedaCliente("")
@@ -97,7 +180,6 @@ export function VehiclesView() {
     setIsModalOpen(true)
   }
 
-  // FORMATEADOR DE PATENTES
   const handlePatenteChange = (e: any) => {
     let limpia = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase()
     if (limpia.length > 7) limpia = limpia.slice(0, 7)
@@ -154,20 +236,18 @@ export function VehiclesView() {
     }
   }
 
-  // Filtrado para la tabla principal
   const vehiculosFiltrados = vehiculos.filter(v => 
     v.patente.includes(busquedaPrincipal.replace(/\s/g, "").toUpperCase()) || 
     v.marca.toLowerCase().includes(busquedaPrincipal.toLowerCase()) ||
     v.modelo.toLowerCase().includes(busquedaPrincipal.toLowerCase())
   )
 
-  // Filtrado para el buscador de clientes en el modal
   const clientesParaMostrar = busquedaCliente.trim() === "" ? [] : clientes.filter(c => 
     (c.nombre && c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase())) ||
     (c.apellido && c.apellido.toLowerCase().includes(busquedaCliente.toLowerCase())) ||
     (c.razon_social && c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase())) ||
     (c.documento && c.documento.includes(busquedaCliente))
-  ).slice(0, 5) // Mostramos solo los primeros 5 para no hacer una lista gigante
+  ).slice(0, 5)
 
   const seleccionarCliente = (cliente: any) => {
     setFormData({ ...formData, cliente_id: cliente.id })
@@ -187,6 +267,155 @@ export function VehiclesView() {
     return patenteDB
   }
 
+  // ==========================================
+  // RENDER: VISTA DE DETALLE
+  // ==========================================
+  if (vista === "detalle" && vehiculoSeleccionado) {
+    const c = vehiculoSeleccionado.clientes;
+    const nombreCliente = c ? (c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido || ''}`) : 'Sin Propietario Vinculado';
+
+    return (
+      <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-4 w-4 mr-2"/> Volver
+            </Button>
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <span className="bg-[#008A4B] text-white px-3 py-1 rounded-md font-mono tracking-widest text-lg">
+                  {formatearPatenteVisual(vehiculoSeleccionado.patente)}
+                </span>
+                {vehiculoSeleccionado.marca} {vehiculoSeleccionado.modelo}
+              </h2>
+            </div>
+          </div>
+          <Button variant="outline" className="bg-background">
+            <Edit className="w-4 h-4 mr-2"/> Editar Datos
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* FICHA TÉCNICA */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="bg-secondary/10 border-b border-border py-4">
+              <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
+                <Car className="w-5 h-5" /> Ficha Técnica
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                <div><span className="text-muted-foreground block mb-1">Marca</span><p className="font-medium text-base">{vehiculoSeleccionado.marca}</p></div>
+                <div><span className="text-muted-foreground block mb-1">Modelo</span><p className="font-medium text-base">{vehiculoSeleccionado.modelo}</p></div>
+                <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Calendar className="w-3 h-3"/> Año</span><p className="font-medium">{vehiculoSeleccionado.anio || '-'}</p></div>
+                <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Palette className="w-3 h-3"/> Color</span><p className="font-medium">{vehiculoSeleccionado.color || '-'}</p></div>
+                <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Gauge className="w-3 h-3"/> Kilometraje</span><p className="font-medium">{vehiculoSeleccionado.kilometraje ? `${vehiculoSeleccionado.kilometraje.toLocaleString()} km` : '-'}</p></div>
+                <div><span className="text-muted-foreground block mb-1">Tipo</span><p className="font-medium capitalize">{vehiculoSeleccionado.tipo_vehiculo || '-'}</p></div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* DATOS DEL PROPIETARIO & TRANSFERENCIA */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="bg-secondary/10 border-b border-border py-4 flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
+                <User className="w-5 h-5" /> Propietario Actual
+              </CardTitle>
+              {!modoTransferencia && (
+                <Button variant="ghost" size="sm" onClick={() => setModoTransferencia(true)} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                  Cambiar Propietario
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="p-6">
+              {modoTransferencia ? (
+                <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border border-border">
+                  <Label className="text-blue-700 dark:text-blue-400 font-semibold flex items-center gap-2">
+                    <UserCheck className="w-4 h-4"/> Seleccionar Nuevo Propietario
+                  </Label>
+                  <Select value={nuevoDuenoId} onValueChange={setNuevoDuenoId}>
+                    <SelectTrigger className="bg-white dark:bg-slate-950">
+                      <SelectValue placeholder="Elija un cliente existente..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="desvincular" className="text-red-600 font-medium">
+                        <div className="flex items-center gap-2"><UserMinus className="w-4 h-4"/> Desvincular Vehículo (Dejar sin dueño)</div>
+                      </SelectItem>
+                      {clientes.map(cl => (
+                        <SelectItem key={cl.id} value={cl.id}>
+                          {cl.tipo_cliente === 'empresa' ? cl.razon_social : `${cl.nombre} ${cl.apellido || ''}`} ({cl.documento || 'S/DNI'})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="ghost" onClick={() => {setModoTransferencia(false); setNuevoDuenoId("");}} disabled={isTransferring}>Cancelar</Button>
+                    <Button onClick={handleTransferirDueno} disabled={!nuevoDuenoId || isTransferring} className="bg-blue-600 hover:bg-blue-700 text-white">
+                      {isTransferring ? <Loader2 className="w-4 h-4 animate-spin"/> : "Confirmar Transferencia"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {c ? (
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                      <div className="col-span-2"><span className="text-muted-foreground block mb-1">Nombre / Razón Social</span><p className="font-bold text-lg">{nombreCliente}</p></div>
+                      <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</span><p className="font-medium font-mono">{c.telefono || '-'}</p></div>
+                      <div><span className="text-muted-foreground block mb-1">DNI / CUIT</span><p className="font-medium">{c.documento || '-'}</p></div>
+                      <div className="col-span-2"><span className="text-muted-foreground block mb-1">Email</span><p className="font-medium">{c.email || '-'}</p></div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-6 text-muted-foreground text-center">
+                      <UserMinus className="w-12 h-12 mb-3 opacity-20" />
+                      <p>Este vehículo no está vinculado a ningún cliente.</p>
+                      <Button variant="link" onClick={() => setModoTransferencia(true)} className="text-blue-600 mt-2">Asignar a un cliente</Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* HISTORIAL DE PRESUPUESTOS */}
+        <div className="pt-4">
+          <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
+            <FileText className="w-5 h-5 text-emerald-600"/> Historial de Presupuestos y Órdenes
+          </h3>
+          <Card className="border-border bg-card overflow-hidden">
+            <Table>
+              <TableHeader className="bg-secondary/20">
+                <TableRow>
+                  <TableHead>Nro</TableHead>
+                  <TableHead>Fecha Emisión</TableHead>
+                  <TableHead>Total Estimado</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historialPresupuestos.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">No hay presupuestos registrados para este vehículo.</TableCell></TableRow>
+                ) : (
+                  historialPresupuestos.map(hp => (
+                    <TableRow key={hp.id} className="hover:bg-secondary/30 transition-colors">
+                      <TableCell className="font-mono font-bold">PRE-{hp.numero_correlativo}</TableCell>
+                      <TableCell>{new Date(hp.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
+                      <TableCell className="font-bold font-mono text-emerald-700 dark:text-emerald-500">${hp.total_final?.toLocaleString()}</TableCell>
+                      <TableCell className="text-center"><Badge variant="outline">{hp.estado}</Badge></TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
+  // ==========================================
+  // RENDER: VISTA LISTA PRINCIPAL (Y MODAL)
+  // ==========================================
   return (
     <div className="space-y-6 pb-8">
       {/* CABECERA Y TABLA PRINCIPAL */}
@@ -225,7 +454,7 @@ export function VehiclesView() {
                 <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay vehículos registrados.</TableCell></TableRow>
               ) : (
                 vehiculosFiltrados.map((v) => (
-                  <TableRow key={v.patente} className="hover:bg-secondary/50 cursor-pointer">
+                  <TableRow key={v.patente} className="hover:bg-secondary/50 cursor-pointer transition-colors" onClick={() => abrirDetalle(v)}>
                     <TableCell>
                       <span className="font-mono font-bold bg-secondary px-2 py-1 rounded border border-border tracking-widest text-foreground whitespace-nowrap">
                         {formatearPatenteVisual(v.patente)}
@@ -249,7 +478,8 @@ export function VehiclesView() {
                       </div>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
+                      {/* Ojo acá con e.stopPropagation() para que al tocar el botón de editar no te abra el detalle por error */}
+                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); /* Acá podrías llamar a un modal de edición rápida si querés */ }} className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
                     </TableCell>
                   </TableRow>
                 ))
