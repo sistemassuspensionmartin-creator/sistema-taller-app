@@ -135,14 +135,24 @@ export function PresupuestosView() {
   const gananciaEstimada = totalFinal - costoTotal
 
   const handleGuardarPresupuesto = async () => {
-    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo usando el buscador o el desplegable.")
+    // 1. Validaciones separadas para saber exactamente qué falta
+    if (!clienteSeleccionado) {
+      return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
+    }
+    if (!vehiculoSeleccionado) {
+      return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
+    }
+
     const filasValidas = filas.filter(f => f.detalle.trim() !== "")
-    if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
+    if (filasValidas.length === 0) {
+      return alert("El presupuesto debe tener al menos un ítem con detalle.")
+    }
 
     setIsSaving(true)
     try {
       const nroComprobante = "PRE-" + Math.floor(1000 + Math.random() * 9000)
 
+      // 2. Quitamos el .single() que a veces hace crashear a Supabase si las reglas (RLS) son estrictas
       const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
         nro_comprobante: nroComprobante,
         fecha: fecha,
@@ -155,12 +165,14 @@ export function PresupuestosView() {
         estado: 'Borrador',
         notas_cliente: notasCliente,
         notas_internas: notasInternas
-      }]).select().single()
+      }]).select()
 
-      if (presError) throw presError
+      // 3. Si Supabase falla, capturamos el mensaje exacto
+      if (presError) throw new Error("Error de Base de Datos (Presupuestos): " + presError.message)
+      if (!presData || presData.length === 0) throw new Error("El presupuesto se guardó, pero Supabase no devolvió el ID. Revisá las políticas RLS.")
 
       const itemsToInsert = filasValidas.map(f => ({
-        presupuesto_id: presData.id,
+        presupuesto_id: presData[0].id,
         tipo: f.tipo,
         detalle: f.detalle,
         cantidad: parseInt(f.cant) || 1,
@@ -170,7 +182,9 @@ export function PresupuestosView() {
       }))
 
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
-      if (itemsError) throw itemsError
+      
+      // 4. Lo mismo para los ítems
+      if (itemsError) throw new Error("Error de Base de Datos (Items): " + itemsError.message)
 
       alert("¡Presupuesto guardado con éxito!")
       setVista("lista")
@@ -180,9 +194,10 @@ export function PresupuestosView() {
       setDescuento(0)
       setNotasInternas("")
       
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al guardar:", error)
-      alert("Hubo un error al guardar el presupuesto.")
+      // 5. Esta es la alerta clave. Nos va a decir la verdad.
+      alert(error.message || "Hubo un error desconocido al guardar.")
     } finally {
       setIsSaving(false)
     }
