@@ -282,7 +282,7 @@ export function CatalogoView() {
 
           <div className="p-8 flex-1 space-y-8">
             <div className="bg-secondary/20 p-4 rounded-lg flex justify-center border border-border">
-              <RadioGroup defaultValue="Repuesto" className="flex flex-wrap justify-center gap-6" value={formData.tipo} onValueChange={(val: string) => setFormData({...formData, tipo: val})}>
+              <RadioGroup defaultValue="Repuesto" className="grid grid-cols-2 gap-x-12 gap-y-4" value={formData.tipo} onValueChange={(val: string) => setFormData({...formData, tipo: val})}>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="Repuesto" id="repuesto" /><Label htmlFor="repuesto" className="font-semibold cursor-pointer flex items-center"><Package className="w-4 h-4 mr-1 text-blue-600"/> Repuesto</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="Neumático" id="neumatico" /><Label htmlFor="neumatico" className="font-semibold cursor-pointer flex items-center"><CircleDashed className="w-4 h-4 mr-1 text-zinc-600"/> Neumáticos</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="Servicio" id="servicio" /><Label htmlFor="servicio" className="font-semibold cursor-pointer flex items-center"><Wrench className="w-4 h-4 mr-1 text-orange-600"/> Servicio</Label></div>
