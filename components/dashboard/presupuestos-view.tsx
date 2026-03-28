@@ -408,7 +408,7 @@ export function PresupuestosView() {
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
               <div className="md:col-span-6 space-y-2 relative">
-                {/* ELIMINADO EL ASTERISCO DE OBLIGATORIEDAD VISUAL */}
+                {/* SIN asterisco, buscar es libre */}
                 <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span></Label>
                 <div className="flex">
                   <Input 
@@ -454,7 +454,6 @@ export function PresupuestosView() {
               </div>
             </div>
 
-            {/* CAJAS READ-ONLY LIMPIAS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
@@ -466,43 +465,23 @@ export function PresupuestosView() {
                 />
               </div>
 
-              {/* ARREGLO DEL BUG DE SELECCIÓN DE VEHÍCULO */}
+              {/* SELECTOR DE VEHÍCULO LIMPIO Y NORMAL */}
               <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar</Label>
-                {!clienteSeleccionado ? (
-                  // Estado 1: Sin cliente elegido
-                  <Input readOnly placeholder="-" className="bg-secondary/20 text-foreground font-medium h-10 border-border pointer-events-none" />
-                ) : !vehiculoSeleccionado ? (
-                  // Estado 2: Cliente elegido, pero auto no seleccionado (o tiene varios)
-                  <Select value={vehiculoSeleccionado} onValueChange={(val: string) => setVehiculoSeleccionado(val)}>
-                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-400 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
-                      {/* Lógica explícita del placeholder para Radix UI */}
-                      <SelectValue placeholder="⚠️ Cliente con varios autos. Elija uno..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vehiculosDelCliente.length === 0 ? (
-                        <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
-                      ) : (
-                        vehiculosDelCliente.map(v => (
-                          <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  // Estado 3: VEHÍCULO SELECCIONADO CORRECTAMENTE -> Caja verde de confirmación
-                  <div className="flex gap-2">
-                    <Input 
-                      readOnly 
-                      value={`${vehiculoActual?.marca} ${vehiculoActual?.modelo} (${vehiculoActual?.patente})`} 
-                      className="bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 text-emerald-900 dark:text-emerald-100 font-medium h-10 pointer-events-none flex-1" 
-                    />
-                    {/* Botón para deseleccionar y elegir otro */}
-                    <Button variant="outline" size="icon" onClick={() => setVehiculoSeleccionado("")} title="Cambiar vehículo" className="h-10 w-10 text-muted-foreground hover:text-destructive shrink-0">
-                      <X className="h-4 w-4"/>
-                    </Button>
-                  </div>
-                )}
+                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar <span className="text-destructive">*</span></Label>
+                <Select value={vehiculoSeleccionado} onValueChange={(val: string) => setVehiculoSeleccionado(val)} disabled={!clienteSeleccionado}>
+                  <SelectTrigger className="bg-white dark:bg-slate-950 h-10 border-border">
+                    <SelectValue placeholder={clienteSeleccionado ? "Seleccione un vehículo..." : "Esperando cliente..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehiculosDelCliente.length === 0 ? (
+                      <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
+                    ) : (
+                      vehiculosDelCliente.map(v => (
+                        <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
