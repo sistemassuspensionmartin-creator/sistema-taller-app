@@ -20,11 +20,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { supabase } from "@/lib/supabase"
 
 export function PresupuestosView() {
-  const [vista, setVista] = useState<"lista" | "crear">("crear")
+  const [vista, setVista] = useState<"lista" | "crear">("lista")
   const [mostrarCostos, setMostrarCostos] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
-  // Datos de la BD
+  // Datos reales de la BD
   const [clientes, setClientes] = useState<any[]>([])
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
@@ -37,7 +38,7 @@ export function PresupuestosView() {
   // Estado del Presupuesto Actual
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<string>("")
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("")
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]) // Fecha del día por defecto
+  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0])
   const [validez, setValidez] = useState("15")
   const [notasCliente, setNotasCliente] = useState("Los repuestos pueden sufrir variaciones de precio sin previo aviso. Validez sujeta a stock.")
   const [notasInternas, setNotasInternas] = useState("")
@@ -47,28 +48,29 @@ export function PresupuestosView() {
     { id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }
   ])
 
-  useEffect(() => {
-    const cargarDatos = async () => {
-      setIsLoading(true)
-      try {
-        const [resClientes, resVehiculos, resCatalogo, resPresupuestos] = await Promise.all([
-          supabase.from('clientes').select('*').order('nombre'),
-          supabase.from('vehiculos').select('*'),
-          supabase.from('catalogo').select('*').order('detalle'),
-          supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente), vehiculos(patente, marca, modelo)').order('created_at', { ascending: false })
-        ])
-        
-        setClientes(resClientes.data || [])
-        setVehiculos(resVehiculos.data || [])
-        setCatalogo(resCatalogo.data || [])
-        setPresupuestos(resPresupuestos.data || [])
-      } catch (error) {
-        console.error("Error al cargar datos:", error)
-      } finally {
-        setIsLoading(false)
-      }
+  const cargarDatos = async () => {
+    setIsLoading(true)
+    try {
+      const [resClientes, resVehiculos, resCatalogo, resPresupuestos] = await Promise.all([
+        supabase.from('clientes').select('*').order('nombre'),
+        supabase.from('vehiculos').select('*'),
+        supabase.from('catalogo').select('*').order('detalle'),
+        supabase.from('presupuestos').select('*, clientes(nombre, apellido, razon_social, tipo_cliente), vehiculos(patente, marca, modelo)').order('created_at', { ascending: false })
+      ])
+      
+      setClientes(resClientes.data || [])
+      setVehiculos(resVehiculos.data || [])
+      setCatalogo(resCatalogo.data || [])
+      setPresupuestos(resPresupuestos.data || [])
+    } catch (error) {
+      console.error("Error al cargar datos:", error)
+    } finally {
+      setIsLoading(false)
     }
-    cargarDatos()
+  }
+
+  useEffect(() => {
+    if (vista === "lista") cargarDatos()
   }, [vista])
 
   // LÓGICA DEL BUSCADOR INTELIGENTE
@@ -92,7 +94,7 @@ export function PresupuestosView() {
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    setVehiculoSeleccionado("") // Forzamos a que tenga que elegir un auto
+    setVehiculoSeleccionado("") 
     setBusquedaEntidad("")
     setMostrarResultados(false)
   }
@@ -100,9 +102,7 @@ export function PresupuestosView() {
   const vehiculosDelCliente = vehiculos.filter(v => v.cliente_id === clienteSeleccionado)
 
   // Lógica de Ítems
-  const agregarFilaVacia = () => {
-    setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
-  }
+  const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
 
   const actualizarFila = (id: string, campo: string, valor: any) => {
     setFilas(filas.map(f => {
@@ -114,9 +114,7 @@ export function PresupuestosView() {
 
   const aplicarItemCatalogo = (idFila: string, idCatalogo: string) => {
     const item = catalogo.find(c => c.id === idCatalogo)
-    if (item) {
-      setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || 0, precio: item.precio_base || 0 } : f))
-    }
+    if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || 0, precio: item.precio_base || 0 } : f))
   }
 
   const eliminarFila = (id: string) => setFilas(filas.filter(f => f.id !== id))
@@ -129,19 +127,98 @@ export function PresupuestosView() {
   const totalFinal = subtotalNeto - descuento
   const gananciaEstimada = totalFinal - costoTotal
 
+  // ACCIONES DE BOTONES
+  const handleGuardarPresupuesto = async () => {
+    if (!clienteSeleccionado || !vehiculoSeleccionado) return alert("Por favor seleccione un cliente y un vehículo.")
+    const filasValidas = filas.filter(f => f.detalle.trim() !== "")
+    if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
+
+    setIsSaving(true)
+    try {
+      // Generamos un número aleatorio para el presupuesto (Ej: PRE-4921)
+      const nroComprobante = "PRE-" + Math.floor(1000 + Math.random() * 9000)
+
+      // 1. Guardar Presupuesto Maestro
+      const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
+        nro_comprobante: nroComprobante,
+        fecha: fecha,
+        validez_dias: parseInt(validez) || 15,
+        cliente_id: clienteSeleccionado,
+        vehiculo_id: vehiculoSeleccionado,
+        subtotal: subtotalNeto,
+        descuento: descuento,
+        total: totalFinal,
+        estado: 'Borrador',
+        notas_cliente: notasCliente,
+        notas_internas: notasInternas
+      }]).select().single()
+
+      if (presError) throw presError
+
+      // 2. Guardar las filas (ítems)
+      const itemsToInsert = filasValidas.map(f => ({
+        presupuesto_id: presData.id,
+        tipo: f.tipo,
+        detalle: f.detalle,
+        cantidad: parseInt(f.cant) || 1,
+        costo_unitario: parseFloat(f.costo) || 0,
+        precio_unitario: parseFloat(f.precio) || 0,
+        subtotal: (parseFloat(f.precio) || 0) * (parseInt(f.cant) || 1)
+      }))
+
+      const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
+      if (itemsError) throw itemsError
+
+      alert("¡Presupuesto guardado con éxito!")
+      setVista("lista")
+      // Limpiar formulario
+      setClienteSeleccionado("")
+      setVehiculoSeleccionado("")
+      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: 1, costo: 0, precio: 0 }])
+      setDescuento(0)
+      setNotasInternas("")
+      
+    } catch (error) {
+      console.error("Error al guardar:", error)
+      alert("Hubo un error al guardar el presupuesto.")
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleWhatsApp = () => {
+    if (!clienteActual || !vehiculoActual) return alert("Seleccione un cliente y vehículo para enviar el mensaje.")
+    if (!clienteActual.telefono) return alert("El cliente no tiene un número de teléfono registrado.")
+    
+    // Limpiamos el teléfono de guiones o espacios
+    const telefonoLimpio = clienteActual.telefono.replace(/\D/g, '')
+    const mensaje = `Hola ${clienteActual.nombre}, te contactamos del taller.\n\nTe comparto el resumen de cotización para tu ${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente}):\n\n*Total estimado: $${totalFinal.toLocaleString()}*\n\nCualquier consulta estamos a disposición.`
+    
+    window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
+  }
+
+
   if (vista === "crear") {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
           <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO: PR-0014</div>
-            <Button variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800"><ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo</Button>
-            <Button variant="outline" className="bg-background"><Printer className="w-4 h-4 mr-2"/> Imprimir / PDF</Button>
-            <Button className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none"><MessageCircle className="w-4 h-4 mr-2"/> WhatsApp</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"><Save className="w-4 h-4 mr-2"/> Guardar</Button>
+            <div className="bg-secondary/50 px-3 py-2 rounded-md border border-border font-mono font-bold text-sm mr-2 text-primary">NUEVO</div>
+            <Button variant="outline" onClick={() => window.print()} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+              <ClipboardList className="w-4 h-4 mr-2"/> Orden de Trabajo
+            </Button>
+            <Button variant="outline" onClick={() => window.print()} className="bg-background">
+              <Printer className="w-4 h-4 mr-2"/> Imprimir / PDF
+            </Button>
+            <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none">
+              <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
+            </Button>
+            <Button onClick={handleGuardarPresupuesto} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} Guardar
+            </Button>
           </div>
         </div>
 
@@ -154,8 +231,6 @@ export function PresupuestosView() {
           </CardHeader>
           <CardContent className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6">
-              
-              {/* BUSCADOR INTELIGENTE */}
               <div className="md:col-span-6 space-y-2 relative">
                 <Label>Buscar Patente o Cliente <span className="text-destructive">*</span></Label>
                 <div className="flex">
@@ -170,7 +245,6 @@ export function PresupuestosView() {
                   <Button variant="outline" className="rounded-l-none bg-secondary/20 px-4 h-10 border-l-0"><Search className="h-4 w-4 text-muted-foreground"/></Button>
                 </div>
 
-                {/* Resultados Desplegables */}
                 {mostrarResultados && busquedaEntidad.length > 0 && (vehiculosBusqueda.length > 0 || clientesBusqueda.length > 0) && (
                   <div className="absolute top-[72px] left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
                     {vehiculosBusqueda.map(v => {
@@ -204,23 +278,23 @@ export function PresupuestosView() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
-              {/* MAGIA DE ASIGNACIÓN: Si eligió cliente pero no auto, se vuelve un Select obligatorio */}
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo</Label>
-                {!vehiculoSeleccionado && clienteSeleccionado ? (
-                  <Select value={vehiculoSeleccionado} onValueChange={setVehiculoSeleccionado}>
-                    <SelectTrigger className="bg-amber-50 dark:bg-amber-900/20 border-amber-300 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all">
-                      <SelectValue placeholder="⚠️ Seleccione el vehículo..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {vehiculosDelCliente.map(v => (
+                {/* ACÁ ESTÁ EL ARREGLO DEL CARTEL AMARILLO */}
+                <Select value={vehiculoSeleccionado} onValueChange={setVehiculoSeleccionado} disabled={!clienteSeleccionado}>
+                  <SelectTrigger className={!vehiculoSeleccionado && clienteSeleccionado ? "bg-amber-50 dark:bg-amber-900/20 border-amber-300 text-amber-900 dark:text-amber-100 h-10 ring-2 ring-amber-400 ring-offset-2 ring-offset-background transition-all" : "bg-slate-50 dark:bg-slate-900 h-10"}>
+                    <SelectValue placeholder={clienteSeleccionado ? "⚠️ Seleccione el vehículo..." : "Primero elija un cliente"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehiculosDelCliente.length === 0 ? (
+                      <SelectItem value="none" disabled>No tiene vehículos cargados</SelectItem>
+                    ) : (
+                      vehiculosDelCliente.map(v => (
                         <SelectItem key={v.id} value={v.id}>{v.marca} {v.modelo} ({v.patente})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input readOnly value={vehiculoActual ? `${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente})` : ""} className="bg-secondary/30 border-dashed text-foreground font-medium h-10" />
-                )}
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -239,7 +313,7 @@ export function PresupuestosView() {
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row items-center justify-between">
             <CardTitle className="text-lg">Detalle Presupuesto</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}>
+            <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}`}>
               {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>} {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
             </Button>
           </CardHeader>
@@ -251,10 +325,10 @@ export function PresupuestosView() {
                     <TableHead className="w-[160px]">Tipo</TableHead>
                     <TableHead>Buscar en Catálogo o Cargar Manual</TableHead>
                     <TableHead className="w-[80px] text-center">Cant.</TableHead>
-                    {mostrarCostos && <TableHead className="w-[120px] text-right text-amber-600">Costo Unit.</TableHead>}
+                    {mostrarCostos && <TableHead className="w-[120px] text-right text-amber-600 print:hidden">Costo Unit.</TableHead>}
                     <TableHead className="w-[140px] text-right text-emerald-600">Precio Venta</TableHead>
                     <TableHead className="w-[140px] text-right">Subtotal</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
+                    <TableHead className="w-[50px] print:hidden"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -277,7 +351,7 @@ export function PresupuestosView() {
                         <TableCell>
                           <div className="flex gap-2">
                             <Select onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}>
-                              <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0">
+                              <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
                                 <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
                               </SelectTrigger>
                               <SelectContent>
@@ -293,18 +367,18 @@ export function PresupuestosView() {
                         </TableCell>
                         <TableCell><Input type="number" min="1" value={fila.cant} onChange={(e) => actualizarFila(fila.id, 'cant', e.target.value)} className="h-10 text-center font-mono bg-white dark:bg-slate-950" /></TableCell>
                         {mostrarCostos && (
-                          <TableCell><Input type="number" value={fila.costo || ""} onChange={(e) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" /></TableCell>
+                          <TableCell className="print:hidden"><Input type="number" value={fila.costo || ""} onChange={(e) => actualizarFila(fila.id, 'costo', e.target.value)} className="h-10 text-right font-mono border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400" /></TableCell>
                         )}
                         <TableCell><Input type="number" value={fila.precio || ""} onChange={(e) => actualizarFila(fila.id, 'precio', e.target.value)} className="h-10 text-right font-mono bg-white dark:bg-slate-950" /></TableCell>
                         <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseInt(fila.cant) || 1)).toLocaleString()}</TableCell>
-                        <TableCell><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
+                        <TableCell className="print:hidden"><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
                       </TableRow>
                     )
                   })}
                 </TableBody>
               </Table>
             </div>
-            <div className="p-4 border-t border-border bg-slate-50 dark:bg-slate-900/30">
+            <div className="p-4 border-t border-border bg-slate-50 dark:bg-slate-900/30 print:hidden">
               <Button variant="outline" size="sm" onClick={agregarFilaVacia} className="bg-background"><Plus className="w-4 h-4 mr-2"/> Agregar Fila</Button>
             </div>
           </CardContent>
@@ -314,7 +388,7 @@ export function PresupuestosView() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
             <Card className="border-border shadow-sm"><CardContent className="p-4 space-y-2"><Label className="font-semibold text-foreground">Observaciones para el Cliente <span className="text-muted-foreground font-normal text-xs">(Sale en el PDF)</span></Label><Textarea value={notasCliente} onChange={(e) => setNotasCliente(e.target.value)} className="min-h-[80px] bg-slate-50 dark:bg-slate-900 border-border" /></CardContent></Card>
-            <Card className="border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm"><CardContent className="p-4 space-y-2"><Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label><Textarea value={notasInternas} onChange={(e) => setNotasInternas(e.target.value)} placeholder="Información solo visible para el taller..." className="min-h-[80px] bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400" /></CardContent></Card>
+            <Card className="border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm print:hidden"><CardContent className="p-4 space-y-2"><Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label><Textarea value={notasInternas} onChange={(e) => setNotasInternas(e.target.value)} placeholder="Información solo visible para el taller..." className="min-h-[80px] bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400" /></CardContent></Card>
           </div>
           <div>
             <Card className="border-border shadow-md h-full">
@@ -322,7 +396,7 @@ export function PresupuestosView() {
                 <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
                 <div className="flex justify-between items-center text-muted-foreground"><span>Descuento / Atención:</span><div className="relative w-32"><span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span><Input type="number" value={descuento || ""} onChange={(e) => setDescuento(parseFloat(e.target.value) || 0)} className="h-10 pl-7 text-right font-mono bg-slate-50 dark:bg-slate-900" /></div></div>
                 <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
-                {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
+                {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
               </CardContent>
             </Card>
           </div>
@@ -331,10 +405,9 @@ export function PresupuestosView() {
     )
   }
 
-  // VISTA LISTA (El resto queda igual...)
+  // VISTA LISTA PRINCIPAL
   return (
     <div className="space-y-6 pb-8">
-      {/* CABECERA LISTA */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div><h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2><p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p></div>
         <Button onClick={() => setVista("crear")} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto</Button>
