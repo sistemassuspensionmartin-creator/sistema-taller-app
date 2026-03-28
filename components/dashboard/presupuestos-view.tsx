@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -73,6 +73,16 @@ export function PresupuestosView() {
     if (vista === "lista") cargarDatos()
   }, [vista])
 
+  // VIGILANTE: Si el cliente seleccionado tiene solo 1 auto, se lo auto-asigna al 100% de seguridad
+  useEffect(() => {
+    if (clienteSeleccionado) {
+      const autosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado));
+      if (autosDelCliente.length === 1 && vehiculoSeleccionado !== autosDelCliente[0].id) {
+        setVehiculoSeleccionado(autosDelCliente[0].id);
+      }
+    }
+  }, [clienteSeleccionado, vehiculos, vehiculoSeleccionado]);
+
   const terminoBusqueda = busquedaEntidad.toLowerCase().trim()
   
   const vehiculosBusqueda = terminoBusqueda === "" ? [] : vehiculos.filter(v => 
@@ -97,17 +107,12 @@ export function PresupuestosView() {
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    const autosDelCliente = vehiculos.filter(v => v.cliente_id === c.id)
-    if (autosDelCliente.length === 1) {
-      setVehiculoSeleccionado(autosDelCliente[0].id)
-    } else {
-      setVehiculoSeleccionado("") 
-    }
+    setVehiculoSeleccionado("") // Lo reseteamos por seguridad, el useEffect se encarga de reasignar si es 1 solo.
     setBusquedaEntidad("")
     setMostrarResultados(false)
   }
 
-  const vehiculosDelCliente = vehiculos.filter(v => v.cliente_id === clienteSeleccionado)
+  const vehiculosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado))
 
   const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: 1, costo: 0, precio: 0 }])
 
@@ -135,30 +140,22 @@ export function PresupuestosView() {
   const gananciaEstimada = totalFinal - costoTotal
 
   const handleGuardarPresupuesto = async () => {
-    // 1. Validaciones separadas para saber exactamente qué falta
-    if (!clienteSeleccionado) {
-      return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
-    }
-    if (!vehiculoSeleccionado) {
-      return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
-    }
+    if (!clienteSeleccionado) return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
+    if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
 
     const filasValidas = filas.filter(f => f.detalle.trim() !== "")
-    if (filasValidas.length === 0) {
-      return alert("El presupuesto debe tener al menos un ítem con detalle.")
-    }
+    if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
 
     setIsSaving(true)
     try {
       const nroComprobante = "PRE-" + Math.floor(1000 + Math.random() * 9000)
 
-      // 2. Quitamos el .single() que a veces hace crashear a Supabase si las reglas (RLS) son estrictas
       const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
         nro_comprobante: nroComprobante,
         fecha: fecha,
         validez_dias: parseInt(validez) || 15,
-        cliente_id: clienteSeleccionado,
-        vehiculo_id: vehiculoSeleccionado,
+        cliente_id: clienteSeleccionado, // <- OJO: ESTE ES EL NOMBRE QUE SUPABASE PIDE QUE VERIFIQUES
+        vehiculo_id: vehiculoSeleccionado, // <- IGUAL QUE ESTE
         subtotal: subtotalNeto,
         descuento: descuento,
         total: totalFinal,
@@ -167,9 +164,8 @@ export function PresupuestosView() {
         notas_internas: notasInternas
       }]).select()
 
-      // 3. Si Supabase falla, capturamos el mensaje exacto
       if (presError) throw new Error("Error de Base de Datos (Presupuestos): " + presError.message)
-      if (!presData || presData.length === 0) throw new Error("El presupuesto se guardó, pero Supabase no devolvió el ID. Revisá las políticas RLS.")
+      if (!presData || presData.length === 0) throw new Error("El presupuesto se guardó, pero hubo un error leyendo el ID.")
 
       const itemsToInsert = filasValidas.map(f => ({
         presupuesto_id: presData[0].id,
@@ -182,8 +178,6 @@ export function PresupuestosView() {
       }))
 
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
-      
-      // 4. Lo mismo para los ítems
       if (itemsError) throw new Error("Error de Base de Datos (Items): " + itemsError.message)
 
       alert("¡Presupuesto guardado con éxito!")
@@ -196,7 +190,6 @@ export function PresupuestosView() {
       
     } catch (error: any) {
       console.error("Error al guardar:", error)
-      // 5. Esta es la alerta clave. Nos va a decir la verdad.
       alert(error.message || "Hubo un error desconocido al guardar.")
     } finally {
       setIsSaving(false)
@@ -213,7 +206,6 @@ export function PresupuestosView() {
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
   }
 
-  // GENERADOR DE PDF PROFESIONAL BLINDADO
   const generarDocumento = (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     const esHistorico = !!datosHistoricos;
     const v_cliente = esHistorico ? datosHistoricos.clientes : clienteActual;
@@ -245,7 +237,7 @@ export function PresupuestosView() {
       <head>
         <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
         <style>
-          @page { size: ${tipo === 'orden' ? 'landscape' : 'A4 portrait'}; margin: 15mm; }
+          @page { size: ${tipo === 'orden' ? 'A5 landscape' : 'A4 portrait'}; margin: 15mm; }
           * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           body { font-family: Arial, sans-serif; color: #111; margin: 0 auto; padding: 0; width: 100%; max-width: 900px; }
           .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; width: 100%; }
@@ -384,7 +376,6 @@ export function PresupuestosView() {
           </div>
         </div>
 
-        {/* 1. DATOS DEL PRESUPUESTO */}
         <Card className="border-border shadow-sm">
           <CardHeader className="bg-secondary/10 border-b border-border pb-4">
             <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
@@ -450,7 +441,6 @@ export function PresupuestosView() {
                 />
               </div>
 
-              {/* SELECTOR NATIVO DE HTML: A prueba de errores y bugs visuales */}
               <div className="space-y-2">
                 <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar <span className="text-destructive">*</span></Label>
                 <select
