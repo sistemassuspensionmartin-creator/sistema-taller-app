@@ -69,7 +69,6 @@ export function ClientsView() {
       setClientes(data || [])
 
       if (clienteSeleccionado) {
-        // ACÁ ESTÁ EL ARREGLO DEL (c: any) QUE TE TIRABA ERROR
         const actualizado = data?.find((c: any) => c.id === clienteSeleccionado.id)
         if (actualizado) setClienteSeleccionado(actualizado)
       }
@@ -121,9 +120,23 @@ export function ClientsView() {
   }
 
   const abrirEditar = (cliente: any, e: any) => {
-    e.stopPropagation() 
+    if (e) e.stopPropagation() 
     setEditingId(cliente.id)
-    setFormData({ ...cliente })
+    setFormData({
+      tipo_cliente: cliente.tipo_cliente || "persona",
+      nombre: cliente.nombre === "-" ? "" : (cliente.nombre || ""), // Limpiamos el guion si era empresa
+      apellido: cliente.apellido || "",
+      telefono: cliente.telefono || "",
+      email: cliente.email || "",
+      calle: cliente.calle || "",
+      barrio: cliente.barrio || "",
+      ciudad: cliente.ciudad || "",
+      documento: cliente.documento || "",
+      razon_social: cliente.razon_social || "",
+      condicion_iva: cliente.condicion_iva || "Consumidor Final",
+      domicilio_fiscal: cliente.domicilio_fiscal || "",
+      notas: cliente.notas || ""
+    })
     setIsModalOpen(true)
   }
 
@@ -134,23 +147,31 @@ export function ClientsView() {
   }
 
   const handleGuardarCliente = async () => {
-    if (formData.tipo_cliente === "persona" && (!formData.nombre.trim() || !formData.apellido.trim() || !formData.telefono.trim())) return alert("Nombre, Apellido y Teléfono son obligatorios para Personas.")
+    if (formData.tipo_cliente === "persona" && (!formData.nombre.trim() || !formData.documento.trim() || !formData.telefono.trim())) return alert("Nombre, Documento y Teléfono son obligatorios para Personas.")
     if (formData.tipo_cliente === "empresa" && (!formData.razon_social.trim() || !formData.documento.trim() || !formData.telefono.trim())) return alert("Razón Social, CUIT y Teléfono son obligatorios para Empresas.")
     
     setIsSaving(true)
     try {
+      // PREPARAMOS LOS DATOS Y APLICAMOS EL FIX DEL NOMBRE OBLIGATORIO PARA EMPRESAS
+      const payload = {
+        ...formData,
+        nombre: formData.tipo_cliente === 'empresa' ? "-" : formData.nombre,
+        apellido: formData.tipo_cliente === 'empresa' ? null : formData.apellido,
+        razon_social: formData.tipo_cliente === 'persona' ? null : formData.razon_social,
+      }
+
       if (editingId) {
-        const { error } = await supabase.from('clientes').update(formData).eq('id', editingId)
+        const { error } = await supabase.from('clientes').update(payload).eq('id', editingId)
         if (error) throw error
       } else {
-        const { error } = await supabase.from('clientes').insert([formData])
+        const { error } = await supabase.from('clientes').insert([payload])
         if (error) throw error
       }
       setIsModalOpen(false)
       fetchClientes() 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al guardar:", error)
-      alert("No se pudo guardar el cliente.")
+      alert("No se pudo guardar el cliente: " + error.message)
     } finally {
       setIsSaving(false)
     }
@@ -274,11 +295,14 @@ export function ClientsView() {
         </CardContent>
       </Card>
 
-      {/* MODAL: VER DETALLES DEL CLIENTE (TAMAÑO FIJO Y GRANDE) */}
+      {/* ========================================================================= */}
+      {/* MODAL 1: VER DETALLES DEL CLIENTE (ESTRUCTURA SCROLL PROFESIONAL)         */}
+      {/* ========================================================================= */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-3xl min-h-[700px] border-border bg-card overflow-y-auto p-0 flex flex-col">
+        <DialogContent className="max-w-3xl border-border bg-card max-h-[85vh] flex flex-col p-0 gap-0">
           {clienteSeleccionado && (
             <>
+              {/* CABECERA (FIJA) */}
               <div className="bg-secondary/30 p-6 border-b border-border shrink-0">
                 <div className="flex justify-between items-start">
                   <div>
@@ -293,7 +317,8 @@ export function ClientsView() {
                 </div>
               </div>
 
-              <div className="p-6 flex-1">
+              {/* CUERPO (SCROLEABLE) */}
+              <div className="p-6 flex-1 overflow-y-auto">
                 <Tabs defaultValue="datos" className="w-full">
                   <TabsList className="mb-6 bg-secondary">
                     <TabsTrigger value="datos">Datos Personales</TabsTrigger>
@@ -375,7 +400,6 @@ export function ClientsView() {
                           <h3 className="text-lg font-bold">Registrar Nuevo Vehículo</h3>
                         </div>
 
-                        {/* El formulario adentro de su cajita gris como querías */}
                         <div className="p-6 bg-secondary/30 rounded-lg border border-border space-y-6">
                           <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-2">
@@ -468,24 +492,30 @@ export function ClientsView() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL CREAR/EDITAR CLIENTE (TAMAÑO FIJO Y GRANDE) */}
+
+      {/* ========================================================================= */}
+      {/* MODAL 2: CREAR / EDITAR CLIENTE (ESTRUCTURA SCROLL PROFESIONAL)           */}
+      {/* ========================================================================= */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-3xl min-h-[700px] border-border bg-card overflow-y-auto">
-          <DialogHeader className="mb-4">
+        <DialogContent className="max-w-3xl border-border bg-card max-h-[85vh] flex flex-col">
+          {/* CABECERA FIJA */}
+          <DialogHeader className="shrink-0 mb-2">
             <DialogTitle className="text-2xl text-foreground font-bold">
               {editingId ? "Editar Cliente" : "Registrar Nuevo Cliente"}
             </DialogTitle>
             <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          <div className="bg-secondary/30 p-4 rounded-lg mb-6 flex justify-center border border-border">
-            <RadioGroup defaultValue="persona" className="flex space-x-6" value={formData.tipo_cliente} onValueChange={(val: string) => setFormData({...formData, tipo_cliente: val})}>
-              <div className="flex items-center space-x-2"><RadioGroupItem value="persona" id="persona" /><Label htmlFor="persona" className="font-semibold cursor-pointer">Persona Física</Label></div>
-              <div className="flex items-center space-x-2"><RadioGroupItem value="empresa" id="empresa" /><Label htmlFor="empresa" className="font-semibold cursor-pointer">Empresa</Label></div>
-            </RadioGroup>
-          </div>
+          {/* CONTENIDO QUE HACE SCROLL */}
+          <div className="flex-1 overflow-y-auto pr-4 space-y-8 pb-4">
+            
+            <div className="bg-secondary/30 p-4 rounded-lg flex justify-center border border-border">
+              <RadioGroup defaultValue="persona" className="flex space-x-6" value={formData.tipo_cliente} onValueChange={(val: string) => setFormData({...formData, tipo_cliente: val})}>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="persona" id="persona" /><Label htmlFor="persona" className="font-semibold cursor-pointer">Persona Física</Label></div>
+                <div className="flex items-center space-x-2"><RadioGroupItem value="empresa" id="empresa" /><Label htmlFor="empresa" className="font-semibold cursor-pointer">Empresa</Label></div>
+              </RadioGroup>
+            </div>
 
-          <div className="space-y-8">
             {formData.tipo_cliente === "persona" && (
               <>
                 <section>
@@ -526,7 +556,7 @@ export function ClientsView() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>CUIT {formData.tipo_cliente === "empresa" && "*"}</Label>
+                    <Label>CUIT/DNI {formData.tipo_cliente === "empresa" && "*"}</Label>
                     <Input className="bg-slate-50 dark:bg-slate-900 border-border font-mono text-sm" placeholder="XX-XXXXXXXX-X" value={formData.documento} onChange={handleCuitChange} />
                   </div>
                   <div className="space-y-2">
@@ -558,7 +588,8 @@ export function ClientsView() {
             </section>
           </div>
           
-          <DialogFooter className="mt-8 border-t border-border pt-4 gap-2 sm:gap-0">
+          {/* PIE DE PÁGINA FIJO */}
+          <DialogFooter className="shrink-0 mt-2 border-t border-border pt-4 gap-2 sm:gap-0">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleGuardarCliente} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : (editingId ? "Actualizar Cliente" : "Guardar Cliente")}
