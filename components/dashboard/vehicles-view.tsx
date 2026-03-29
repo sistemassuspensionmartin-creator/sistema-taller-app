@@ -251,7 +251,8 @@ export function VehiclesView() {
     try {
       const { error } = await supabase.from('clientes').update({
         tipo_cliente: clientFormData.tipo_cliente,
-        nombre: clientFormData.tipo_cliente === 'fisica' ? clientFormData.nombre : null,
+        // LA MAGIA ESTÁ ACÁ: Si es empresa, mandamos un guion para cumplir con el campo obligatorio
+        nombre: clientFormData.tipo_cliente === 'fisica' ? clientFormData.nombre : "-",
         apellido: clientFormData.tipo_cliente === 'fisica' ? clientFormData.apellido : null,
         razon_social: clientFormData.tipo_cliente === 'empresa' ? clientFormData.razon_social : null,
         documento: clientFormData.documento,
@@ -274,7 +275,8 @@ export function VehiclesView() {
       alert("¡Cliente actualizado correctamente!");
     } catch (error: any) {
       console.error("Error al guardar cliente:", error);
-      alert("Hubo un error al actualizar el cliente.");
+      // AHORA LA ALERTA TE VA A DECIR EL ERROR EXACTO SI ALGO FALLA
+      alert("Hubo un error al actualizar el cliente: " + error.message);
     } finally {
       setIsSavingClient(false);
     }
