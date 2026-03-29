@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
@@ -39,8 +38,8 @@ const MARCAS_COMUNES = [
   "Kia", "Chery", "Suzuki", "Otra"
 ]
 
-export function VehiclesView() {
-  const router = useRouter()
+// ACÁ RECIBIMOS LA ORDEN DEL ARCHIVO PRINCIPAL
+export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: () => void }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   
   const [vehiculos, setVehiculos] = useState<any[]>([])
@@ -223,7 +222,7 @@ export function VehiclesView() {
     setClienteSeleccionadoInfo(vehiculoSeleccionado.clientes)
     setBusquedaCliente("")
     setIsEditingCar(true)
-    setIsModalOpen(true) // ¡Ahora sí se va a abrir!
+    setIsModalOpen(true)
   }
 
   const handlePatenteChange = (e: any) => {
@@ -353,9 +352,6 @@ export function VehiclesView() {
 
   return (
     <>
-      {/* ==========================================
-          VISTA DE DETALLE
-          ========================================== */}
       {vista === "detalle" && vehiculoSeleccionado ? (
         <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
@@ -372,7 +368,6 @@ export function VehiclesView() {
                 </h2>
               </div>
             </div>
-            {/* ESTE BOTÓN AHORA SÍ FUNCIONA */}
             <Button variant="outline" onClick={abrirModalEditar} className="bg-background hover:bg-secondary">
               <Edit className="w-4 h-4 mr-2"/> Editar Datos Principales
             </Button>
@@ -431,8 +426,14 @@ export function VehiclesView() {
                   <User className="w-5 h-5" /> Propietario Actual
                 </CardTitle>
                 <div className="flex gap-2">
+                  {/* ACÁ ESTÁ LA MAGIA DEL BOTÓN */}
                   {vehiculoSeleccionado.clientes && !modoTransferencia && (
-                    <Button variant="ghost" size="sm" onClick={() => router.push('/clientes')} className="text-muted-foreground hover:text-primary">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => onNavigateToClients && onNavigateToClients()} 
+                      className="text-muted-foreground hover:text-primary"
+                    >
                       <Edit className="w-4 h-4 mr-2"/> Editar Cliente
                     </Button>
                   )}
@@ -561,9 +562,6 @@ export function VehiclesView() {
           </div>
         </div>
       ) : (
-        /* ==========================================
-            VISTA LISTA PRINCIPAL
-            ========================================== */
         <div className="space-y-6 pb-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -645,9 +643,7 @@ export function VehiclesView() {
         </div>
       )}
 
-      {/* ==========================================
-          MODAL COMPARTIDO (NUEVO / EDITAR VEHÍCULO)
-          ========================================== */}
+      {/* MODAL COMPARTIDO (NUEVO / EDITAR VEHÍCULO) */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-4">
