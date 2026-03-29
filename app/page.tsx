@@ -31,7 +31,7 @@ export default function DashboardPage() {
       case "Clientes":
         return <ClientsView onNavigateToVehicles={() => setActiveSection("Vehículos")} />
       case "Vehículos":
-        return <VehiclesView onNavigateToClients={() => setActiveSection("Clientes")} />
+        return <VehiclesView />
       case "Taller":
         return <WorkOrdersTable />
       case "Caja":               

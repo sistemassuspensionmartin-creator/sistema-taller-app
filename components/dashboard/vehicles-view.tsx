@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
+import { StringifyOptions } from "node:querystring"
 
 const MARCAS_COMUNES = [
   "Volkswagen", "Ford", "Chevrolet", "Toyota", "Renault", 
@@ -38,8 +39,7 @@ const MARCAS_COMUNES = [
   "Kia", "Chery", "Suzuki", "Otra"
 ]
 
-// ACÁ RECIBIMOS LA ORDEN DEL ARCHIVO PRINCIPAL
-export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: () => void }) {
+export function VehiclesView() {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   
   const [vehiculos, setVehiculos] = useState<any[]>([])
@@ -79,10 +79,29 @@ export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: ()
   const [nuevoKm, setNuevoKm] = useState("")
   const [isUpdatingKm, setIsUpdatingKm] = useState(false)
 
+  // ==========================================
+  // NUEVOS ESTADOS: EDICIÓN DE CLIENTE DIRECTA
+  // ==========================================
+  const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false)
+  const [isSavingClient, setIsSavingClient] = useState(false)
+  const [clientFormData, setClientFormData] = useState({
+    id: "",
+    tipo_cliente: "fisica",
+    nombre: "",
+    apellido: "",
+    razon_social: "",
+    documento: "",
+    telefono: "",
+    email: "",
+    condicion_iva: "Consumidor Final",
+    domicilio_fiscal: "",
+    notas: ""
+  })
+
   const fetchVehiculos = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email )`)
+      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas )`)
       if (error) throw error
       setVehiculos(data || [])
     } catch (error) {
@@ -94,7 +113,7 @@ export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: ()
 
   const fetchClientesParaSelect = async () => {
     try {
-      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email').order('nombre')
+      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas').order('nombre')
       if (error) throw error
       setClientes(data || [])
     } catch (error) {
@@ -197,6 +216,67 @@ export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: ()
       alert("Error al actualizar kilometraje: " + error.message);
     } finally {
       setIsUpdatingKm(false);
+    }
+  }
+
+  // --- LÓGICA DE EDICIÓN DEL CLIENTE ---
+  const abrirModalEditarCliente = () => {
+    if (!vehiculoSeleccionado?.clientes) return;
+    const c = vehiculoSeleccionado.clientes;
+    setClientFormData({
+      id: c.id,
+      tipo_cliente: c.tipo_cliente || "fisica",
+      nombre: c.nombre || "",
+      apellido: c.apellido || "",
+      razon_social: c.razon_social || "",
+      documento: c.documento || "",
+      telefono: c.telefono || "",
+      email: c.email || "",
+      condicion_iva: c.condicion_iva || "Consumidor Final",
+      domicilio_fiscal: c.domicilio_fiscal || "",
+      notas: c.notas || ""
+    });
+    setIsEditClientModalOpen(true);
+  }
+
+  const handleGuardarCliente = async () => {
+    if (clientFormData.tipo_cliente === 'fisica' && (!clientFormData.nombre || !clientFormData.documento)) {
+      return alert("El nombre y el DNI son obligatorios.");
+    }
+    if (clientFormData.tipo_cliente === 'empresa' && (!clientFormData.razon_social || !clientFormData.documento)) {
+      return alert("La Razón Social y el CUIT son obligatorios.");
+    }
+
+    setIsSavingClient(true);
+    try {
+      const { error } = await supabase.from('clientes').update({
+        tipo_cliente: clientFormData.tipo_cliente,
+        nombre: clientFormData.tipo_cliente === 'fisica' ? clientFormData.nombre : null,
+        apellido: clientFormData.tipo_cliente === 'fisica' ? clientFormData.apellido : null,
+        razon_social: clientFormData.tipo_cliente === 'empresa' ? clientFormData.razon_social : null,
+        documento: clientFormData.documento,
+        telefono: clientFormData.telefono,
+        email: clientFormData.email,
+        condicion_iva: clientFormData.condicion_iva,
+        domicilio_fiscal: clientFormData.domicilio_fiscal,
+        notas: clientFormData.notas
+      }).eq('id', clientFormData.id);
+
+      if (error) throw error;
+
+      // Actualizar vista local
+      const updatedClient = { ...vehiculoSeleccionado.clientes, ...clientFormData };
+      setVehiculoSeleccionado({ ...vehiculoSeleccionado, clientes: updatedClient });
+      setVehiculos(vehiculos.map(v => v.cliente_id === updatedClient.id ? { ...v, clientes: updatedClient } : v));
+      setClientes(clientes.map(c => c.id === updatedClient.id ? updatedClient : c));
+
+      setIsEditClientModalOpen(false);
+      alert("¡Cliente actualizado correctamente!");
+    } catch (error: any) {
+      console.error("Error al guardar cliente:", error);
+      alert("Hubo un error al actualizar el cliente.");
+    } finally {
+      setIsSavingClient(false);
     }
   }
 
@@ -426,14 +506,8 @@ export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: ()
                   <User className="w-5 h-5" /> Propietario Actual
                 </CardTitle>
                 <div className="flex gap-2">
-                  {/* ACÁ ESTÁ LA MAGIA DEL BOTÓN */}
                   {vehiculoSeleccionado.clientes && !modoTransferencia && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => onNavigateToClients && onNavigateToClients()} 
-                      className="text-muted-foreground hover:text-primary"
-                    >
+                    <Button variant="ghost" size="sm" onClick={abrirModalEditarCliente} className="text-muted-foreground hover:text-primary">
                       <Edit className="w-4 h-4 mr-2"/> Editar Cliente
                     </Button>
                   )}
@@ -652,7 +726,6 @@ export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: ()
           </DialogHeader>
 
           <div className="space-y-8">
-            
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Dueño del Vehículo</h3>
@@ -778,6 +851,151 @@ export function VehiclesView({ onNavigateToClients }: { onNavigateToClients?: ()
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleGuardarVehiculo} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> {isEditingCar ? "Actualizar Vehículo" : "Guardar Vehículo"}</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ==========================================
+          NUEVO MODAL: EDITAR CLIENTE
+          ========================================== */}
+      <Dialog open={isEditClientModalOpen} onOpenChange={setIsEditClientModalOpen}>
+        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-2xl text-foreground font-bold">Editar Cliente</DialogTitle>
+            <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* TIPO DE CLIENTE */}
+            <div className="flex gap-4 p-1 bg-secondary/50 rounded-lg w-fit border border-border">
+              <Button 
+                variant={clientFormData.tipo_cliente === 'fisica' ? "default" : "ghost"} 
+                className={clientFormData.tipo_cliente === 'fisica' ? "bg-white text-emerald-700 shadow-sm hover:bg-white" : ""}
+                onClick={() => setClientFormData({...clientFormData, tipo_cliente: 'fisica'})}
+              >
+                Persona Física
+              </Button>
+              <Button 
+                variant={clientFormData.tipo_cliente === 'empresa' ? "default" : "ghost"}
+                className={clientFormData.tipo_cliente === 'empresa' ? "bg-white text-emerald-700 shadow-sm hover:bg-white" : ""}
+                onClick={() => setClientFormData({...clientFormData, tipo_cliente: 'empresa'})}
+              >
+                Empresa
+              </Button>
+            </div>
+
+            {/* CONTACTO */}
+            <section>
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+                <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Contacto</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Número de Teléfono</Label>
+                  <Input 
+                    value={clientFormData.telefono} 
+                    onChange={e => setClientFormData({...clientFormData, telefono: e.target.value})} 
+                    className="bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input 
+                    value={clientFormData.email} 
+                    onChange={e => setClientFormData({...clientFormData, email: e.target.value})} 
+                    className="bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* FACTURACIÓN */}
+            <section>
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+                <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Facturación (ARCA/AFIP)</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{clientFormData.tipo_cliente === 'empresa' ? 'CUIT *' : 'DNI / CUIT *'}</Label>
+                  <Input 
+                    value={clientFormData.documento} 
+                    onChange={e => setClientFormData({...clientFormData, documento: e.target.value})} 
+                    className="bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+                {clientFormData.tipo_cliente === 'empresa' ? (
+                  <div className="space-y-2">
+                    <Label>Razón Social *</Label>
+                    <Input 
+                      value={clientFormData.razon_social} 
+                      onChange={e => setClientFormData({...clientFormData, razon_social: e.target.value})} 
+                      className="bg-slate-50 dark:bg-slate-900"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Nombre *</Label>
+                      <Input 
+                        value={clientFormData.nombre} 
+                        onChange={e => setClientFormData({...clientFormData, nombre: e.target.value})} 
+                        className="bg-slate-50 dark:bg-slate-900"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Apellido</Label>
+                      <Input 
+                        value={clientFormData.apellido} 
+                        onChange={e => setClientFormData({...clientFormData, apellido: e.target.value})} 
+                        className="bg-slate-50 dark:bg-slate-900"
+                      />
+                    </div>
+                  </>
+                )}
+                <div className="space-y-2">
+                  <Label>Condición de IVA</Label>
+                  <Select value={clientFormData.condicion_iva} onValueChange={(val: string) => setClientFormData({...clientFormData, condicion_iva: val})}>
+                    <SelectTrigger className="bg-slate-50 dark:bg-slate-900"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Consumidor Final">Consumidor Final</SelectItem>
+                      <SelectItem value="Responsable Inscripto">Responsable Inscripto</SelectItem>
+                      <SelectItem value="Monotributista">Monotributista</SelectItem>
+                      <SelectItem value="Exento">Exento</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Domicilio Fiscal</Label>
+                  <Input 
+                    value={clientFormData.domicilio_fiscal} 
+                    onChange={e => setClientFormData({...clientFormData, domicilio_fiscal: e.target.value})} 
+                    className="bg-slate-50 dark:bg-slate-900"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* INTERNO */}
+            <section>
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4">
+                <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Interno</h3>
+              </div>
+              <div className="space-y-2">
+                <Label>Notas del Taller</Label>
+                <textarea 
+                  className="w-full min-h-[80px] rounded-md border border-input bg-slate-50 dark:bg-slate-900 px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                  value={clientFormData.notas}
+                  onChange={e => setClientFormData({...clientFormData, notas: e.target.value})}
+                />
+              </div>
+            </section>
+          </div>
+
+          <DialogFooter className="mt-6 border-t border-border pt-4">
+            <Button variant="ghost" onClick={() => setIsEditClientModalOpen(false)} disabled={isSavingClient}>Cancelar</Button>
+            <Button onClick={handleGuardarCliente} disabled={isSavingClient} className="bg-emerald-600 text-white hover:bg-emerald-700">
+              {isSavingClient ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : "Actualizar Cliente"}
             </Button>
           </DialogFooter>
         </DialogContent>
