@@ -30,7 +30,6 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
-import { StringifyOptions } from "node:querystring"
 
 const MARCAS_COMUNES = [
   "Volkswagen", "Ford", "Chevrolet", "Toyota", "Renault", 
@@ -79,9 +78,7 @@ export function VehiclesView() {
   const [nuevoKm, setNuevoKm] = useState("")
   const [isUpdatingKm, setIsUpdatingKm] = useState(false)
 
-  // ==========================================
-  // NUEVOS ESTADOS: EDICIÓN DE CLIENTE DIRECTA
-  // ==========================================
+  // Estados de Edición de Cliente
   const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false)
   const [isSavingClient, setIsSavingClient] = useState(false)
   const [clientFormData, setClientFormData] = useState({
@@ -219,7 +216,6 @@ export function VehiclesView() {
     }
   }
 
-  // --- LÓGICA DE EDICIÓN DEL CLIENTE ---
   const abrirModalEditarCliente = () => {
     if (!vehiculoSeleccionado?.clientes) return;
     const c = vehiculoSeleccionado.clientes;
@@ -251,7 +247,6 @@ export function VehiclesView() {
     try {
       const { error } = await supabase.from('clientes').update({
         tipo_cliente: clientFormData.tipo_cliente,
-        // LA MAGIA ESTÁ ACÁ: Si es empresa, mandamos un guion para cumplir con el campo obligatorio
         nombre: clientFormData.tipo_cliente === 'fisica' ? clientFormData.nombre : "-",
         apellido: clientFormData.tipo_cliente === 'fisica' ? clientFormData.apellido : null,
         razon_social: clientFormData.tipo_cliente === 'empresa' ? clientFormData.razon_social : null,
@@ -265,7 +260,6 @@ export function VehiclesView() {
 
       if (error) throw error;
 
-      // Actualizar vista local
       const updatedClient = { ...vehiculoSeleccionado.clientes, ...clientFormData };
       setVehiculoSeleccionado({ ...vehiculoSeleccionado, clientes: updatedClient });
       setVehiculos(vehiculos.map(v => v.cliente_id === updatedClient.id ? { ...v, clientes: updatedClient } : v));
@@ -275,7 +269,6 @@ export function VehiclesView() {
       alert("¡Cliente actualizado correctamente!");
     } catch (error: any) {
       console.error("Error al guardar cliente:", error);
-      // AHORA LA ALERTA TE VA A DECIR EL ERROR EXACTO SI ALGO FALLA
       alert("Hubo un error al actualizar el cliente: " + error.message);
     } finally {
       setIsSavingClient(false);
@@ -700,9 +693,9 @@ export function VehiclesView() {
                           </TableCell>
                           <TableCell>
                             <div className="text-xs text-muted-foreground space-y-1">
-                              {v.anio && <div className="flex items-center gap-1"><Calendar className="h-3 w-3"/> Año {v.anio}</div>}
+                              {v.anio && <span className="flex items-center gap-1"><Calendar className="h-3 w-3"/> Año {v.anio}</span>}
                               {v.color && <div className="flex items-center gap-1"><Palette className="h-3 w-3"/> {v.color}</div>}
-                              {v.kilometraje && <div className="flex items-center gap-1"><Gauge className="h-3 w-3"/> {v.kilometraje.toLocaleString()} km</div>}
+                              {v.kilometraje && <span className="flex items-center gap-1"><Gauge className="h-3 w-3"/> {v.kilometraje.toLocaleString()} km</span>}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -719,15 +712,18 @@ export function VehiclesView() {
         </div>
       )}
 
-      {/* MODAL COMPARTIDO (NUEVO / EDITAR VEHÍCULO) */}
+      {/* ==========================================
+          MODAL 1: NUEVO / EDITAR VEHÍCULO (AHORA CON ESTRUCTURA PROFESIONAL)
+          ========================================== */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="mb-4">
+        <DialogContent className="max-w-2xl border-border bg-card max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0 mb-2">
             <DialogTitle className="text-2xl text-foreground font-bold">{isEditingCar ? "Editar Vehículo" : "Registrar Vehículo"}</DialogTitle>
             <p className="text-sm text-muted-foreground">{isEditingCar ? "Actualice la información principal del vehículo." : "Vincule un nuevo vehículo a un cliente del taller."}</p>
           </DialogHeader>
 
-          <div className="space-y-8">
+          {/* EL CONTENIDO DEL MEDIO ES EL ÚNICO QUE HACE SCROLL */}
+          <div className="flex-1 overflow-y-auto pr-4 space-y-8">
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Dueño del Vehículo</h3>
@@ -849,7 +845,7 @@ export function VehiclesView() {
             </section>
           </div>
           
-          <DialogFooter className="mt-8 border-t border-border pt-4 gap-2 sm:gap-0">
+          <DialogFooter className="shrink-0 mt-4 border-t border-border pt-4 gap-2 sm:gap-0">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleGuardarVehiculo} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> {isEditingCar ? "Actualizar Vehículo" : "Guardar Vehículo"}</>}
@@ -859,17 +855,17 @@ export function VehiclesView() {
       </Dialog>
 
       {/* ==========================================
-          NUEVO MODAL: EDITAR CLIENTE
+          MODAL 2: EDITAR CLIENTE (AHORA CON ESTRUCTURA PROFESIONAL)
           ========================================== */}
       <Dialog open={isEditClientModalOpen} onOpenChange={setIsEditClientModalOpen}>
-        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="mb-4">
+        <DialogContent className="max-w-2xl border-border bg-card max-h-[85vh] flex flex-col">
+          <DialogHeader className="shrink-0 mb-2">
             <DialogTitle className="text-2xl text-foreground font-bold">Editar Cliente</DialogTitle>
             <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          <div className="space-y-6">
-            {/* TIPO DE CLIENTE */}
+          {/* EL CONTENIDO DEL MEDIO ES EL ÚNICO QUE HACE SCROLL */}
+          <div className="flex-1 overflow-y-auto pr-4 space-y-6">
             <div className="flex gap-4 p-1 bg-secondary/50 rounded-lg w-fit border border-border">
               <Button 
                 variant={clientFormData.tipo_cliente === 'fisica' ? "default" : "ghost"} 
@@ -887,7 +883,6 @@ export function VehiclesView() {
               </Button>
             </div>
 
-            {/* CONTACTO */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Contacto</h3>
@@ -912,7 +907,6 @@ export function VehiclesView() {
               </div>
             </section>
 
-            {/* FACTURACIÓN */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Facturación (ARCA/AFIP)</h3>
@@ -978,7 +972,6 @@ export function VehiclesView() {
               </div>
             </section>
 
-            {/* INTERNO */}
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Interno</h3>
@@ -994,7 +987,7 @@ export function VehiclesView() {
             </section>
           </div>
 
-          <DialogFooter className="mt-6 border-t border-border pt-4">
+          <DialogFooter className="shrink-0 mt-4 border-t border-border pt-4">
             <Button variant="ghost" onClick={() => setIsEditClientModalOpen(false)} disabled={isSavingClient}>Cancelar</Button>
             <Button onClick={handleGuardarCliente} disabled={isSavingClient} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {isSavingClient ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : "Actualizar Cliente"}
