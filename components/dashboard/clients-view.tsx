@@ -35,6 +35,13 @@ import {
 
 import { supabase } from "@/lib/supabase"
 
+const MARCAS_COMUNES = [
+  "Volkswagen", "Ford", "Chevrolet", "Toyota", "Renault", 
+  "Peugeot", "Fiat", "Honda", "Nissan", "Citroën", 
+  "Jeep", "Audi", "BMW", "Mercedes-Benz", "Hyundai", 
+  "Kia", "Chery", "Suzuki", "Otra"
+]
+
 export function ClientsView() {
   const [clientes, setClientes] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -124,7 +131,7 @@ export function ClientsView() {
     setEditingId(cliente.id)
     setFormData({
       tipo_cliente: cliente.tipo_cliente || "persona",
-      nombre: cliente.nombre === "-" ? "" : (cliente.nombre || ""), // Limpiamos el guion si era empresa
+      nombre: cliente.nombre === "-" ? "" : (cliente.nombre || ""), 
       apellido: cliente.apellido || "",
       telefono: cliente.telefono || "",
       email: cliente.email || "",
@@ -152,7 +159,6 @@ export function ClientsView() {
     
     setIsSaving(true)
     try {
-      // PREPARAMOS LOS DATOS Y APLICAMOS EL FIX DEL NOMBRE OBLIGATORIO PARA EMPRESAS
       const payload = {
         ...formData,
         nombre: formData.tipo_cliente === 'empresa' ? "-" : formData.nombre,
@@ -296,10 +302,10 @@ export function ClientsView() {
       </Card>
 
       {/* ========================================================================= */}
-      {/* MODAL 1: VER DETALLES DEL CLIENTE (ESTRUCTURA SCROLL PROFESIONAL)         */}
+      {/* MODAL 1: VER DETALLES DEL CLIENTE (ALTURA FIJA CON h-[85vh])              */}
       {/* ========================================================================= */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-3xl border-border bg-card max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-3xl border-border bg-card h-[85vh] flex flex-col p-0 gap-0">
           {clienteSeleccionado && (
             <>
               {/* CABECERA (FIJA) */}
@@ -421,9 +427,15 @@ export function ClientsView() {
                           </div>
 
                           <div className="grid grid-cols-2 gap-6">
+                            {/* ACÁ RECUPERAMOS EL SELECTOR DE MARCAS */}
                             <div className="space-y-2">
                               <Label>Marca <span className="text-destructive">*</span></Label>
-                              <Input placeholder="Ej: Volkswagen" className="bg-white dark:bg-slate-950" value={vehicleFormData.marca} onChange={(e) => setVehicleFormData({...vehicleFormData, marca: e.target.value})} />
+                              <Select value={vehicleFormData.marca} onValueChange={(val: string) => setVehicleFormData({...vehicleFormData, marca: val})}>
+                                <SelectTrigger className="bg-white dark:bg-slate-950"><SelectValue placeholder="Marca" /></SelectTrigger>
+                                <SelectContent className="max-h-[200px]">
+                                  {MARCAS_COMUNES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
                             </div>
                             <div className="space-y-2">
                               <Label>Modelo <span className="text-destructive">*</span></Label>
@@ -494,12 +506,12 @@ export function ClientsView() {
 
 
       {/* ========================================================================= */}
-      {/* MODAL 2: CREAR / EDITAR CLIENTE (ESTRUCTURA SCROLL PROFESIONAL)           */}
+      {/* MODAL 2: CREAR / EDITAR CLIENTE (ALTURA FIJA CON h-[85vh])                */}
       {/* ========================================================================= */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-3xl border-border bg-card max-h-[85vh] flex flex-col">
+        <DialogContent className="max-w-3xl border-border bg-card h-[85vh] flex flex-col p-0">
           {/* CABECERA FIJA */}
-          <DialogHeader className="shrink-0 mb-2">
+          <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-2xl text-foreground font-bold">
               {editingId ? "Editar Cliente" : "Registrar Nuevo Cliente"}
             </DialogTitle>
@@ -507,7 +519,7 @@ export function ClientsView() {
           </DialogHeader>
 
           {/* CONTENIDO QUE HACE SCROLL */}
-          <div className="flex-1 overflow-y-auto pr-4 space-y-8 pb-4">
+          <div className="flex-1 overflow-y-auto p-6 space-y-8">
             
             <div className="bg-secondary/30 p-4 rounded-lg flex justify-center border border-border">
               <RadioGroup defaultValue="persona" className="flex space-x-6" value={formData.tipo_cliente} onValueChange={(val: string) => setFormData({...formData, tipo_cliente: val})}>
@@ -589,11 +601,13 @@ export function ClientsView() {
           </div>
           
           {/* PIE DE PÁGINA FIJO */}
-          <DialogFooter className="shrink-0 mt-2 border-t border-border pt-4 gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
-            <Button onClick={handleGuardarCliente} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
-              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : (editingId ? "Actualizar Cliente" : "Guardar Cliente")}
-            </Button>
+          <DialogFooter className="shrink-0 p-6 border-t border-border bg-card rounded-b-lg">
+            <div className="flex justify-end gap-2 w-full">
+              <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+              <Button onClick={handleGuardarCliente} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
+                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : (editingId ? "Actualizar Cliente" : "Guardar Cliente")}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
