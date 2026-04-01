@@ -1,5 +1,4 @@
 //@ts-nocheck
-
 "use client"
 
 import { useState } from "react"
@@ -18,6 +17,10 @@ import { AjustesView } from "@/components/dashboard/ajustes-view"
 
 export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState("Vehículos")
+  
+  // ESTADOS PARA LA MEMORIA DEL PUENTE
+  const [vehiculoParaAbrir, setVehiculoParaAbrir] = useState<any>(null)
+  const [clienteParaAbrir, setClienteParaAbrir] = useState<any>(null)
 
   const renderContent = () => {
     switch (activeSection) {
@@ -29,12 +32,26 @@ export default function DashboardPage() {
           </div>
         )
       case "Clientes":
-        return <ClientsView onNavigateToVehicles={() => setActiveSection("Vehículos")} />
+        return <ClientsView 
+                 clienteAbreDetalle={clienteParaAbrir}
+                 onClearClienteDetalle={() => setClienteParaAbrir(null)}
+                 onNavigateToVehicles={(vehiculo) => { 
+                   setVehiculoParaAbrir(vehiculo);
+                   setActiveSection("Vehículos"); 
+                 }} 
+               />
       case "Vehículos":
-        return <VehiclesView />
+        return <VehiclesView 
+                 vehiculoAbreDetalle={vehiculoParaAbrir}
+                 onClearVehiculoDetalle={() => setVehiculoParaAbrir(null)}
+                 onNavigateToClients={(cliente) => {
+                   setClienteParaAbrir(cliente);
+                   setActiveSection("Clientes");
+                 }}
+               />
       case "Taller":
         return <WorkOrdersTable />
-      case "Caja":               
+      case "Caja":              
         return <CajaView />
       case "Turnos":
         return <TurnosView />
@@ -42,10 +59,17 @@ export default function DashboardPage() {
         return <PresupuestosView />
       case "Stock/Repuestos":
         return <CatalogoView />
-      default:
-        return <ClientsView onNavigateToVehicles={() => setActiveSection("Vehículos")} />
       case "Configuración":
         return <AjustesView />
+      default:
+        return <ClientsView 
+                 clienteAbreDetalle={clienteParaAbrir}
+                 onClearClienteDetalle={() => setClienteParaAbrir(null)}
+                 onNavigateToVehicles={(vehiculo) => { 
+                   setVehiculoParaAbrir(vehiculo);
+                   setActiveSection("Vehículos"); 
+                 }} 
+               />
     }
   }
 
@@ -57,18 +81,12 @@ export default function DashboardPage() {
       disableTransitionOnChange
     >
       <div className="flex h-screen bg-background">
-        {/* Sidebar */}
         <DashboardSidebar 
           activeSection={activeSection} 
           onSectionChange={setActiveSection} 
         />
-
-        {/* Main content */}
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Header */}
           <DashboardHeader activeSection={activeSection} />
-
-          {/* Page content */}
           <main className="flex-1 overflow-y-auto p-6">
             <div className="mx-auto max-w-7xl">
               {renderContent()}

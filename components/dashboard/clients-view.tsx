@@ -42,19 +42,17 @@ const MARCAS_COMUNES = [
   "Kia", "Chery", "Suzuki", "Otra"
 ]
 
-export function ClientsView() {
+export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearClienteDetalle }: { onNavigateToVehicles?: (vehiculo?: any) => void, clienteAbreDetalle?: any, onClearClienteDetalle?: () => void }) {
   const [clientes, setClientes] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [busqueda, setBusqueda] = useState("")
 
-  // ESTADOS MODALES CLIENTES
   const [isModalOpen, setIsModalOpen] = useState(false) 
   const [editingId, setEditingId] = useState<string | null>(null) 
   const [isViewModalOpen, setIsViewModalOpen] = useState(false) 
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null)
 
-  // ESTADOS VEHÍCULOS
   const [isAddingVehicleTab, setIsAddingVehicleTab] = useState(false)
   const [isSavingVehicle, setIsSavingVehicle] = useState(false)
   const [vehicleFormData, setVehicleFormData] = useState({
@@ -87,6 +85,14 @@ export function ClientsView() {
   }
 
   useEffect(() => { fetchClientes() }, [])
+
+  // EFECTO MÁGICO 1: Si aterrizamos desde Vehículos, abrimos el modal del cliente
+  useEffect(() => {
+    if (clienteAbreDetalle) {
+      abrirDetalles(clienteAbreDetalle);
+      if (onClearClienteDetalle) onClearClienteDetalle();
+    }
+  }, [clienteAbreDetalle])
 
   const handleCuitChange = (e: any) => {
     let value = e.target.value.replace(/\D/g, "")
@@ -233,7 +239,6 @@ export function ClientsView() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* TABLA PRINCIPAL */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Directorio de Clientes</h2>
@@ -301,14 +306,10 @@ export function ClientsView() {
         </CardContent>
       </Card>
 
-      {/* ========================================================================= */}
-      {/* MODAL 1: VER DETALLES DEL CLIENTE (ALTURA FIJA CON h-[85vh])              */}
-      {/* ========================================================================= */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
         <DialogContent className="max-w-3xl border-border bg-card h-[85vh] flex flex-col p-0 gap-0">
           {clienteSeleccionado && (
             <>
-              {/* CABECERA (FIJA) */}
               <div className="bg-secondary/30 p-6 border-b border-border shrink-0">
                 <div className="flex justify-between items-start">
                   <div>
@@ -323,7 +324,6 @@ export function ClientsView() {
                 </div>
               </div>
 
-              {/* CUERPO (SCROLEABLE) */}
               <div className="p-6 flex-1 overflow-y-auto">
                 <Tabs defaultValue="datos" className="w-full">
                   <TabsList className="mb-6 bg-secondary">
@@ -427,7 +427,6 @@ export function ClientsView() {
                           </div>
 
                           <div className="grid grid-cols-2 gap-6">
-                            {/* ACÁ RECUPERAMOS EL SELECTOR DE MARCAS */}
                             <div className="space-y-2">
                               <Label>Marca <span className="text-destructive">*</span></Label>
                               <Select value={vehicleFormData.marca} onValueChange={(val: string) => setVehicleFormData({...vehicleFormData, marca: val})}>
@@ -469,7 +468,17 @@ export function ClientsView() {
                         {clienteSeleccionado.vehiculos && clienteSeleccionado.vehiculos.length > 0 ? (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {clienteSeleccionado.vehiculos.map((v: any) => (
-                              <Card key={v.patente} className="border-border bg-secondary/20 hover:border-primary/50 transition-colors shadow-sm">
+                              <Card 
+                                key={v.patente} 
+                                className="border-border bg-secondary/20 hover:border-primary/50 transition-colors shadow-sm cursor-pointer"
+                                onClick={() => {
+                                  setIsViewModalOpen(false);
+                                  if (onNavigateToVehicles) {
+                                    // ACÁ ESTÁ LA MAGIA 2: Enviamos el auto y le ponemos la etiqueta
+                                    onNavigateToVehicles({ ...v, clientes: clienteSeleccionado, vieneDeCliente: true });
+                                  }
+                                }}
+                              >
                                 <CardContent className="p-4">
                                   <div className="flex justify-between items-start mb-3">
                                     <span className="font-mono font-bold bg-background px-2 py-1 rounded border border-border tracking-widest text-sm text-foreground shadow-sm">
@@ -504,13 +513,8 @@ export function ClientsView() {
         </DialogContent>
       </Dialog>
 
-
-      {/* ========================================================================= */}
-      {/* MODAL 2: CREAR / EDITAR CLIENTE (ALTURA FIJA CON h-[85vh])                */}
-      {/* ========================================================================= */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-3xl border-border bg-card h-[85vh] flex flex-col p-0">
-          {/* CABECERA FIJA */}
           <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-2xl text-foreground font-bold">
               {editingId ? "Editar Cliente" : "Registrar Nuevo Cliente"}
@@ -518,7 +522,6 @@ export function ClientsView() {
             <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          {/* CONTENIDO QUE HACE SCROLL */}
           <div className="flex-1 overflow-y-auto p-6 space-y-8">
             
             <div className="bg-secondary/30 p-4 rounded-lg flex justify-center border border-border">
@@ -600,7 +603,6 @@ export function ClientsView() {
             </section>
           </div>
           
-          {/* PIE DE PÁGINA FIJO */}
           <DialogFooter className="shrink-0 p-6 border-t border-border bg-card rounded-b-lg">
             <div className="flex justify-end gap-2 w-full">
               <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>

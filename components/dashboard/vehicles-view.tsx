@@ -38,9 +38,12 @@ const MARCAS_COMUNES = [
   "Kia", "Chery", "Suzuki", "Otra"
 ]
 
-export function VehiclesView() {
+export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNavigateToClients }: { vehiculoAbreDetalle?: any, onClearVehiculoDetalle?: () => void, onNavigateToClients?: (cliente: any) => void }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   
+  // EL ESTADO QUE LEE LA ETIQUETA PARA SABER DE DÓNDE VENIMOS
+  const [vieneDeCliente, setVieneDeCliente] = useState(false)
+
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([]) 
   const [isLoading, setIsLoading] = useState(true)
@@ -126,6 +129,15 @@ export function VehiclesView() {
       setModoTransferencia(false)
     }
   }, [vista])
+
+  // EFECTO MÁGICO 3: Aterrizamos en Vehículos y leemos la etiqueta
+  useEffect(() => {
+    if (vehiculoAbreDetalle) {
+      setVieneDeCliente(vehiculoAbreDetalle.vieneDeCliente || false);
+      abrirDetalle(vehiculoAbreDetalle);
+      if (onClearVehiculoDetalle) onClearVehiculoDetalle();
+    }
+  }, [vehiculoAbreDetalle])
 
   const abrirDetalle = async (vehiculo: any) => {
     setVehiculoSeleccionado(vehiculo)
@@ -431,9 +443,24 @@ export function VehiclesView() {
         <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={() => setVista("lista")} className="text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-4 w-4 mr-2"/> Volver a la Flota
+              
+              {/* BOTÓN CAMALEÓN: El que sabe a dónde volver */}
+              <Button 
+                variant="ghost" 
+                onClick={() => {
+                  if (vieneDeCliente && onNavigateToClients) {
+                    onNavigateToClients(vehiculoSeleccionado.clientes);
+                  } else {
+                    setVista("lista");
+                    setVieneDeCliente(false); // Limpiamos por las dudas
+                  }
+                }} 
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <ArrowLeft className="h-4 w-4 mr-2"/> 
+                {vieneDeCliente ? "Volver al Cliente" : "Volver a la Flota"}
               </Button>
+              
               <div>
                 <h2 className="text-2xl font-bold flex items-center gap-2">
                   <span className="bg-[#008A4B] text-white px-3 py-1 rounded-md font-mono tracking-widest text-lg">
@@ -694,7 +721,7 @@ export function VehiclesView() {
                           <TableCell>
                             <div className="text-xs text-muted-foreground space-y-1">
                               {v.anio && <span className="flex items-center gap-1"><Calendar className="h-3 w-3"/> Año {v.anio}</span>}
-                              {v.color && <div className="flex items-center gap-1"><Palette className="h-3 w-3"/> {v.color}</div>}
+                              {v.color && <span className="flex items-center gap-1"><Palette className="h-3 w-3"/> {v.color}</span>}
                               {v.kilometraje && <span className="flex items-center gap-1"><Gauge className="h-3 w-3"/> {v.kilometraje.toLocaleString()} km</span>}
                             </div>
                           </TableCell>
@@ -712,9 +739,7 @@ export function VehiclesView() {
         </div>
       )}
 
-      {/* ==========================================
-          MODAL 1: NUEVO / EDITAR VEHÍCULO (AHORA CON ESTRUCTURA PROFESIONAL)
-          ========================================== */}
+      {/* MODAL COMPARTIDO (NUEVO / EDITAR VEHÍCULO) */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[85vh] flex flex-col">
           <DialogHeader className="shrink-0 mb-2">
@@ -722,7 +747,6 @@ export function VehiclesView() {
             <p className="text-sm text-muted-foreground">{isEditingCar ? "Actualice la información principal del vehículo." : "Vincule un nuevo vehículo a un cliente del taller."}</p>
           </DialogHeader>
 
-          {/* EL CONTENIDO DEL MEDIO ES EL ÚNICO QUE HACE SCROLL */}
           <div className="flex-1 overflow-y-auto pr-4 space-y-8">
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
@@ -854,9 +878,7 @@ export function VehiclesView() {
         </DialogContent>
       </Dialog>
 
-      {/* ==========================================
-          MODAL 2: EDITAR CLIENTE (AHORA CON ESTRUCTURA PROFESIONAL)
-          ========================================== */}
+      {/* NUEVO MODAL: EDITAR CLIENTE */}
       <Dialog open={isEditClientModalOpen} onOpenChange={setIsEditClientModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[85vh] flex flex-col">
           <DialogHeader className="shrink-0 mb-2">
@@ -864,7 +886,6 @@ export function VehiclesView() {
             <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          {/* EL CONTENIDO DEL MEDIO ES EL ÚNICO QUE HACE SCROLL */}
           <div className="flex-1 overflow-y-auto pr-4 space-y-6">
             <div className="flex gap-4 p-1 bg-secondary/50 rounded-lg w-fit border border-border">
               <Button 
@@ -956,7 +977,7 @@ export function VehiclesView() {
                     <SelectContent>
                       <SelectItem value="Consumidor Final">Consumidor Final</SelectItem>
                       <SelectItem value="Responsable Inscripto">Responsable Inscripto</SelectItem>
-                      <SelectItem value="Monotributista">Monotributista</SelectItem>
+                      <SelectItem value="Monotributo">Monotributo</SelectItem>
                       <SelectItem value="Exento">Exento</SelectItem>
                     </SelectContent>
                   </Select>
