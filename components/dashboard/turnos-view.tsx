@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -24,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+import { supabase } from "@/lib/supabase"
 
 const HORARIOS = [
   "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00",
@@ -48,18 +50,15 @@ const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
   "Cubiertas": { sigla: "CUB", color: "bg-stone-500/10 text-stone-500 border-stone-500/20" },
 }
 
-const AUTOS_REGISTRADOS = [
-  { patente: "AB 123 CD", modelo: "Toyota Corolla", dueño: "Juan Martínez", telefono: "+54 11 4567-8901", presupuestos: [{ id: "PR-001", detalle: "Cambio de pastillas y discos", monto: 85000 }] },
-  { patente: "AC 456 EF", modelo: "Ford Ranger", dueño: "Esteban Q.", telefono: "+54 11 1111-2222", presupuestos: [{ id: "PR-045", detalle: "Service 50.000km", monto: 120000 }] },
-  { patente: "AD 789 GH", modelo: "VW Golf", dueño: "María G.", telefono: "+54 11 3333-4444", presupuestos: [] },
-]
-
 export function TurnosView() {
   const [fechaActual, setFechaActual] = useState(new Date())
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   
   // Modales
-  const [isModalOpen, setIsModalOpen] = useState(false) // Nuevo Turno
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false) // Detalle
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<any>(null)
   const [isReprogramming, setIsReprogramming] = useState(false)
@@ -71,18 +70,33 @@ export function TurnosView() {
   const [autoEncontrado, setAutoEncontrado] = useState<any>(null)
 
   const [formData, setFormData] = useState({
-    fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: ""
+    fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuesto_id: ""
   })
 
-  // Obtener fecha de hoy como string para comparaciones
+  const [turnos, setTurnos] = useState<any[]>([])
+
   const hoyString = new Date().toISOString().split("T")[0]
 
-  // Turnos simulados (Agregamos el campo "estado")
-  const [turnos, setTurnos] = useState([
-    { id: 1, fecha: hoyString, hora: "08:30", cliente: "Juan Martínez", telefono: "+54 11 4567-8901", auto: "Toyota Corolla", patente: "AB 123 CD", servicio: "Frenos", observaciones: "Hace ruido al frenar de golpe", presupuestoAsociado: "PR-001", estado: "pendiente" },
-    { id: 2, fecha: hoyString, hora: "08:30", cliente: "Ana Rod.", telefono: "+54 11 9999-8888", auto: "Peugeot 208", patente: "XX 999 YY", servicio: "Tren delantero", observaciones: "Revisar precaps", presupuestoAsociado: "", estado: "asistio" },
-    { id: 3, fecha: hoyString, hora: "10:30", cliente: "María G.", telefono: "+54 11 3333-4444", auto: "VW Golf", patente: "AD 789 GH", servicio: "Alineado + Balanceado", observaciones: "Vibra a 120km/h", presupuestoAsociado: "", estado: "cancelado" },
-  ])
+  // Cargar turnos desde Supabase (incluyendo datos del presupuesto asociado)
+  const fetchTurnos = async () => {
+    setIsLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('turnos')
+        .select('*, presupuestos(numero_correlativo)')
+      
+      if (error) throw error
+      setTurnos(data || [])
+    } catch (error) {
+      console.error("Error al cargar turnos:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchTurnos()
+  }, [])
 
   // --- LOGICA DE FECHAS Y BLOQUEOS ---
   const fechaHoyReal = new Date()
@@ -128,15 +142,55 @@ export function TurnosView() {
     }
   }
 
-  // --- LOGICA DE FORMULARIOS Y ESTADOS ---
-  const buscarAuto = () => {
-    const auto = AUTOS_REGISTRADOS.find(a => a.patente.toLowerCase() === busquedaPatente.toLowerCase())
-    if (auto) {
-      setAutoEncontrado(auto)
-      setFormData({ ...formData, patente: auto.patente, marcaModelo: auto.modelo, nombreDueño: auto.dueño, telefono: auto.telefono, presupuestoAsociado: "" })
-    } else {
-      alert("Patente no encontrada en el sistema.")
-      autoEncontrado(null)
+  // --- LOGICA DE BD: BUSCAR AUTO ---
+  const buscarAuto = async () => {
+    const patenteLimpia = busquedaPatente.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    if(!patenteLimpia) return;
+
+    setIsSearching(true);
+    try {
+      const { data: auto, error } = await supabase
+        .from('vehiculos')
+        .select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono)')
+        .eq('patente', patenteLimpia)
+        .single();
+
+      if (error || !auto) {
+        alert("Patente no encontrada en el sistema.");
+        setAutoEncontrado(null);
+        return;
+      }
+
+      const { data: presups } = await supabase
+        .from('presupuestos')
+        .select('id, numero_correlativo, total_final, detalle, estado')
+        .eq('vehiculo_patente', patenteLimpia)
+        .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
+
+      const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
+      const telefonoCliente = auto.clientes?.telefono || '';
+
+      setAutoEncontrado({
+        ...auto,
+        dueño: nombreCliente,
+        telefono: telefonoCliente,
+        presupuestos: presups || []
+      });
+
+      setFormData({ 
+        ...formData, 
+        patente: patenteLimpia, 
+        marcaModelo: `${auto.marca} ${auto.modelo}`, 
+        nombreDueño: nombreCliente, 
+        telefono: telefonoCliente, 
+        presupuesto_id: "" 
+      });
+
+    } catch (err) {
+      console.error(err);
+      alert("Hubo un error al buscar la patente.");
+    } finally {
+      setIsSearching(false);
     }
   }
 
@@ -164,13 +218,12 @@ export function TurnosView() {
     }
   }
 
-  const handleGuardarTurno = () => {
+  const handleGuardarTurno = async () => {
     if (!formData.fecha || !formData.hora || !formData.servicio || !formData.patente) {
       alert("Faltan completar campos obligatorios.")
       return
     }
 
-    // Validación de fecha para no permitir días pasados
     const selectedDate = new Date(formData.fecha + "T00:00:00");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -180,15 +233,37 @@ export function TurnosView() {
       return;
     }
 
-    const nuevoTurno = {
-      id: Math.random(),
-      fecha: formData.fecha, hora: formData.hora, servicio: formData.servicio, cliente: formData.nombreDueño, telefono: formData.telefono, auto: formData.marcaModelo, patente: formData.patente, observaciones: formData.observaciones, presupuestoAsociado: formData.presupuestoAsociado === "ninguno" ? "" : formData.presupuestoAsociado, estado: "pendiente"
+    setIsSaving(true);
+    try {
+      const payload = {
+        fecha: formData.fecha, 
+        hora: formData.hora, 
+        servicio: formData.servicio, 
+        cliente: formData.nombreDueño, 
+        telefono: formData.telefono, 
+        auto: formData.marcaModelo, 
+        patente: formData.patente, 
+        observaciones: formData.observaciones, 
+        presupuesto_id: formData.presupuesto_id === "ninguno" || !formData.presupuesto_id ? null : formData.presupuesto_id, 
+        estado: "pendiente"
+      };
+
+      const { error } = await supabase.from('turnos').insert([payload]);
+
+      if (error) throw error;
+
+      setIsModalOpen(false)
+      setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuesto_id: "" })
+      setAutoEncontrado(null)
+      setBusquedaPatente("")
+      fetchTurnos() 
+
+    } catch (error: any) {
+      console.error("Error al guardar:", error)
+      alert("Error al agendar el turno: " + error.message)
+    } finally {
+      setIsSaving(false);
     }
-    setTurnos([...turnos, nuevoTurno])
-    setIsModalOpen(false)
-    setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuestoAsociado: "" })
-    autoEncontrado(null)
-    setBusquedaPatente("")
   }
 
   const abrirDetalleTurno = (turno: any) => {
@@ -198,18 +273,25 @@ export function TurnosView() {
     setIsDetailModalOpen(true)
   }
 
-  const cambiarEstadoTurno = (id: number, nuevoEstado: string) => {
-    setTurnos(turnos.map(t => t.id === id ? { ...t, estado: nuevoEstado } : t))
-    setIsDetailModalOpen(false)
+  const cambiarEstadoTurno = async (id: string, nuevoEstado: string) => {
+    try {
+      const { error } = await supabase.from('turnos').update({ estado: nuevoEstado }).eq('id', id);
+      if (error) throw error;
+      
+      fetchTurnos(); // Refrescamos para ver el cambio
+      setIsDetailModalOpen(false)
+    } catch (error: any) {
+      console.error("Error al cambiar estado:", error)
+      alert("Error al actualizar el estado: " + error.message)
+    }
   }
 
-  const guardarReprogramacion = () => {
+  const guardarReprogramacion = async () => {
     if (!reprogramData.fecha || !reprogramData.hora) {
       alert("Debe seleccionar una fecha y hora válidas.")
       return
     }
 
-    // --- NUEVA VALIDACIÓN: No reprogramar al pasado ---
     const selectedDate = new Date(reprogramData.fecha + "T00:00:00");
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -218,15 +300,29 @@ export function TurnosView() {
       alert("❌ No se puede reprogramar un turno para una fecha pasada.");
       return;
     }
-    // --------------------------------------------------
 
-    setTurnos(turnos.map(t => t.id === turnoSeleccionado.id ? { ...t, fecha: reprogramData.fecha, hora: reprogramData.hora, estado: "pendiente" } : t))
-    setIsReprogramming(false)
-    setIsDetailModalOpen(false)
-    alert("Turno reprogramado con éxito.")
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('turnos').update({ 
+        fecha: reprogramData.fecha, 
+        hora: reprogramData.hora, 
+        estado: "pendiente" 
+      }).eq('id', turnoSeleccionado.id);
+
+      if (error) throw error;
+
+      fetchTurnos();
+      setIsReprogramming(false)
+      setIsDetailModalOpen(false)
+      alert("Turno reprogramado con éxito.")
+    } catch (error: any) {
+      console.error("Error al reprogramar:", error)
+      alert("Error al reprogramar el turno: " + error.message)
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  // --- RENDERIZADO VISUAL DEL TURNO CON ESTILOS PARA DÍAS PASADOS ---
   const getTurnoStyle = (estado: string, esPasado: boolean) => {
     let baseStyle = "group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden";
     if (esPasado) {
@@ -234,7 +330,7 @@ export function TurnosView() {
     }
     if (estado === "asistio") return `${baseStyle} bg-green-100 border-green-500/50 dark:bg-green-900/20 opacity-90`;
     if (estado === "cancelado") return `${baseStyle} bg-red-50 border-red-500/30 dark:bg-red-900/10 opacity-50 grayscale`;
-    return `${baseStyle} bg-card border-border hover:border-primary/50`; // Pendiente (Normal)
+    return `${baseStyle} bg-card border-border hover:border-primary/50`; 
   }
 
   return (
@@ -268,8 +364,12 @@ export function TurnosView() {
       </div>
 
       {/* Calendario Semanal */}
-      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Cabecera de Días con COLORES Y ESTILOS DE DÍA PASADO */}
+      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden relative">
+        {isLoading && (
+          <div className="absolute inset-0 bg-background/50 z-10 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        )}
         <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0 relative">
           <div className="p-3 text-center border-r border-border flex items-center justify-center">
             <Clock className="h-4 w-4 text-muted-foreground" />
@@ -280,13 +380,11 @@ export function TurnosView() {
             const esPasado = fechaString < hoyString
             const esNoLaborable = diasNoLaborables.includes(fechaString)
             
-            // Colores de la cabecera
             let headerBg = "bg-transparent"
             let esHoyStyle = esHoy ? "text-blue-700 dark:text-blue-300" : "text-muted-foreground"
             let esPasadoStyle = esPasado ? "grayscale opacity-60" : ""
 
             if (esNoLaborable) headerBg = "bg-destructive/10"
-            // Se eliminaron los fondos de cabecera que interferían con el griseado completo del día pasado
 
             return (
               <div key={fechaString} className={`p-2 text-center border-r border-border last:border-0 flex flex-col items-center relative transition-colors ${headerBg} ${esPasadoStyle}`}>
@@ -308,7 +406,6 @@ export function TurnosView() {
           })}
         </div>
 
-        {/* Celdas del Calendario */}
         <div className="flex-1 overflow-y-auto min-h-0 bg-background/50">
           <div className="min-w-full relative">
             {HORARIOS.map(hora => (
@@ -323,7 +420,6 @@ export function TurnosView() {
                   const esPasado = fechaString < hoyString
                   const esNoLaborable = diasNoLaborables.includes(fechaString)
                   
-                  // Fondo de celda con color para día actual (atrás de los turnos)
                   let cellBg = "hover:bg-secondary/10"
                   let esPasadoStyle = esPasado ? "bg-slate-100 dark:bg-slate-900/40 grayscale opacity-60" : ""
                   if (esHoy) cellBg = "bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/40"
@@ -343,7 +439,7 @@ export function TurnosView() {
                             <Badge variant="outline" className={`text-[9px] px-1 py-0 font-bold border ${SERVICE_UI[turno.servicio]?.color || "bg-secondary text-foreground"}`}>
                               {SERVICE_UI[turno.servicio]?.sigla || "SRV"}
                             </Badge>
-                            {turno.presupuestoAsociado && <FileText className="h-3 w-3 text-primary" />}
+                            {turno.presupuesto_id && <FileText className="h-3 w-3 text-primary" />}
                             {turno.estado === "asistio" && <CheckCircle2 className="h-3 w-3 text-green-600 ml-auto" />}
                           </div>
                         </div>
@@ -419,10 +515,15 @@ export function TurnosView() {
                 </div>
               </div>
 
-              {turnoSeleccionado.presupuestoAsociado && (
+              {turnoSeleccionado.presupuesto_id && (
                 <button className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors">
-                  <div className="flex items-center gap-2 text-sm text-primary font-medium"><FileText className="w-4 h-4" /> Presupuesto</div>
-                  <div className="flex items-center gap-2"><span className="font-mono text-xs text-primary font-bold">{turnoSeleccionado.presupuestoAsociado}</span><ExternalLink className="w-4 h-4 text-primary opacity-50" /></div>
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium"><FileText className="w-4 h-4" /> Presupuesto Asociado</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-primary font-bold">
+                      {turnoSeleccionado.presupuestos?.numero_correlativo ? `PRE-${turnoSeleccionado.presupuestos.numero_correlativo}` : 'Ver'}
+                    </span>
+                    <ExternalLink className="w-4 h-4 text-primary opacity-50" />
+                  </div>
                 </button>
               )}
 
@@ -438,12 +539,13 @@ export function TurnosView() {
           <DialogFooter className="flex-col sm:flex-row gap-2 sm:gap-0 mt-4 border-t border-border pt-4">
             {isReprogramming ? (
               <>
-                <Button variant="ghost" onClick={() => setIsReprogramming(false)} className="w-full sm:w-auto">Cancelar</Button>
-                <Button onClick={guardarReprogramacion} className="bg-primary text-primary-foreground w-full sm:w-auto">Confirmar Cambios</Button>
+                <Button variant="ghost" onClick={() => setIsReprogramming(false)} className="w-full sm:w-auto" disabled={isSaving}>Cancelar</Button>
+                <Button onClick={guardarReprogramacion} className="bg-primary text-primary-foreground w-full sm:w-auto" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Confirmar Cambios
+                </Button>
               </>
             ) : (
               <div className="flex flex-col w-full gap-2">
-                {/* Acomodar botones en la misma línea: Ingreso (Verde), Reprogramar, Cancelar (Rojo) */}
                 <div className="grid grid-cols-3 gap-2 w-full">
                     {turnoSeleccionado?.estado !== "cancelado" && turnoSeleccionado?.estado !== "asistio" && (
                         <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "asistio")} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
@@ -461,7 +563,6 @@ export function TurnosView() {
                         </Button>
                     )}
                 </div>
-                {/* Se eliminó el botón "Cerrar Detalle" */}
               </div>
             )}
           </DialogFooter>
@@ -470,15 +571,15 @@ export function TurnosView() {
 
       {/* --- MODAL DE NUEVO TURNO --- */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl border-border bg-card max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl border-border bg-card h-[85vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-xl text-card-foreground">Agendar Nuevo Turno</DialogTitle>
             <DialogDescription className="text-muted-foreground">
               Complete los datos para registrar la cita.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="text-card-foreground">Fecha</Label>
@@ -533,7 +634,9 @@ export function TurnosView() {
                           onKeyDown={(e: any) => e.key === 'Enter' && buscarAuto()}
                         />
                       </div>
-                      <Button onClick={buscarAuto} className="bg-primary text-primary-foreground">Buscar</Button>
+                      <Button onClick={buscarAuto} disabled={isSearching} className="bg-primary text-primary-foreground">
+                        {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Buscar"}
+                      </Button>
                     </div>
 
                     {autoEncontrado && (
@@ -547,9 +650,9 @@ export function TurnosView() {
                         {autoEncontrado.presupuestos.length > 0 ? (
                           <div className="space-y-2 pt-2 border-t border-border">
                             <Label className="text-primary font-bold flex items-center gap-2">
-                              <FileText className="w-4 h-4" /> Presupuestos Pendientes
+                              <FileText className="w-4 h-4" /> Presupuestos Activos
                             </Label>
-                            <Select value={formData.presupuestoAsociado} onValueChange={(val: string) => setFormData({...formData, presupuestoAsociado: val})}>
+                            <Select value={formData.presupuesto_id} onValueChange={(val: string) => setFormData({...formData, presupuesto_id: val})}>
                               <SelectTrigger className="bg-background border-primary/50 text-foreground">
                                 <SelectValue placeholder="Asociar un presupuesto (Opcional)" />
                               </SelectTrigger>
@@ -557,14 +660,14 @@ export function TurnosView() {
                                 <SelectItem value="ninguno">No asociar ninguno</SelectItem>
                                 {autoEncontrado.presupuestos.map((p: any) => (
                                   <SelectItem key={p.id} value={p.id}>
-                                    {p.id} - {p.detalle} (${p.monto.toLocaleString()})
+                                    PRE-{p.numero_correlativo} - {p.estado} (${p.total_final?.toLocaleString()})
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground pt-2 border-t border-border">No registra presupuestos pendientes.</div>
+                          <div className="text-xs text-muted-foreground pt-2 border-t border-border">No registra presupuestos pendientes en sistema.</div>
                         )}
                       </div>
                     )}
@@ -609,13 +712,16 @@ export function TurnosView() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:bg-secondary">
-              Cancelar
-            </Button>
-            <Button onClick={handleGuardarTurno} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Agendar Turno
-            </Button>
+          <DialogFooter className="shrink-0 p-4 border-t border-border bg-card rounded-b-lg">
+            <div className="flex justify-end gap-2 w-full">
+              <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving} className="text-muted-foreground hover:bg-secondary">
+                Cancelar
+              </Button>
+              <Button onClick={handleGuardarTurno} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Agendar Turno
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
