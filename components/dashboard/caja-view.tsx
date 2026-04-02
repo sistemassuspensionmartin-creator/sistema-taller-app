@@ -134,7 +134,7 @@ export function CajaView() {
     setIsCobrarModalOpen(true);
   }
 
-  // --- LÓGICA BLINDADA DE COBRO ---
+  // --- LÓGICA BLINDADA DE COBRO (CON DEBUG) ---
   const procesarCobro = async () => {
     const monto = parseFloat(montoCobro);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
@@ -152,18 +152,22 @@ export function CajaView() {
         throw new Error("No se encontró la caja destino para este método de pago.");
       }
 
-      // PASO 1 (CRÍTICO): Actualizamos la caja PRIMERO. Si falla, se corta todo acá.
+      // PASO 1: Actualizamos la caja PRIMERO.
       if (cajaDestinoId) {
         const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
         const nuevoSaldo = Number(cajaAfectada.saldo || 0) + monto;
         
+        console.log("🛠️ DEBUG: Intentando actualizar Caja ID:", cajaDestinoId, "Nuevo Saldo:", nuevoSaldo);
+
         const { error: updateCajaError } = await supabase.from('cajas').update({ saldo: nuevoSaldo }).eq('id', cajaDestinoId);
+        
         if (updateCajaError) {
-          throw new Error("Error de permisos en Base de Datos: No se pudo sumar el dinero a la caja. El cobro FUE CANCELADO y no se registró nada en el historial.");
+          console.error("🚨 ERROR CRÍTICO DE SUPABASE AL ACTUALIZAR CAJA:", updateCajaError);
+          throw new Error(`Error BD al sumar saldo: ${updateCajaError.message || updateCajaError.code}`);
         }
       }
 
-      // PASO 2: Solo si la caja guardó la plata, anotamos el recibo.
+      // PASO 2: Anotamos el recibo.
       const { error: errorPago } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
         caja_destino_id: cajaDestinoId,
@@ -173,13 +177,17 @@ export function CajaView() {
         detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})`,
         notas: notasCobro
       }]);
-      if (errorPago) throw new Error("La caja recibió la plata pero falló el registro del historial.");
+      if (errorPago) {
+         console.error("🚨 ERROR CRÍTICO DE SUPABASE AL INSERTAR HISTORIAL:", errorPago);
+         throw new Error("La caja recibió la plata pero falló el registro del historial.");
+      }
 
       // PASO 3: Actualizamos el Presupuesto
       const nuevoRestante = presupuestoACobrar.restante - monto;
       const nuevoEstado = nuevoRestante <= 0 ? 'Cobrado' : 'Parcial';
       
-      await supabase.from('presupuestos').update({ estado_pago: nuevoEstado }).eq('id', presupuestoACobrar.id);
+      const { error: errorPres } = await supabase.from('presupuestos').update({ estado_pago: nuevoEstado }).eq('id', presupuestoACobrar.id);
+      if(errorPres) console.error("🚨 Error al actualizar el estado del presupuesto:", errorPres);
 
       if(nuevoEstado === 'Cobrado') {
           await supabase.from('presupuestos').update({ estado: 'Facturado' }).eq('id', presupuestoACobrar.id);
@@ -207,19 +215,16 @@ export function CajaView() {
 
     setIsSaving(true);
     try {
-      // PASO 1 (CRÍTICO): Actualizamos saldos primero
       const { error: errorOrigen } = await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
       if (errorOrigen) throw new Error("Fallo al descontar saldo de la caja origen. Operación CANCELADA.");
 
       const cajaDestObj = cajas.find(c => c.id === cajaDestino);
       const { error: errorDestino } = await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
       if (errorDestino) {
-        // Rollback manual (Le devolvemos la plata a la origen porque falló la destino)
         await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) }).eq('id', cajaOrigen);
         throw new Error("Fallo al sumar saldo a la caja destino. Se devolvió el dinero al origen. Operación CANCELADA.");
       }
 
-      // PASO 2: Anotamos en el libro
       const { error: errorMov } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'transferencia_interna',
         caja_origen_id: cajaOrigen,
