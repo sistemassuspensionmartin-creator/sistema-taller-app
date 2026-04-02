@@ -122,9 +122,10 @@ export function CajaView() {
 
   useEffect(() => { cargarDatos() }, [])
 
-  const cajaMostrador = cajas.find(c => c.tipo === 'operativa');
+  // Buscamos explícitamente por nombre para que nunca falle
+  const cajaMostrador = cajas.find(c => c.nombre === 'Caja Mostrador');
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
-  const saldoGeneral = cajas.filter(c => c.tipo !== 'operativa').reduce((acc, c) => acc + Number(c.saldo || 0), 0);
+  const saldoGeneral = cajas.filter(c => c.nombre !== 'Caja Mostrador').reduce((acc, c) => acc + Number(c.saldo || 0), 0);
 
   const abrirModalCobro = (cuenta: any) => {
     setPresupuestoACobrar(cuenta);
