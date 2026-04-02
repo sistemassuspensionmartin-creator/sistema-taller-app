@@ -50,27 +50,24 @@ const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
   "Cubiertas": { sigla: "CUB", color: "bg-stone-500/10 text-stone-500 border-stone-500/20" },
 }
 
-// RECIBIMOS LA MEMORIA DEL PUENTE DESDE PRESUPUESTOS
 export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turnoAgendarInfo?: any, onClearTurnoAgendarInfo?: () => void }) {
   const [fechaActual, setFechaActual] = useState(new Date())
   const [isLoading, setIsLoading] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
-  // Modales
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<any>(null)
   const [isReprogramming, setIsReprogramming] = useState(false)
   const [reprogramData, setReprogramData] = useState({ fecha: "", hora: "" })
-
-  const [sugerenciasVehiculos, setSugerenciasVehiculos] = useState<any[]>([])
   
   const [diasNoLaborables, setDiasNoLaborables] = useState<string[]>([])
   const [tipoRegistro, setTipoRegistro] = useState("registrado")
   const [busquedaPatente, setBusquedaPatente] = useState("")
   const [autoEncontrado, setAutoEncontrado] = useState<any>(null)
+  const [sugerenciasVehiculos, setSugerenciasVehiculos] = useState<any[]>([])
 
   const [formData, setFormData] = useState({
     fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuesto_id: ""
@@ -80,14 +77,10 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
 
   const hoyString = new Date().toISOString().split("T")[0]
 
-  // Cargar turnos desde Supabase (incluyendo datos del presupuesto asociado)
   const fetchTurnos = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('turnos')
-        .select('*, presupuestos(numero_correlativo)')
-      
+      const { data, error } = await supabase.from('turnos').select('*, presupuestos(numero_correlativo)')
       if (error) throw error
       setTurnos(data || [])
     } catch (error) {
@@ -97,19 +90,18 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
     }
   }
 
-  useEffect(() => {
-    fetchTurnos()
-  }, [])
+  useEffect(() => { fetchTurnos() }, [])
 
-  // --- NUEVA LÓGICA: EFECTO MODO AGENDAMIENTO ---
   useEffect(() => {
     const cargarAutoPredefinido = async (patente: string, pres_id: string) => {
       setIsSearching(true);
       try {
+        const patenteLimpia = patente.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
         const { data: auto, error } = await supabase
           .from('vehiculos')
           .select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono)')
-          .eq('patente', patente)
+          .ilike('patente', `%${patenteLimpia}%`)
           .single();
 
         if (error || !auto) return;
@@ -117,7 +109,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         const { data: presups } = await supabase
           .from('presupuestos')
           .select('id, numero_correlativo, total_final, detalle, estado')
-          .eq('vehiculo_patente', patente)
+          .ilike('vehiculo_patente', `%${patenteLimpia}%`)
           .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
 
         const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
@@ -132,14 +124,14 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
 
         setFormData(prev => ({ 
           ...prev, 
-          patente: patente, 
+          patente: patenteLimpia, 
           marcaModelo: `${auto.marca} ${auto.modelo}`, 
           nombreDueño: nombreCliente, 
           telefono: telefonoCliente, 
           presupuesto_id: pres_id 
         }));
         
-        setBusquedaPatente(patente);
+        setBusquedaPatente(patenteLimpia);
       } catch (err) {
         console.error(err);
       } finally {
@@ -153,7 +145,6 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
   }, [turnoAgendarInfo])
 
 
-  // --- LOGICA DE FECHAS Y BLOQUEOS ---
   const fechaHoyReal = new Date()
   fechaHoyReal.setHours(0, 0, 0, 0)
   
@@ -197,30 +188,29 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
     }
   }
 
-  // --- LOGICA DE BD: BUSCAR AUTO ---
   const buscarAuto = async () => {
     const patenteLimpia = busquedaPatente.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
     if(!patenteLimpia) return;
 
     setIsSearching(true);
-    setSugerenciasVehiculos([]); // Limpiamos las sugerencias
+    setSugerenciasVehiculos([]); 
     try {
       const { data: auto, error } = await supabase
         .from('vehiculos')
         .select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono)')
-        .eq('patente', patenteLimpia)
+        .ilike('patente', `%${patenteLimpia}%`)
         .single();
 
       if (error || !auto) {
         alert("Patente no encontrada en el sistema.");
-        setAutoEncontrado(null); // Corregido: antes decía autoEncontrado(null)
+        setAutoEncontrado(null); 
         return;
       }
 
       const { data: presups } = await supabase
         .from('presupuestos')
         .select('id, numero_correlativo, total_final, detalle, estado')
-        .eq('vehiculo_patente', patenteLimpia)
+        .ilike('vehiculo_patente', `%${patenteLimpia}%`)
         .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
 
       const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
@@ -276,7 +266,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
 
   const handleGuardarTurno = async () => {
     if (!formData.fecha || !formData.hora || !formData.servicio || !formData.patente) {
-      alert("Faltan completar campos obligatorios.")
+      alert("⚠️ Faltan completar campos obligatorios. Asegúrese de seleccionar la Fecha, Hora y el Servicio.");
       return
     }
 
@@ -307,17 +297,16 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
       const { error } = await supabase.from('turnos').insert([payload]);
       if (error) throw error;
 
-      // LA TRANSACCIÓN SEGURA: APROBAMOS EL PRESUPUESTO ACÁ (SI EXISTE)
+      // LA TRANSACCIÓN SEGURA: APROBAMOS EL PRESUPUESTO ACÁ SÓLO SI EL TURNO SE GUARDÓ
       if (payload.presupuesto_id) {
         await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', payload.presupuesto_id);
       }
 
       setIsModalOpen(false)
       setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuesto_id: "" })
-      setAutoEncontrado(null); // Corregido
+      setAutoEncontrado(null); 
       setBusquedaPatente("")
       
-      // Limpiar memoria
       if (onClearTurnoAgendarInfo) onClearTurnoAgendarInfo();
 
       fetchTurnos() 
@@ -343,7 +332,6 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
       const { error } = await supabase.from('turnos').update({ estado: nuevoEstado }).eq('id', id);
       if (error) throw error;
       
-      // LA LÓGICA DE TALLER: PASA AL KANBAN AL INGRESAR
       if (nuevoEstado === "asistio") {
         const turno = turnos.find(t => t.id === id);
         if (turno) {
@@ -359,7 +347,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         }
       }
 
-      fetchTurnos(); // Refrescamos
+      fetchTurnos(); 
       setIsDetailModalOpen(false)
     } catch (error: any) {
       console.error("Error al cambiar estado:", error)
@@ -404,7 +392,6 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
     }
   }
 
-  // --- RENDERIZADO VISUAL ---
   const getTurnoStyle = (estado: string, esPasado: boolean) => {
     let baseStyle = "group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden";
     if (esPasado) {
@@ -412,12 +399,11 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
     }
     if (estado === "asistio") return `${baseStyle} bg-green-100 border-green-500/50 dark:bg-green-900/20 opacity-90`;
     if (estado === "cancelado") return `${baseStyle} bg-red-50 border-red-500/30 dark:bg-red-900/10 opacity-50 grayscale`;
-    return `${baseStyle} bg-card border-border hover:border-primary/50`; // Pendiente (Normal)
+    return `${baseStyle} bg-card border-border hover:border-primary/50`; 
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 pb-4">
-      {/* BANNER DE MODO AGENDAMIENTO (Si viene de Presupuestos) */}
       {turnoAgendarInfo && (
         <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm animate-in slide-in-from-top-4 shrink-0">
           <div className="flex gap-3">
@@ -438,7 +424,6 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         </div>
       )}
 
-      {/* Header y Controles */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Agenda de Turnos</h2>
@@ -466,8 +451,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         </div>
       </div>
 
-      {/* Calendario Semanal */}
-      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
+      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden relative">
         {isLoading && (
           <div className="absolute inset-0 bg-background/50 z-10 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -556,7 +540,6 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         </div>
       </Card>
 
-      {/* --- MODAL DETALLE DE TURNO --- */}
       <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
         <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader>
@@ -588,7 +571,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
                     <div>
                       <div className="text-2xl font-bold text-foreground flex items-center gap-2">
                         {turnoSeleccionado.hora}
-                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 border-green-200">Ingresó</Badge>}
+                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Ingresó</Badge>}
                         {turnoSeleccionado.estado === "cancelado" && <Badge variant="destructive">Cancelado</Badge>}
                       </div>
                       <div className="text-sm text-muted-foreground">{turnoSeleccionado.fecha}</div>
@@ -672,7 +655,6 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL DE NUEVO TURNO --- */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">

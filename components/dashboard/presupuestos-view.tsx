@@ -552,18 +552,14 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       if (errExistente) throw errExistente;
 
       if (tallerExistente && tallerExistente.length > 0) {
-        alert("⚠️ ATENCIÓN: Este presupuesto ya tiene una Orden de Trabajo ingresada en el Taller. No se puede volver a ingresar ni generar otro turno duplicado.");
+        alert("⚠️ ATENCIÓN: Este presupuesto ya tiene una Orden de Trabajo ingresada en el Taller. No se puede volver a ingresar.");
         setIsAprobarModalOpen(false);
         return;
       }
 
-      // 2. Si pasó la validación, lo aprobamos
-      await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', editandoId);
-      setEstado("Aprobado");
-      setIsAprobarModalOpen(false);
-
-      // 3. Ejecutamos la acción seleccionada
       if (opcion === "turnos") {
+        // LA APROBACIÓN DIFERIDA: ¡NO ACTUALIZAMOS LA BASE DE DATOS ACÁ!
+        setIsAprobarModalOpen(false);
         if (onNavigateToTurnos) {
           onNavigateToTurnos({ 
             patente: vehiculoSeleccionado,
@@ -571,6 +567,11 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
           });
         }
       } else if (opcion === "inmediato") {
+        // APROBACIÓN INMEDIATA (Acá sí guardamos todo porque ya está el auto)
+        await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', editandoId);
+        setEstado("Aprobado");
+        setIsAprobarModalOpen(false);
+
         const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre} ${clienteActual?.apellido || ''}`.trim();
         
         const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
@@ -582,7 +583,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
         if (tallerError) throw tallerError;
         
-        // Cierra la vista detalle y nos manda al taller
         setVista("lista");
         if (onNavigateToTaller) onNavigateToTaller();
       }
