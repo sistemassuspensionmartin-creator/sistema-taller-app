@@ -45,17 +45,14 @@ export function CajaView() {
   
   const [busqueda, setBusqueda] = useState("")
 
-  // Modales
   const [isCobrarModalOpen, setIsCobrarModalOpen] = useState(false)
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false)
 
-  // Estados para Cobrar
   const [presupuestoACobrar, setPresupuestoACobrar] = useState<any>(null)
   const [montoCobro, setMontoCobro] = useState("")
   const [metodoPago, setMetodoPago] = useState("Efectivo")
   const [notasCobro, setNotasCobro] = useState("")
 
-  // Estados para Movimiento Interno
   const [cajaOrigen, setCajaOrigen] = useState("")
   const [cajaDestino, setCajaDestino] = useState("")
   const [montoMovimiento, setMontoMovimiento] = useState("")
@@ -64,11 +61,9 @@ export function CajaView() {
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
-      // 1. Cargar Cajas
       const { data: cajasData } = await supabase.from('cajas').select('*').order('nombre')
       setCajas(cajasData || [])
 
-      // 2. Cargar Movimientos Recientes
       const { data: movData } = await supabase
         .from('movimientos_caja')
         .select('*, caja_origen:caja_origen_id(nombre), caja_destino:caja_destino_id(nombre)')
@@ -76,7 +71,6 @@ export function CajaView() {
         .limit(50)
       setMovimientos(movData || [])
 
-      // 3. Cargar Autos y Pagos cruzados
       const { data: ordenesData, error: ordenesError } = await supabase
         .from('ordenes_trabajo')
         .select(`vehiculo_patente, cliente_nombre, presupuestos (*)`)
@@ -91,13 +85,10 @@ export function CajaView() {
 
       if (pagosError) throw pagosError;
 
-      // ELIMINADOR DE DUPLICADOS: Usamos un Map para que cada presupuesto pase una sola vez
       const presupuestosUnicos = new Map();
 
       (ordenesData || []).forEach((orden: any) => {
         const pres = orden.presupuestos;
-        
-        // Si el presupuesto no existe, o ya lo metimos en la lista, lo ignoramos
         if (!pres || presupuestosUnicos.has(pres.id)) return;
 
         const pagosDeEstePresupuesto = (pagosData || []).filter((p: any) => p.presupuesto_id === pres.id);
@@ -106,7 +97,6 @@ export function CajaView() {
         const total = Number(pres.total_final || 0);
         const restante = total - totalPagado;
 
-        // Lo guardamos en el Map con su ID como llave
         presupuestosUnicos.set(pres.id, {
           id: pres.id,
           numero: pres.numero_correlativo,
@@ -120,7 +110,6 @@ export function CajaView() {
         });
       });
 
-      // Convertimos el Map de vuelta a un Array y lo ordenamos
       const procesadas = Array.from(presupuestosUnicos.values());
       setCuentasPorCobrar(procesadas.sort((a: any, b: any) => b.restante - a.restante))
 
@@ -145,6 +134,7 @@ export function CajaView() {
     setIsCobrarModalOpen(true);
   }
 
+  // --- LÓGICA BLINDADA DE COBRO ---
   const procesarCobro = async () => {
     const monto = parseFloat(montoCobro);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
@@ -162,7 +152,18 @@ export function CajaView() {
         throw new Error("No se encontró la caja destino para este método de pago.");
       }
 
-      // 1. Registrar el Pago
+      // PASO 1 (CRÍTICO): Actualizamos la caja PRIMERO. Si falla, se corta todo acá.
+      if (cajaDestinoId) {
+        const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
+        const nuevoSaldo = Number(cajaAfectada.saldo || 0) + monto;
+        
+        const { error: updateCajaError } = await supabase.from('cajas').update({ saldo: nuevoSaldo }).eq('id', cajaDestinoId);
+        if (updateCajaError) {
+          throw new Error("Error de permisos en Base de Datos: No se pudo sumar el dinero a la caja. El cobro FUE CANCELADO y no se registró nada en el historial.");
+        }
+      }
+
+      // PASO 2: Solo si la caja guardó la plata, anotamos el recibo.
       const { error: errorPago } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
         caja_destino_id: cajaDestinoId,
@@ -172,18 +173,9 @@ export function CajaView() {
         detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})`,
         notas: notasCobro
       }]);
-      if (errorPago) throw errorPago;
+      if (errorPago) throw new Error("La caja recibió la plata pero falló el registro del historial.");
 
-      // 2. Sumar el saldo a la Caja con ALARMA de error
-      if (cajaDestinoId) {
-        const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
-        const nuevoSaldo = Number(cajaAfectada.saldo || 0) + monto;
-        
-        const { error: updateCajaError } = await supabase.from('cajas').update({ saldo: nuevoSaldo }).eq('id', cajaDestinoId);
-        if (updateCajaError) throw new Error("No se pudo sumar el saldo a la caja. Verifique los permisos.");
-      }
-
-      // 3. Actualizar el estado del Presupuesto
+      // PASO 3: Actualizamos el Presupuesto
       const nuevoRestante = presupuestoACobrar.restante - monto;
       const nuevoEstado = nuevoRestante <= 0 ? 'Cobrado' : 'Parcial';
       
@@ -193,16 +185,17 @@ export function CajaView() {
           await supabase.from('presupuestos').update({ estado: 'Facturado' }).eq('id', presupuestoACobrar.id);
       }
 
-      alert("¡Cobro registrado con éxito!");
+      alert("¡Cobro registrado con éxito en la caja y el historial!");
       setIsCobrarModalOpen(false);
       cargarDatos();
     } catch (err: any) {
-      alert("Error al registrar el cobro: " + err.message);
+      alert(err.message);
     } finally {
       setIsSaving(false);
     }
   }
 
+  // --- LÓGICA BLINDADA DE MOVIMIENTO INTERNO ---
   const procesarMovimientoInterno = async () => {
     const monto = parseFloat(montoMovimiento);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
@@ -214,6 +207,19 @@ export function CajaView() {
 
     setIsSaving(true);
     try {
+      // PASO 1 (CRÍTICO): Actualizamos saldos primero
+      const { error: errorOrigen } = await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
+      if (errorOrigen) throw new Error("Fallo al descontar saldo de la caja origen. Operación CANCELADA.");
+
+      const cajaDestObj = cajas.find(c => c.id === cajaDestino);
+      const { error: errorDestino } = await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
+      if (errorDestino) {
+        // Rollback manual (Le devolvemos la plata a la origen porque falló la destino)
+        await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) }).eq('id', cajaOrigen);
+        throw new Error("Fallo al sumar saldo a la caja destino. Se devolvió el dinero al origen. Operación CANCELADA.");
+      }
+
+      // PASO 2: Anotamos en el libro
       const { error: errorMov } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'transferencia_interna',
         caja_origen_id: cajaOrigen,
@@ -222,14 +228,7 @@ export function CajaView() {
         metodo_pago: 'Efectivo',
         detalle: notasMovimiento || "Movimiento interno de fondos"
       }]);
-      if (errorMov) throw errorMov;
-
-      const { error: errorOrigen } = await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
-      if (errorOrigen) throw errorOrigen;
-
-      const cajaDestObj = cajas.find(c => c.id === cajaDestino);
-      const { error: errorDestino } = await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
-      if (errorDestino) throw errorDestino;
+      if (errorMov) throw new Error("Se movió el dinero pero falló el registro en el historial.");
 
       alert("Movimiento realizado con éxito.");
       setIsMovimientoModalOpen(false);
@@ -237,7 +236,7 @@ export function CajaView() {
       setNotasMovimiento("");
       cargarDatos();
     } catch (err: any) {
-      alert("Error al procesar el movimiento: " + err.message);
+      alert(err.message);
     } finally {
       setIsSaving(false);
     }
