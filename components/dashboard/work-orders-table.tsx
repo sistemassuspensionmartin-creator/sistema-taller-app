@@ -76,15 +76,16 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
 
   const handleNotificarCliente = async (orden: any) => {
     try {
-      // 1. Vamos a buscar el teléfono del cliente a la base de datos usando la patente
+      // 1. Buscamos el teléfono y los datos exactos del auto
       const { data, error } = await supabase
         .from('vehiculos')
-        .select('clientes(telefono)')
+        .select('marca, modelo, clientes(telefono)')
         .eq('patente', orden.vehiculo_patente)
         .single();
 
-      // @ts-ignore (evitamos error estricto de typescript anidado)
+      // @ts-ignore
       const telefono = data?.clientes?.telefono;
+      const marcaModelo = data ? `${data.marca} ${data.modelo}` : "vehículo";
 
       if (error || !telefono) {
         alert("⚠️ El dueño de este vehículo no tiene un número de teléfono registrado en el sistema.");
@@ -93,12 +94,19 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
 
       // 2. Preparamos el mensaje
       const telefonoLimpio = telefono.replace(/\D/g, '');
-      const nombreTaller = configuracion.nombre_taller || "nuestro taller";
-      const horarios = configuracion.horarios || "nuestro horario de atención";
       
-      const msj = `Hola ${orden.cliente_nombre}, te contactamos de ${nombreTaller}.\n\n¡Te avisamos que tu vehículo (${orden.vehiculo_patente}) ya está terminado y listo para retirar! ✅\n\nPodés pasar dentro de ${horarios}. ¡Te esperamos!`;
+      // Traemos tu plantilla de Ajustes
+      let mensaje = configuracion.msj_listo || "Hola {{cliente}}, te avisamos que tu {{vehiculo}} ({{patente}}) ya está listo para retirar en {{taller}} dentro del horario: {{horario}}.";
       
-      window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(msj)}`, '_blank');
+      // Reemplazamos todas las variables
+      mensaje = mensaje
+        .replace(/{{cliente}}/g, orden.cliente_nombre)
+        .replace(/{{vehiculo}}/g, marcaModelo)
+        .replace(/{{patente}}/g, orden.vehiculo_patente)
+        .replace(/{{horario}}/g, configuracion.horario || "nuestro horario de atención")
+        .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
+      
+      window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
 
     } catch (err) {
       alert("Hubo un error al intentar abrir WhatsApp.");

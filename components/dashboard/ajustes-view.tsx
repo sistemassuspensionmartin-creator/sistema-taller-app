@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Save, Loader2, Store, Phone, MapPin, FileText, Mail, FileSignature, Clock, Instagram, Users, Shield, Database, Download, Plus, Trash2, Edit, Wrench } from "lucide-react"
+import { Save, Loader2, Store, Phone, MapPin, FileText, Mail, FileSignature, Clock, Instagram, Users, Shield, Database, Download, Plus, Trash2, Edit, Wrench, MessageCircle, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -25,7 +25,9 @@ export function AjustesView() {
 
   const [formData, setFormData] = useState({
     nombre_taller: "", telefono: "", direccion: "", cuit: "",
-    email: "", horario: "", instagram: "", terminos_presupuesto: ""
+    email: "", horario: "", instagram: "", terminos_presupuesto: "",
+    msj_presupuesto: "Hola {{cliente}}, te contactamos de {{taller}}.\n\nTe preparamos el presupuesto para tu {{vehiculo}} ({{patente}}).\n\n*Total estimado: {{total}}*\n\nTe adjunto el PDF con el detalle. ¡Cualquier consulta estamos a disposición!",
+    msj_listo: "Hola {{cliente}}, te contactamos de {{taller}}.\n\n¡Te avisamos que tu vehículo ({{patente}}) ya está terminado y listo para retirar! ✅\n\nPodés pasar dentro de nuestro horario: {{horario}}. ¡Te esperamos!"
   })
 
   const fetchConfig = async () => {
@@ -38,7 +40,9 @@ export function AjustesView() {
           nombre_taller: data.nombre_taller || "", telefono: data.telefono || "",
           direccion: data.direccion || "", cuit: data.cuit || "",
           email: data.email || "", horario: data.horario || "",
-          instagram: data.instagram || "", terminos_presupuesto: data.terminos_presupuesto || ""
+          instagram: data.instagram || "", terminos_presupuesto: data.terminos_presupuesto || "",
+          msj_presupuesto: data.msj_presupuesto || formData.msj_presupuesto,
+          msj_listo: data.msj_listo || formData.msj_listo
         })
       }
     } catch (error) {
@@ -75,22 +79,22 @@ export function AjustesView() {
   }
 
   return (
-    <div className="space-y-6 pb-8 max-w-5xl mx-auto">
+    <div className="space-y-6 pb-8 max-w-5xl mx-auto animate-in fade-in duration-300">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-foreground">Ajustes del Sistema</h2>
-          <p className="text-sm text-muted-foreground">Administrá tu empresa, usuarios y copias de seguridad.</p>
+          <p className="text-sm text-muted-foreground">Administrá tu empresa, notificaciones y usuarios.</p>
         </div>
       </div>
 
       <Tabs defaultValue="empresa" className="w-full">
         <TabsList className="mb-6 bg-secondary h-12 w-full justify-start rounded-lg px-2">
-          <TabsTrigger value="empresa" className="px-6 data-[state=active]:bg-background">Datos de la Empresa</TabsTrigger>
+          <TabsTrigger value="empresa" className="px-6 data-[state=active]:bg-background">Datos y Notificaciones</TabsTrigger>
           <TabsTrigger value="usuarios" className="px-6 data-[state=active]:bg-background">Usuarios y Permisos</TabsTrigger>
           <TabsTrigger value="sistema" className="px-6 data-[state=active]:bg-background">Sistema y Respaldos</TabsTrigger>
         </TabsList>
 
-        {/* PESTAÑA 1: DATOS DE LA EMPRESA (El formulario que ya funciona) */}
+        {/* PESTAÑA 1: DATOS Y NOTIFICACIONES */}
         <TabsContent value="empresa" className="space-y-6">
           <Card className="border-border shadow-sm">
             <CardHeader className="bg-secondary/10 border-b border-border pb-4 flex flex-row items-center justify-between">
@@ -100,7 +104,7 @@ export function AjustesView() {
               </div>
               <Button onClick={handleGuardarCambios} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md">
                 {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                Guardar Empresa
+                Guardar Cambios
               </Button>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
@@ -143,13 +147,55 @@ export function AjustesView() {
             </CardContent>
           </Card>
 
+          {/* NUEVA SECCIÓN: NOTIFICACIONES WHATSAPP */}
+          <Card className="border-border shadow-sm">
+            <CardHeader className="bg-[#25D366]/10 border-b border-border pb-4">
+              <CardTitle className="text-lg flex items-center gap-2 text-[#128C7E] dark:text-[#25D366]">
+                <MessageCircle className="w-5 h-5" /> Plantillas de WhatsApp Automatizadas
+              </CardTitle>
+              <CardDescription>Configurá los mensajes que se envían al cliente. Usá las variables para que el sistema las reemplace automáticamente por los datos reales de cada auto.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              
+              <div className="bg-secondary/40 p-4 rounded-lg border border-dashed border-border flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <p className="text-xs font-bold uppercase text-muted-foreground shrink-0 mt-1">Variables<br/>Disponibles:</p>
+                <div className="flex flex-wrap gap-2">
+                  {['{{cliente}}', '{{vehiculo}}', '{{patente}}', '{{total}}', '{{taller}}', '{{horario}}'].map(v => (
+                    <Badge key={v} variant="outline" className="font-mono bg-background text-primary border-primary/30 shadow-sm">{v}</Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <Label className="font-bold flex items-center gap-2"><FileText className="w-4 h-4 text-muted-foreground"/> Enviar Presupuesto</Label>
+                  <Textarea 
+                    className="min-h-[160px] bg-slate-50 dark:bg-slate-900 border-border resize-none" 
+                    value={formData.msj_presupuesto} 
+                    onChange={(e) => setFormData({...formData, msj_presupuesto: e.target.value})} 
+                  />
+                  <p className="text-[10px] text-muted-foreground italic">El link del PDF se adjuntará de forma manual al abrir WhatsApp.</p>
+                </div>
+
+                <div className="space-y-3">
+                  <Label className="font-bold flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-muted-foreground"/> Auto Terminado (Para Retirar)</Label>
+                  <Textarea 
+                    className="min-h-[160px] bg-slate-50 dark:bg-slate-900 border-border resize-none" 
+                    value={formData.msj_listo} 
+                    onChange={(e) => setFormData({...formData, msj_listo: e.target.value})} 
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="border-border shadow-sm">
             <CardHeader className="bg-secondary/10 border-b border-border pb-4">
               <CardTitle className="text-lg flex items-center gap-2"><FileSignature className="w-5 h-5 text-primary" /> Preferencias de Presupuestos</CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <div className="space-y-2">
-                <Label>Términos y Condiciones (Letra chica)</Label>
+                <Label>Términos y Condiciones (Letra chica que sale al pie del PDF)</Label>
                 <Textarea className="min-h-[100px] bg-slate-50 dark:bg-slate-900 border-border" value={formData.terminos_presupuesto} onChange={(e) => setFormData({...formData, terminos_presupuesto: e.target.value})} />
               </div>
             </CardContent>
@@ -222,6 +268,7 @@ export function AjustesView() {
             </CardContent>
           </Card>
         </TabsContent>
+        
       </Tabs>
     </div>
   )

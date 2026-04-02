@@ -389,7 +389,17 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     await actualizarAEnEsperaSiEsBorrador();
 
     const telefonoLimpio = clienteActual.telefono.replace(/\D/g, '')
-    const mensaje = `Hola ${clienteActual.nombre}, te contactamos de ${configuracion.nombre_taller || 'Taller'}.\n\nTe preparamos el presupuesto para tu ${vehiculoActual.marca} ${vehiculoActual.modelo} (${vehiculoActual.patente}).\n\n*Total estimado: $${totalFinal.toLocaleString()}*\n\nTe adjunto el PDF con el detalle. ¡Cualquier consulta estamos a disposición!`
+    
+    // LA MAGIA DE LAS VARIABLES: Traemos tu plantilla y reemplazamos los corchetes
+    let mensaje = configuracion.msj_presupuesto || "Hola {{cliente}}, te enviamos el presupuesto para tu {{vehiculo}} ({{patente}}). Total: {{total}}. Saludos!";
+    
+    // Usamos una expresión regular (/g) por si pusiste la misma variable dos veces en el texto
+    mensaje = mensaje
+      .replace(/{{cliente}}/g, clienteActual.nombre)
+      .replace(/{{vehiculo}}/g, `${vehiculoActual.marca} ${vehiculoActual.modelo}`)
+      .replace(/{{patente}}/g, vehiculoActual.patente)
+      .replace(/{{total}}/g, `$${totalFinal.toLocaleString()}`)
+      .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
     
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
   }
