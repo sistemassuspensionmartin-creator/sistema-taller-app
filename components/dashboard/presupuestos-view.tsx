@@ -1012,9 +1012,29 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
           <Table>
             <TableHeader><TableRow className="bg-secondary/20"><TableHead>Nro</TableHead><TableHead>Fecha</TableHead><TableHead>Cliente y Vehículo</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-center">Estado</TableHead><TableHead className="text-right">Acciones Rápidas</TableHead></TableRow></TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={6} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-              ) : presupuestosFiltrados.length === 0 ? (
+                  {isLoading ? (
+                    /* MAGIA VISUAL: Esqueletos para Presupuestos (6 columnas) */
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><div className="h-6 w-24 bg-secondary/60 rounded animate-pulse"></div></TableCell>
+                        <TableCell><div className="h-5 w-28 bg-secondary/40 rounded animate-pulse"></div></TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <div className="h-5 w-48 bg-secondary/60 rounded animate-pulse"></div>
+                            <div className="h-4 w-32 bg-secondary/40 rounded animate-pulse"></div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right"><div className="h-6 w-28 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                        <TableCell className="text-center"><div className="h-8 w-32 bg-secondary/60 rounded animate-pulse mx-auto"></div></TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                            <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : presupuestosFiltrados.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No se encontraron presupuestos.</TableCell></TableRow>
               ) : (
                 presupuestosFiltrados.map((p) => (

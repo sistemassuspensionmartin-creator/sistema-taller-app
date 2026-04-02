@@ -268,9 +268,33 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={5} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
-              ) : clientesFiltrados.length === 0 ? (
+                  {isLoading ? (
+                    /* MAGIA VISUAL: Esqueletos para Clientes */
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <div className="h-5 w-40 bg-secondary/60 rounded animate-pulse"></div>
+                            <div className="h-4 w-24 bg-secondary/40 rounded animate-pulse"></div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <div className="h-4 w-32 bg-secondary/60 rounded animate-pulse"></div>
+                            <div className="h-4 w-48 bg-secondary/40 rounded animate-pulse"></div>
+                          </div>
+                        </TableCell>
+                        <TableCell><div className="h-5 w-28 bg-secondary/60 rounded animate-pulse"></div></TableCell>
+                        <TableCell><div className="h-6 w-16 bg-secondary/60 rounded-full animate-pulse"></div></TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                            <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : clientesFiltrados.length === 0 ? ( 
                 <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay clientes para mostrar.</TableCell></TableRow>
               ) : (
                 clientesFiltrados.map((cliente) => (
