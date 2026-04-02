@@ -75,7 +75,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
   const [presupuestoAFusionar, setPresupuestoAFusionar] = useState<string>("")
   const [isAprobarModalOpen, setIsAprobarModalOpen] = useState(false)
 
-  // Estados para imprimir con las nuevas plantillas
+  // Estados para imprimir
   const [printType, setPrintType] = useState<'presupuesto' | 'orden' | null>(null)
   const [printData, setPrintData] = useState<any>(null)
 
@@ -386,45 +386,25 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     }
   }
 
-  // --- WHATSAPP DIVIDIDO EN DOS (CLIENTE O MECÁNICO) ---
-  const handleWhatsApp = async (tipo: 'presupuesto' | 'orden') => {
+  // --- WHATSAPP RESTAURADO ---
+  const handleWhatsApp = async () => {
     if (!clienteActual || !vehiculoActual) return alert("Seleccione un cliente y vehículo para enviar el mensaje.")
-    if (!clienteActual.telefono && tipo === 'presupuesto') return alert("El cliente no tiene un número de teléfono registrado.")
+    if (!clienteActual.telefono) return alert("El cliente no tiene un número de teléfono registrado.")
     
     await actualizarAEnEsperaSiEsBorrador();
 
-    const telefonoLimpio = clienteActual.telefono ? clienteActual.telefono.replace(/\D/g, '') : '';
-    let mensaje = "";
-
-    if (tipo === 'presupuesto') {
-      mensaje = configuracion.msj_presupuesto || "Hola {{cliente}}, te enviamos el presupuesto para tu {{vehiculo}} ({{patente}}). Total: {{total}}. Saludos!";
-      mensaje = mensaje
-        .replace(/{{cliente}}/g, clienteActual.nombre)
-        .replace(/{{vehiculo}}/g, `${vehiculoActual.marca} ${vehiculoActual.modelo}`)
-        .replace(/{{patente}}/g, vehiculoActual.patente)
-        .replace(/{{total}}/g, `$${totalFinal.toLocaleString()}`)
-        .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
-      
-      window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
+    const telefonoLimpio = clienteActual.telefono.replace(/\D/g, '')
     
-    } else if (tipo === 'orden') {
-      // Mensaje estructurado tipo Checklist para el mecánico
-      const trabajosStr = filas.filter(f => f.detalle.trim() !== "" && f.tipo !== 'Repuesto' && f.tipo !== 'Neumático')
-                              .map(f => `👉 ${f.detalle}`).join('\n');
-      
-      const repuestosStr = filas.filter(f => f.detalle.trim() !== "" && (f.tipo === 'Repuesto' || f.tipo === 'Neumático'))
-                               .map(f => `📦 ${f.cant}x ${f.detalle}`).join('\n');
-
-      mensaje = `*🛠️ ORDEN DE TRABAJO: ${vehiculoActual.patente}*\n`;
-      mensaje += `Vehículo: ${vehiculoActual.marca} ${vehiculoActual.modelo}\n\n`;
-      
-      if (trabajosStr) mensaje += `*TAREAS A REALIZAR:*\n${trabajosStr}\n\n`;
-      if (repuestosStr) mensaje += `*REPUESTOS NECESARIOS:*\n${repuestosStr}\n\n`;
-      if (notasInternas) mensaje += `*⚠️ NOTAS INTERNAS:*\n${notasInternas}`;
-      
-      // Abre WhatsApp web para elegir el contacto (ej: grupo del taller o mecánico)
-      window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank')
-    }
+    let mensaje = configuracion.msj_presupuesto || "Hola {{cliente}}, te enviamos el presupuesto para tu {{vehiculo}} ({{patente}}). Total: {{total}}. Saludos!";
+    
+    mensaje = mensaje
+      .replace(/{{cliente}}/g, clienteActual.nombre)
+      .replace(/{{vehiculo}}/g, `${vehiculoActual.marca} ${vehiculoActual.modelo}`)
+      .replace(/{{patente}}/g, vehiculoActual.patente)
+      .replace(/{{total}}/g, `$${totalFinal.toLocaleString()}`)
+      .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
+    
+    window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
   }
 
   // --- LA MAGIA DE LA IMPRESIÓN CON PLANTILLAS REACT ---
@@ -439,17 +419,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "");
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
-    
-    const serviciosParaImprimir = v_filas.filter((f: any) => f.tipo !== 'Repuesto' && f.tipo !== 'Neumático').map((f: any) => ({
-      descripcion: f.detalle,
-      precio: parseFloat(f.precio_unitario || f.precio || 0) * parseFloat(f.cantidad || f.cant || 1)
-    }));
-
-    const repuestosParaImprimir = v_filas.filter((f: any) => f.tipo === 'Repuesto' || f.tipo === 'Neumático').map((f: any) => ({
-      cantidad: parseFloat(f.cantidad || f.cant || 1),
-      descripcion: f.detalle,
-      precio_total: parseFloat(f.precio_unitario || f.precio || 0) * parseFloat(f.cantidad || f.cant || 1)
-    }));
 
     const datosFormateadosParaPlantilla = {
       cliente_nombre: v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`,
@@ -458,18 +427,17 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       vehiculo_modelo: `${v_vehiculo.marca} ${v_vehiculo.modelo}`,
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
-      servicios: serviciosParaImprimir,
-      repuestos: repuestosParaImprimir,
+      items: v_filas, // Pasamos los ítems completos y unificados
       total_final: v_total,
+      validez_dias: validez,
       observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
-      observaciones: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente // Mapeo doble por si acaso
+      observaciones: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
+      config: configuracion
     };
 
-    // 1. Configuramos qué queremos imprimir y le pasamos los datos
     setPrintType(tipo);
     setPrintData(datosFormateadosParaPlantilla);
 
-    // 2. Le damos 300ms a React para que dibuje la plantilla oculta y disparamos la impresión nativa
     setTimeout(() => {
       window.print();
     }, 300);
@@ -524,11 +492,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
   return (
     <>
-      {/* ============================================================== */}
-      {/* ESTA ES LA APP NORMAL (Se oculta al tocar imprimir: print:hidden) */}
-      {/* ============================================================== */}
       <div className="space-y-6 pb-8 print:hidden">
-        
         {vista === "detalle" ? (
           <div className="max-w-7xl mx-auto animate-in fade-in duration-300 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
@@ -582,13 +546,9 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                 <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
                   <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
                 </Button>
-
-                {/* BOTONES WHATSAPP SEPARADOS */}
-                <Button onClick={() => handleWhatsApp('presupuesto')} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
-                  <MessageCircle className="w-4 h-4 mr-2"/> Wpp Cliente
-                </Button>
-                <Button onClick={() => handleWhatsApp('orden')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white shadow-sm border-none">
-                  <MessageCircle className="w-4 h-4 mr-2"/> Wpp Orden
+                
+                <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
+                  <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
                 </Button>
               </div>
             </div>
@@ -1010,9 +970,9 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
       {/* ============================================================== */}
       {/* ZONA DE IMPRESIÓN (Solo visible al tocar Ctrl+P o Imprimir)  */}
-      {/* Usamos 'absolute z-50' para que tape a toda la aplicación.  */}
+      {/* fixed inset-0 z-[9999] fuerza a tapar todo, incluso la sidebar  */}
       {/* ============================================================== */}
-      <div className="hidden print:block absolute top-0 left-0 w-full bg-white z-50">
+      <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
         {printType === 'presupuesto' && <PresupuestoImprimible datos={printData} />}
         {printType === 'orden' && <OrdenTrabajoImprimible datos={printData} />}
       </div>
