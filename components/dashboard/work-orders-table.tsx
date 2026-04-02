@@ -5,7 +5,15 @@ import { supabase } from "@/lib/supabase"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Clock, Wrench, CheckCircle2, Flag, ArrowRight, User, FileText, Loader2, MessageCircle } from "lucide-react"
+import { Clock, Wrench, CheckCircle2, Flag, ArrowRight, User, FileText, Loader2, MessageCircle, Star, Mail } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 const COLUMNAS = [
   { id: "A Ingresar", titulo: "Esperando Ingreso", icono: Clock, color: "text-slate-500", border: "border-slate-200 dark:border-slate-800", bg: "bg-slate-50 dark:bg-slate-900/50" },
@@ -14,7 +22,6 @@ const COLUMNAS = [
   { id: "Entregado", titulo: "Entregado al Cliente", icono: Flag, color: "text-purple-500", border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/50 dark:bg-purple-900/10" },
 ]
 
-// Función para obtener "Hoy" usando la zona horaria local
 const getLocalDateString = (d: Date) => {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -27,12 +34,15 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
   const [configuracion, setConfiguracion] = useState<any>({})
   const [isLoading, setIsLoading] = useState(true)
 
+  // Estados para el Modal Post-Venta
+  const [isPostVentaModalOpen, setIsPostVentaModalOpen] = useState(false)
+  const [ordenPostVenta, setOrdenPostVenta] = useState<any>(null)
+
   const hoyLocal = getLocalDateString(new Date());
 
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
-      // Cargamos órdenes y la configuración del taller (para el nombre en WhatsApp)
       const [resOrdenes, resConfig] = await Promise.all([
         supabase.from('ordenes_trabajo').select('*, presupuestos(numero_correlativo, total_final)').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single()
@@ -48,17 +58,13 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
     }
   }
 
-  useEffect(() => {
-    cargarDatos()
-  }, [])
+  useEffect(() => { cargarDatos() }, [])
 
   const avanzarEstado = async (id: string, estadoActual: string) => {
     const currentIndex = COLUMNAS.findIndex(c => c.id === estadoActual)
     if (currentIndex >= COLUMNAS.length - 1) return 
 
     const nuevoEstado = COLUMNAS[currentIndex + 1].id
-    
-    // Si lo pasamos a Entregado, le clavamos la fecha de HOY
     const fechaEntrega = nuevoEstado === "Entregado" ? hoyLocal : null;
 
     setOrdenes(ordenes.map(o => o.id === id ? { ...o, estado: nuevoEstado, fecha_entrega: fechaEntrega } : o))
@@ -66,7 +72,6 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
     try {
       let updatePayload: any = { estado: nuevoEstado };
       if (fechaEntrega) updatePayload.fecha_entrega = fechaEntrega;
-
       await supabase.from('ordenes_trabajo').update(updatePayload).eq('id', id)
     } catch (error) {
       alert("Error al mover el vehículo.")
@@ -76,13 +81,7 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
 
   const handleNotificarCliente = async (orden: any) => {
     try {
-      // 1. Buscamos el teléfono y los datos exactos del auto
-      const { data, error } = await supabase
-        .from('vehiculos')
-        .select('marca, modelo, clientes(telefono)')
-        .eq('patente', orden.vehiculo_patente)
-        .single();
-
+      const { data, error } = await supabase.from('vehiculos').select('marca, modelo, clientes(telefono)').eq('patente', orden.vehiculo_patente).single();
       // @ts-ignore
       const telefono = data?.clientes?.telefono;
       const marcaModelo = data ? `${data.marca} ${data.modelo}` : "vehículo";
@@ -92,13 +91,9 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
         return;
       }
 
-      // 2. Preparamos el mensaje
       const telefonoLimpio = telefono.replace(/\D/g, '');
-      
-      // Traemos tu plantilla de Ajustes
       let mensaje = configuracion.msj_listo || "Hola {{cliente}}, te avisamos que tu {{vehiculo}} ({{patente}}) ya está listo para retirar en {{taller}} dentro del horario: {{horario}}.";
       
-      // Reemplazamos todas las variables
       mensaje = mensaje
         .replace(/{{cliente}}/g, orden.cliente_nombre)
         .replace(/{{vehiculo}}/g, marcaModelo)
@@ -107,9 +102,51 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
         .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
       
       window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
+    } catch (err) { alert("Hubo un error al intentar abrir WhatsApp."); }
+  }
 
+  // --- LÓGICA DE POST VENTA ---
+  const abrirModalPostVenta = (orden: any, e: any) => {
+    e.stopPropagation();
+    setOrdenPostVenta(orden);
+    setIsPostVentaModalOpen(true);
+  }
+
+  const ejecutarPostVenta = async (medio: 'wpp' | 'email') => {
+    try {
+      const { data, error } = await supabase.from('vehiculos').select('marca, modelo, clientes(telefono, email)').eq('patente', ordenPostVenta.vehiculo_patente).single();
+      
+      // @ts-ignore
+      const telefono = data?.clientes?.telefono;
+      // @ts-ignore
+      const email = data?.clientes?.email;
+      const marcaModelo = data ? `${data.marca} ${data.modelo}` : "vehículo";
+
+      const reemplazos = (texto: string) => {
+        return (texto || "")
+          .replace(/{{cliente}}/g, ordenPostVenta.cliente_nombre)
+          .replace(/{{vehiculo}}/g, marcaModelo)
+          .replace(/{{patente}}/g, ordenPostVenta.vehiculo_patente)
+          .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
+      }
+
+      if (medio === 'wpp') {
+        if (!telefono) return alert("⚠️ El dueño no tiene número de teléfono registrado.");
+        const telefonoLimpio = telefono.replace(/\D/g, '');
+        const msj = reemplazos(configuracion.msj_postventa_wpp);
+        window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(msj)}`, '_blank');
+      } 
+      else if (medio === 'email') {
+        if (!email) return alert("⚠️ El dueño no tiene un correo electrónico (email) registrado en el sistema.");
+        const asunto = reemplazos(configuracion.msj_postventa_email_asunto);
+        const cuerpo = reemplazos(configuracion.msj_postventa_email_cuerpo);
+        // Mailto abre el gestor de correos por defecto de la computadora (Gmail, Outlook, etc)
+        window.open(`mailto:${email}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`, '_self');
+      }
+
+      setIsPostVentaModalOpen(false);
     } catch (err) {
-      alert("Hubo un error al intentar abrir WhatsApp.");
+      alert("Hubo un error al preparar el mensaje.");
     }
   }
 
@@ -128,7 +165,6 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
         {COLUMNAS.map(columna => {
           const Icono = columna.icono
           
-          // FILTRO MÁGICO: Si es la columna "Entregado", solo mostramos los de HOY
           let ordenesEnColumna = ordenes.filter(o => o.estado === columna.id)
           if (columna.id === "Entregado") {
             ordenesEnColumna = ordenesEnColumna.filter(o => o.fecha_entrega === hoyLocal)
@@ -175,31 +211,22 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
 
                         {!readOnly && (
                           <div className="mt-3 flex flex-col gap-1.5">
-                            {/* BOTÓN WHATSAPP SOLO EN "TERMINADO" */}
+                            
                             {columna.id === "Terminado" && (
-                              <Button 
-                                size="sm" 
-                                className="w-full h-7 text-xs bg-[#25D366] hover:bg-[#128C7E] text-white border-none transition-colors"
-                                onClick={(e) => {
-                                  e.stopPropagation(); 
-                                  handleNotificarCliente(orden);
-                                }}
-                              >
+                              <Button size="sm" className="w-full h-7 text-xs bg-[#25D366] hover:bg-[#128C7E] text-white border-none transition-colors" onClick={(e) => { e.stopPropagation(); handleNotificarCliente(orden); }}>
                                 <MessageCircle className="w-3 h-3 mr-1" /> Avisar al Cliente
                               </Button>
                             )}
 
-                            {/* BOTÓN AVANZAR (Oculto en "Entregado") */}
+                            {/* BOTÓN DE POST-VENTA EN LA COLUMNA ENTREGADO */}
+                            {columna.id === "Entregado" && (
+                              <Button size="sm" className="w-full h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white border-none transition-colors" onClick={(e) => abrirModalPostVenta(orden, e)}>
+                                <Star className="w-3 h-3 mr-1" /> Post-Venta
+                              </Button>
+                            )}
+
                             {columna.id !== "Entregado" && (
-                              <Button 
-                                size="sm" 
-                                variant="secondary" 
-                                className="w-full h-7 text-xs bg-background hover:bg-emerald-50 hover:text-emerald-700 border border-border group-hover:border-emerald-200 transition-colors"
-                                onClick={(e) => {
-                                  e.stopPropagation(); 
-                                  avanzarEstado(orden.id, orden.estado);
-                                }}
-                              >
+                              <Button size="sm" variant="secondary" className="w-full h-7 text-xs bg-background hover:bg-emerald-50 hover:text-emerald-700 border border-border group-hover:border-emerald-200 transition-colors" onClick={(e) => { e.stopPropagation(); avanzarEstado(orden.id, orden.estado); }}>
                                 Avanzar <ArrowRight className="w-3 h-3 ml-1" />
                               </Button>
                             )}
@@ -214,6 +241,44 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
           )
         })}
       </div>
+
+      {/* MODAL DE POST VENTA */}
+      <Dialog open={isPostVentaModalOpen} onOpenChange={setIsPostVentaModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+              <Star className="w-6 h-6 text-blue-600" /> Seguimiento Post-Venta
+            </DialogTitle>
+            <DialogDescription>
+              ¿Por qué medio querés enviarle la encuesta de satisfacción a <b>{ordenPostVenta?.cliente_nombre}</b>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-4">
+            <Button 
+              variant="outline" 
+              className="h-24 flex flex-col items-center justify-center gap-2 border-green-200 bg-green-50 hover:bg-green-100 text-green-800 dark:border-green-900/50 dark:bg-green-900/20 dark:text-green-300"
+              onClick={() => ejecutarPostVenta('wpp')}
+            >
+              <MessageCircle className="w-6 h-6 mb-1" />
+              <span className="font-bold">WhatsApp</span>
+            </Button>
+
+            <Button 
+              variant="outline" 
+              className="h-24 flex flex-col items-center justify-center gap-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300"
+              onClick={() => ejecutarPostVenta('email')}
+            >
+              <Mail className="w-6 h-6 mb-1" />
+              <span className="font-bold">Correo Electrónico</span>
+            </Button>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsPostVentaModalOpen(false)}>Cancelar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

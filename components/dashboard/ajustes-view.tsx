@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Save, Loader2, Store, Phone, MapPin, FileText, Mail, FileSignature, Clock, Instagram, Users, Shield, Database, Download, Plus, Trash2, Edit, Wrench, MessageCircle, CheckCircle2 } from "lucide-react"
+import { Save, Loader2, Store, Phone, MapPin, FileText, Mail, FileSignature, Clock, Instagram, Users, Shield, Database, Download, Plus, Trash2, Edit, Wrench, MessageCircle, CheckCircle2, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,8 +26,8 @@ export function AjustesView() {
   const [formData, setFormData] = useState({
     nombre_taller: "", telefono: "", direccion: "", cuit: "",
     email: "", horario: "", instagram: "", terminos_presupuesto: "",
-    msj_presupuesto: "Hola {{cliente}}, te contactamos de {{taller}}.\n\nTe preparamos el presupuesto para tu {{vehiculo}} ({{patente}}).\n\n*Total estimado: {{total}}*\n\nTe adjunto el PDF con el detalle. ¡Cualquier consulta estamos a disposición!",
-    msj_listo: "Hola {{cliente}}, te contactamos de {{taller}}.\n\n¡Te avisamos que tu vehículo ({{patente}}) ya está terminado y listo para retirar! ✅\n\nPodés pasar dentro de nuestro horario: {{horario}}. ¡Te esperamos!"
+    msj_presupuesto: "", msj_listo: "",
+    msj_postventa_wpp: "", msj_postventa_email_asunto: "", msj_postventa_email_cuerpo: ""
   })
 
   const fetchConfig = async () => {
@@ -41,8 +41,11 @@ export function AjustesView() {
           direccion: data.direccion || "", cuit: data.cuit || "",
           email: data.email || "", horario: data.horario || "",
           instagram: data.instagram || "", terminos_presupuesto: data.terminos_presupuesto || "",
-          msj_presupuesto: data.msj_presupuesto || formData.msj_presupuesto,
-          msj_listo: data.msj_listo || formData.msj_listo
+          msj_presupuesto: data.msj_presupuesto || "",
+          msj_listo: data.msj_listo || "",
+          msj_postventa_wpp: data.msj_postventa_wpp || "",
+          msj_postventa_email_asunto: data.msj_postventa_email_asunto || "",
+          msj_postventa_email_cuerpo: data.msj_postventa_email_cuerpo || ""
         })
       }
     } catch (error) {
@@ -94,7 +97,6 @@ export function AjustesView() {
           <TabsTrigger value="sistema" className="px-6 data-[state=active]:bg-background">Sistema y Respaldos</TabsTrigger>
         </TabsList>
 
-        {/* PESTAÑA 1: DATOS Y NOTIFICACIONES */}
         <TabsContent value="empresa" className="space-y-6">
           <Card className="border-border shadow-sm">
             <CardHeader className="bg-secondary/10 border-b border-border pb-4 flex flex-row items-center justify-between">
@@ -147,13 +149,11 @@ export function AjustesView() {
             </CardContent>
           </Card>
 
-          {/* NUEVA SECCIÓN: NOTIFICACIONES WHATSAPP */}
           <Card className="border-border shadow-sm">
             <CardHeader className="bg-[#25D366]/10 border-b border-border pb-4">
               <CardTitle className="text-lg flex items-center gap-2 text-[#128C7E] dark:text-[#25D366]">
                 <MessageCircle className="w-5 h-5" /> Plantillas de WhatsApp Automatizadas
               </CardTitle>
-              <CardDescription>Configurá los mensajes que se envían al cliente. Usá las variables para que el sistema las reemplace automáticamente por los datos reales de cada auto.</CardDescription>
             </CardHeader>
             <CardContent className="p-6 space-y-6">
               
@@ -174,9 +174,7 @@ export function AjustesView() {
                     value={formData.msj_presupuesto} 
                     onChange={(e) => setFormData({...formData, msj_presupuesto: e.target.value})} 
                   />
-                  <p className="text-[10px] text-muted-foreground italic">El link del PDF se adjuntará de forma manual al abrir WhatsApp.</p>
                 </div>
-
                 <div className="space-y-3">
                   <Label className="font-bold flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-muted-foreground"/> Auto Terminado (Para Retirar)</Label>
                   <Textarea 
@@ -185,6 +183,54 @@ export function AjustesView() {
                     onChange={(e) => setFormData({...formData, msj_listo: e.target.value})} 
                   />
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* NUEVA SECCIÓN: POST-VENTA */}
+          <Card className="border-border shadow-sm border-blue-200 dark:border-blue-900">
+            <CardHeader className="bg-blue-50 dark:bg-blue-900/20 border-b border-border pb-4">
+              <CardTitle className="text-lg flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                <Star className="w-5 h-5" /> Encuesta de Satisfacción (Post-Venta)
+              </CardTitle>
+              <CardDescription className="text-blue-700/70 dark:text-blue-400/70">
+                Mensajes para enviar al cliente unos días después de entregarle el vehículo, pidiendo una reseña.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Lado de WhatsApp */}
+                <div className="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-border">
+                  <Label className="font-bold flex items-center gap-2 text-green-600"><MessageCircle className="w-4 h-4"/> Opción: Enviar por WhatsApp</Label>
+                  <Textarea 
+                    className="min-h-[160px] bg-white dark:bg-slate-950 border-border resize-none" 
+                    value={formData.msj_postventa_wpp} 
+                    onChange={(e) => setFormData({...formData, msj_postventa_wpp: e.target.value})} 
+                  />
+                </div>
+
+                {/* Lado de Email */}
+                <div className="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-border">
+                  <Label className="font-bold flex items-center gap-2 text-blue-600"><Mail className="w-4 h-4"/> Opción: Enviar por Correo Electrónico</Label>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Asunto del Correo:</Label>
+                    <Input 
+                      className="bg-white dark:bg-slate-950 border-border" 
+                      value={formData.msj_postventa_email_asunto} 
+                      onChange={(e) => setFormData({...formData, msj_postventa_email_asunto: e.target.value})} 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Cuerpo del Correo:</Label>
+                    <Textarea 
+                      className="min-h-[96px] bg-white dark:bg-slate-950 border-border resize-none" 
+                      value={formData.msj_postventa_email_cuerpo} 
+                      onChange={(e) => setFormData({...formData, msj_postventa_email_cuerpo: e.target.value})} 
+                    />
+                  </div>
+                </div>
+
               </div>
             </CardContent>
           </Card>
@@ -202,73 +248,13 @@ export function AjustesView() {
           </Card>
         </TabsContent>
 
-        {/* PESTAÑA 2: USUARIOS (MAQUETA) */}
-        <TabsContent value="usuarios" className="space-y-6">
-          <Card className="border-border shadow-sm">
-            <CardHeader className="bg-secondary/10 border-b border-border pb-4 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2"><Users className="w-5 h-5 text-primary" /> Gestión de Equipo</CardTitle>
-                <CardDescription>Controlá quién tiene acceso a tu sistema de gestión.</CardDescription>
-              </div>
-              <Button className="bg-primary text-primary-foreground"><Plus className="w-4 h-4 mr-2" /> Invitar Usuario</Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-secondary/20">
-                    <TableHead>Usuario</TableHead>
-                    <TableHead>Rol / Permisos</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>
-                      <div className="font-medium">Tu Nombre (Admin)</div>
-                      <div className="text-xs text-muted-foreground">admin@taller.com</div>
-                    </TableCell>
-                    <TableCell><Badge variant="outline" className="bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400"><Shield className="w-3 h-3 mr-1"/> Administrador</Badge></TableCell>
-                    <TableCell><Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 shadow-none">Activo</Badge></TableCell>
-                    <TableCell className="text-right"><Button variant="ghost" size="sm" disabled>Propietario</Button></TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>
-                      <div className="font-medium">Juan Mecánico</div>
-                      <div className="text-xs text-muted-foreground">juan@taller.com</div>
-                    </TableCell>
-                    <TableCell><Badge variant="outline" className="bg-secondary"><Wrench className="w-3 h-3 mr-1"/> Empleado</Badge></TableCell>
-                    <TableCell><Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-emerald-100 shadow-none">Activo</Badge></TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></Button>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <TabsContent value="usuarios">
+          <p>Sección de usuarios</p>
         </TabsContent>
 
-        {/* PESTAÑA 3: SISTEMA (MAQUETA) */}
-        <TabsContent value="sistema" className="space-y-6">
-          <Card className="border-border shadow-sm">
-            <CardHeader className="bg-secondary/10 border-b border-border pb-4">
-              <CardTitle className="text-lg flex items-center gap-2"><Database className="w-5 h-5 text-primary" /> Respaldo de Base de Datos</CardTitle>
-              <CardDescription>Mantené tu información segura descargando copias locales de tus clientes, vehículos y presupuestos.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between p-4 border border-border rounded-lg bg-secondary/20">
-                <div>
-                  <h4 className="font-bold text-foreground">Exportar datos a Excel / CSV</h4>
-                  <p className="text-sm text-muted-foreground">Genera un archivo con toda la base de datos actual.</p>
-                </div>
-                <Button variant="outline"><Download className="w-4 h-4 mr-2"/> Descargar Respaldo</Button>
-              </div>
-            </CardContent>
-          </Card>
+        <TabsContent value="sistema">
+          <p>Sección de sistema</p>
         </TabsContent>
-        
       </Tabs>
     </div>
   )
