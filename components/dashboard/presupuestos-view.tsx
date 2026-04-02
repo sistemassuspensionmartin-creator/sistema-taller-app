@@ -27,10 +27,21 @@ import {
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
 
-// AGREGAMOS EL PROP DE NAVEGACIÓN PARA EL FUTURO ENLACE CON TURNOS
+// FUNCIÓN PARA LOS COLORES DE LOS ESTADOS
+const getEstadoColor = (estado: string) => {
+  switch (estado) {
+    case "Borrador": return "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700";
+    case "En Espera": return "bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800";
+    case "Aprobado": return "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800";
+    case "Rechazado": return "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
+    case "Facturado": return "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
+    default: return "bg-secondary text-foreground border-border";
+  }
+}
+
 export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: (vehiculoInfo: any) => void }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
-  const [isEditing, setIsEditing] = useState(false) // MODO LECTURA / EDICIÓN
+  const [isEditing, setIsEditing] = useState(false)
   const [mostrarCostos, setMostrarCostos] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -59,7 +70,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
     { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0" }
   ])
 
-  // ESTADOS PARA FUSIÓN Y APROBACIÓN
   const [presupuestosAEliminar, setPresupuestosAEliminar] = useState<string[]>([])
   const [isAsociarModalOpen, setIsAsociarModalOpen] = useState(false)
   const [presupuestoAFusionar, setPresupuestoAFusionar] = useState<string>("")
@@ -174,9 +184,8 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
   const totalFinal = subtotalNeto - (parseFloat(descuento.toString()) || 0)
   const gananciaEstimada = totalFinal - costoTotal
 
-  // ABRIR EN MODO LECTURA O MODO CREACIÓN
   const handleAbrirPresupuesto = (p?: any) => {
-    setPresupuestosAEliminar([]); // Limpiamos array de fusión por las dudas
+    setPresupuestosAEliminar([]); 
     
     if (p) {
       setEditandoId(p.id)
@@ -189,7 +198,7 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
       setDescuento(p.descuento || "0")
       setNotasCliente(p.observaciones_publicas || "")
       setNotasInternas(p.notas_internas || "")
-      setIsEditing(false) // FORZAMOS MODO LECTURA
+      setIsEditing(false) 
 
       if (p.presupuesto_items && p.presupuesto_items.length > 0) {
         setFilas(p.presupuesto_items.map((item: any) => ({
@@ -204,7 +213,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
         setFilas([])
       }
     } else {
-      // NUEVO PRESUPUESTO
       setEditandoId(null)
       setNumeroCorrelativo("")
       setClienteSeleccionado("")
@@ -212,7 +220,7 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
       setFecha(new Date().toISOString().split('T')[0])
       setEstado("Borrador")
       setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0" }])
-      setIsEditing(true) // NUEVO ARRANCA EN MODO EDICIÓN SÍ O SÍ
+      setIsEditing(true) 
     }
     
     setVista("detalle")
@@ -234,17 +242,14 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
     }
   }
 
-  // --- MOTOR DE FUSIÓN ---
   const confirmarFusion = async () => {
     if (!presupuestoAFusionar) return alert("Seleccione un presupuesto para asociar.");
     
     setIsSaving(true);
     try {
-      // 1. Buscamos los items del presupuesto viejo
       const { data: itemsAnteriores, error } = await supabase.from('presupuesto_items').select('*').eq('presupuesto_id', presupuestoAFusionar);
       if (error) throw error;
 
-      // 2. Formateamos los items y los agregamos a nuestras filas actuales en la pantalla
       if (itemsAnteriores && itemsAnteriores.length > 0) {
         const nuevasFilas = itemsAnteriores.map((item: any) => ({
           id: 'fusion_' + Date.now().toString() + Math.random(),
@@ -258,10 +263,8 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
         setFilas([...filas, ...nuevasFilas]);
       }
 
-      // 3. Anotamos el ID del presupuesto viejo para ELIMINARLO cuando el usuario apriete Guardar
       setPresupuestosAEliminar([...presupuestosAEliminar, presupuestoAFusionar]);
       
-      // 4. Forzamos modo edición para que el usuario pueda revisar el nuevo total y guardar
       setIsEditing(true);
       setIsAsociarModalOpen(false);
       setPresupuestoAFusionar("");
@@ -343,7 +346,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
       if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
-      // SI HABÍA PRESUPUESTOS ASOCIADOS, LOS ELIMINAMOS AHORA DE LA BD (FUSIÓN CONFIRMADA)
       if (presupuestosAEliminar.length > 0) {
         await supabase.from('presupuesto_items').delete().in('presupuesto_id', presupuestosAEliminar);
         await supabase.from('presupuestos').delete().in('id', presupuestosAEliminar);
@@ -353,7 +355,7 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
       
       setVista("lista")
       setIsEditing(false)
-      cargarDatos() // Recargamos para refrescar todo
+      cargarDatos() 
       
     } catch (error: any) {
       console.error("Error al guardar:", error)
@@ -363,12 +365,10 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
     }
   }
 
-  // --- AUTO-ESTADOS (BORRADOR -> EN ESPERA) ---
   const actualizarAEnEsperaSiEsBorrador = async () => {
     if (estado === "Borrador" && editandoId) {
       setEstado("En Espera");
       await supabase.from('presupuestos').update({ estado: "En Espera" }).eq('id', editandoId);
-      // No frenamos el hilo de ejecución para que abra el PDF o WPP rápido
     }
   }
 
@@ -532,7 +532,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
 
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     try {
-      // 1. Actualizamos el estado a Aprobado en DB
       await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', editandoId);
       setEstado("Aprobado");
       setIsAprobarModalOpen(false);
@@ -578,7 +577,8 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
                   <Link2 className="w-4 h-4 mr-2"/> Asociar
                 </Button>
                 
-                <Button variant="outline" onClick={() => setIsEditing(true)} className="bg-background">
+                {/* BOTÓN ACTIVAR EDICIÓN (NARANJA/ÁMBAR) */}
+                <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
                   <Pencil className="w-4 h-4 mr-2"/> Activar Edición
                 </Button>
 
@@ -601,21 +601,17 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
             <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
               <ClipboardList className="w-4 h-4 mr-2"/> Orden Trabajo
             </Button>
-            <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-background">
-              <Printer className="w-4 h-4 mr-2"/> PDF
+            
+            {/* BOTÓN PDF / IMPRIMIR (VIOLETA/PÚRPURA) */}
+            <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
+              <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
             </Button>
+            
             <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none">
               <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
             </Button>
           </div>
         </div>
-
-        {/* INDICADOR DE LECTURA */}
-        {!isEditing && editandoId && (
-          <div className="bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300 p-3 rounded-md flex items-center justify-center border border-blue-200 dark:border-blue-800 font-medium text-sm">
-            <Lock className="w-4 h-4 mr-2"/> Estás viendo el presupuesto en Modo Lectura. Para modificar repuestos o valores, tocá "Activar Edición".
-          </div>
-        )}
 
         <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
           <CardHeader className="bg-secondary/10 border-b border-border pb-4">
@@ -676,7 +672,7 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
               <div className="md:col-span-4 space-y-2">
                 <Label>Estado</Label>
                 <Select value={estado} onValueChange={setEstado} disabled={!isEditing}>
-                  <SelectTrigger className="h-10 bg-slate-50 dark:bg-slate-900 border-border font-medium disabled:opacity-100">
+                  <SelectTrigger className={`h-10 border-border font-medium disabled:opacity-100 ${getEstadoColor(estado)}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -987,9 +983,10 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
                     </TableCell>
                     <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
                     
+                    {/* ESTADO CON COLOR */}
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
-                        <SelectTrigger className="h-8 text-xs w-[130px] mx-auto bg-transparent border-dashed">
+                        <SelectTrigger className={`h-8 text-xs w-[130px] mx-auto border ${getEstadoColor(p.estado)}`}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
