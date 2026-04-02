@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock, Loader2 } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock, Loader2, BookmarkPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -50,7 +50,8 @@ const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
   "Cubiertas": { sigla: "CUB", color: "bg-stone-500/10 text-stone-500 border-stone-500/20" },
 }
 
-export function TurnosView() {
+// RECIBIMOS LA MEMORIA DEL PUENTE DESDE PRESUPUESTOS
+export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turnoAgendarInfo?: any, onClearTurnoAgendarInfo?: () => void }) {
   const [fechaActual, setFechaActual] = useState(new Date())
   const [isLoading, setIsLoading] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
@@ -99,6 +100,58 @@ export function TurnosView() {
   useEffect(() => {
     fetchTurnos()
   }, [])
+
+  // --- NUEVA LÓGICA: EFECTO MODO AGENDAMIENTO ---
+  useEffect(() => {
+    const cargarAutoPredefinido = async (patente: string, pres_id: string) => {
+      setIsSearching(true);
+      try {
+        const { data: auto, error } = await supabase
+          .from('vehiculos')
+          .select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono)')
+          .eq('patente', patente)
+          .single();
+
+        if (error || !auto) return;
+
+        const { data: presups } = await supabase
+          .from('presupuestos')
+          .select('id, numero_correlativo, total_final, detalle, estado')
+          .eq('vehiculo_patente', patente)
+          .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
+
+        const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
+        const telefonoCliente = auto.clientes?.telefono || '';
+
+        setAutoEncontrado({
+          ...auto,
+          dueño: nombreCliente,
+          telefono: telefonoCliente,
+          presupuestos: presups || []
+        });
+
+        setFormData(prev => ({ 
+          ...prev, 
+          patente: patente, 
+          marcaModelo: `${auto.marca} ${auto.modelo}`, 
+          nombreDueño: nombreCliente, 
+          telefono: telefonoCliente, 
+          presupuesto_id: pres_id 
+        }));
+        
+        setBusquedaPatente(patente);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsSearching(false);
+      }
+    }
+
+    if (turnoAgendarInfo) {
+      cargarAutoPredefinido(turnoAgendarInfo.patente, turnoAgendarInfo.presupuesto_id);
+    }
+  }, [turnoAgendarInfo])
+
 
   // --- LOGICA DE FECHAS Y BLOQUEOS ---
   const fechaHoyReal = new Date()
@@ -150,6 +203,7 @@ export function TurnosView() {
     if(!patenteLimpia) return;
 
     setIsSearching(true);
+    setSugerenciasVehiculos([]); // Limpiamos las sugerencias
     try {
       const { data: auto, error } = await supabase
         .from('vehiculos')
@@ -159,7 +213,7 @@ export function TurnosView() {
 
       if (error || !auto) {
         alert("Patente no encontrada en el sistema.");
-        setAutoEncontrado(null);
+        setAutoEncontrado(null); // Corregido: antes decía autoEncontrado(null)
         return;
       }
 
@@ -251,14 +305,23 @@ export function TurnosView() {
       };
 
       const { error } = await supabase.from('turnos').insert([payload]);
-
       if (error) throw error;
+
+      // LA TRANSACCIÓN SEGURA: APROBAMOS EL PRESUPUESTO ACÁ (SI EXISTE)
+      if (payload.presupuesto_id) {
+        await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', payload.presupuesto_id);
+      }
 
       setIsModalOpen(false)
       setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuesto_id: "" })
-      setAutoEncontrado(null)
+      setAutoEncontrado(null); // Corregido
       setBusquedaPatente("")
+      
+      // Limpiar memoria
+      if (onClearTurnoAgendarInfo) onClearTurnoAgendarInfo();
+
       fetchTurnos() 
+      alert(payload.presupuesto_id ? "¡Turno agendado y presupuesto aprobado con éxito!" : "¡Turno agendado con éxito!");
 
     } catch (error: any) {
       console.error("Error al guardar:", error)
@@ -280,7 +343,7 @@ export function TurnosView() {
       const { error } = await supabase.from('turnos').update({ estado: nuevoEstado }).eq('id', id);
       if (error) throw error;
       
-      // LA MAGIA: Si el cliente llegó al turno, lo mandamos al Kanban del taller
+      // LA LÓGICA DE TALLER: PASA AL KANBAN AL INGRESAR
       if (nuevoEstado === "asistio") {
         const turno = turnos.find(t => t.id === id);
         if (turno) {
@@ -289,14 +352,14 @@ export function TurnosView() {
             vehiculo_patente: turno.patente,
             cliente_nombre: turno.cliente,
             estado: 'A Ingresar',
-            notas_mecanico: turno.observaciones || null // Pasamos las notas del cliente al mecánico
+            notas_mecanico: turno.observaciones || null
           }]);
           if (tallerError) throw tallerError;
           alert("¡Turno confirmado! El vehículo ya está en el tablero del Taller esperando al mecánico.");
         }
       }
 
-      fetchTurnos(); // Refrescamos la lista de turnos
+      fetchTurnos(); // Refrescamos
       setIsDetailModalOpen(false)
     } catch (error: any) {
       console.error("Error al cambiar estado:", error)
@@ -341,6 +404,7 @@ export function TurnosView() {
     }
   }
 
+  // --- RENDERIZADO VISUAL ---
   const getTurnoStyle = (estado: string, esPasado: boolean) => {
     let baseStyle = "group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden";
     if (esPasado) {
@@ -348,11 +412,32 @@ export function TurnosView() {
     }
     if (estado === "asistio") return `${baseStyle} bg-green-100 border-green-500/50 dark:bg-green-900/20 opacity-90`;
     if (estado === "cancelado") return `${baseStyle} bg-red-50 border-red-500/30 dark:bg-red-900/10 opacity-50 grayscale`;
-    return `${baseStyle} bg-card border-border hover:border-primary/50`; 
+    return `${baseStyle} bg-card border-border hover:border-primary/50`; // Pendiente (Normal)
   }
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 pb-4">
+      {/* BANNER DE MODO AGENDAMIENTO (Si viene de Presupuestos) */}
+      {turnoAgendarInfo && (
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm animate-in slide-in-from-top-4 shrink-0">
+          <div className="flex gap-3">
+            <BookmarkPlus className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-bold text-base">Modo Agendamiento Activo</h3>
+              <p className="text-sm opacity-90">Navegue por el calendario para buscar disponibilidad. Al hacer clic en <b>"Nuevo Turno"</b>, los datos de la patente <b>{turnoAgendarInfo.patente}</b> se cargarán automáticamente.</p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" className="bg-white dark:bg-slate-950 border-emerald-200 text-emerald-700 hover:bg-emerald-100 shrink-0" onClick={() => {
+            if(onClearTurnoAgendarInfo) onClearTurnoAgendarInfo();
+            setAutoEncontrado(null);
+            setBusquedaPatente("");
+            setFormData({ fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuesto_id: "" });
+          }}>
+            Cancelar Agendamiento
+          </Button>
+        </div>
+      )}
+
       {/* Header y Controles */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
         <div>
@@ -374,15 +459,15 @@ export function TurnosView() {
             </Button>
           </div>
 
-          <Button onClick={() => setIsModalOpen(true)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button onClick={() => setIsModalOpen(true)} className={`${turnoAgendarInfo ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-500/30 ring-offset-2 ring-offset-background animate-pulse' : 'bg-primary hover:bg-primary/90'} text-primary-foreground transition-all`}>
             <Plus className="mr-2 h-4 w-4" />
-            Nuevo Turno
+            {turnoAgendarInfo ? "Agendar Vehículo" : "Nuevo Turno"}
           </Button>
         </div>
       </div>
 
       {/* Calendario Semanal */}
-      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden relative">
+      <Card className="border-border bg-card flex-1 flex flex-col min-h-0 overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 bg-background/50 z-10 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -503,7 +588,7 @@ export function TurnosView() {
                     <div>
                       <div className="text-2xl font-bold text-foreground flex items-center gap-2">
                         {turnoSeleccionado.hora}
-                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Ingresó</Badge>}
+                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 border-green-200">Ingresó</Badge>}
                         {turnoSeleccionado.estado === "cancelado" && <Badge variant="destructive">Cancelado</Badge>}
                       </div>
                       <div className="text-sm text-muted-foreground">{turnoSeleccionado.fecha}</div>
@@ -642,55 +727,53 @@ export function TurnosView() {
                 <div className="p-4 mt-2 bg-background rounded-md border border-border">
                   <TabsContent value="registrado" className="m-0 space-y-4">
                     <div className="flex gap-2 items-end">
-                      <div className="space-y-2 flex-1">
+                      <div className="space-y-2 flex-1 relative">
                         <Label className="text-card-foreground">Patente del Vehículo</Label>
                         <div className="relative">
-                        <Input 
-                          placeholder="Ej: AB 123 CD" 
-                          className="bg-secondary border-border uppercase" 
-                          value={busquedaPatente} 
-                          onChange={async (e: any) => {
-                            const val = e.target.value;
-                            setBusquedaPatente(val);
-                            const limpia = val.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-                            if (limpia.length >= 2) {
-                              const { data } = await supabase
-                                .from('vehiculos')
-                                .select('patente, marca, modelo')
-                                .ilike('patente', `%${limpia}%`)
-                                .limit(5);
-                              setSugerenciasVehiculos(data || []);
-                            } else {
-                              setSugerenciasVehiculos([]);
-                            }
-                          }}
-                          onKeyDown={(e: any) => {
-                            if (e.key === 'Enter') {
-                              setSugerenciasVehiculos([]);
-                              buscarAuto();
-                            }
-                          }}
-                        />
-                        {sugerenciasVehiculos.length > 0 && (
-                          <div className="absolute top-11 left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
-                            {sugerenciasVehiculos.map(v => (
-                              <div 
-                                key={v.patente} 
-                                className="p-3 hover:bg-secondary cursor-pointer border-b border-border/50 last:border-0 flex justify-between items-center"
-                                onClick={() => {
-                                  setBusquedaPatente(v.patente);
-                                  setSugerenciasVehiculos([]);
-                                  // Al hacer clic, podrías incluso llamar a buscarAuto() directamente si quisieras, 
-                                  // pero con que se llene el campo ya el usuario le da a "Buscar".
-                                }}
-                              >
-                                <div className="font-mono font-bold tracking-widest">{v.patente}</div>
-                                <div className="text-xs text-muted-foreground">{v.marca} {v.modelo}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                          <Input 
+                            placeholder="Ej: AB 123 CD" 
+                            className="bg-secondary border-border uppercase" 
+                            value={busquedaPatente} 
+                            onChange={async (e: any) => {
+                              const val = e.target.value;
+                              setBusquedaPatente(val);
+                              const limpia = val.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+                              if (limpia.length >= 2) {
+                                const { data } = await supabase
+                                  .from('vehiculos')
+                                  .select('patente, marca, modelo')
+                                  .ilike('patente', `%${limpia}%`)
+                                  .limit(5);
+                                setSugerenciasVehiculos(data || []);
+                              } else {
+                                setSugerenciasVehiculos([]);
+                              }
+                            }}
+                            onKeyDown={(e: any) => {
+                              if (e.key === 'Enter') {
+                                setSugerenciasVehiculos([]);
+                                buscarAuto();
+                              }
+                            }}
+                          />
+                          {sugerenciasVehiculos.length > 0 && (
+                            <div className="absolute top-[45px] left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
+                              {sugerenciasVehiculos.map(v => (
+                                <div 
+                                  key={v.patente} 
+                                  className="p-3 hover:bg-secondary cursor-pointer border-b border-border/50 last:border-0 flex justify-between items-center"
+                                  onClick={() => {
+                                    setBusquedaPatente(v.patente);
+                                    setSugerenciasVehiculos([]);
+                                  }}
+                                >
+                                  <div className="font-mono font-bold tracking-widest">{v.patente}</div>
+                                  <div className="text-xs text-muted-foreground">{v.marca} {v.modelo}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <Button onClick={buscarAuto} disabled={isSearching} className="bg-primary text-primary-foreground">
                         {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Buscar"}

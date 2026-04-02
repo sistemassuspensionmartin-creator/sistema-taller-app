@@ -21,7 +21,10 @@ export default function DashboardPage() {
   // ESTADOS PARA LA MEMORIA DEL PUENTE
   const [vehiculoParaAbrir, setVehiculoParaAbrir] = useState<any>(null)
   const [clienteParaAbrir, setClienteParaAbrir] = useState<any>(null)
-  const [presupuestoParaAbrir, setPresupuestoParaAbrir] = useState<string | null>(null) // NUEVO
+  const [presupuestoParaAbrir, setPresupuestoParaAbrir] = useState<string | null>(null) 
+  
+  // NUEVA MEMORIA: Para guardar el auto y presupuesto en tránsito hacia el turnero
+  const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
 
   const renderContent = () => {
     switch (activeSection) {
@@ -65,14 +68,17 @@ export default function DashboardPage() {
       case "Caja":              
         return <CajaView />
       case "Turnos":
-        return <TurnosView />
+        return <TurnosView 
+                 turnoAgendarInfo={turnoAgendarInfo}
+                 onClearTurnoAgendarInfo={() => setTurnoAgendarInfo(null)}
+               />
       case "Presupuestos":
         return <PresupuestosView 
                  presupuestoAbreDetalle={presupuestoParaAbrir}
                  onClearPresupuestoDetalle={() => setPresupuestoParaAbrir(null)}
                  onNavigateToTaller={() => setActiveSection("Taller")}
-                 onNavigateToTurnos={(vehiculo) => {
-                   // Acá enviaremos a turnos pronto
+                 onNavigateToTurnos={(vehiculoInfo) => {
+                   setTurnoAgendarInfo(vehiculoInfo);
                    setActiveSection("Turnos");
                  }}
                />
