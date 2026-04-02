@@ -1,298 +1,135 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase" // Importamos tu conexión real!
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { supabase } from "@/lib/supabase"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Search, MoreHorizontal, Eye, Edit, ChevronDown, Plus, Loader2 } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Clock, Wrench, CheckCircle2, Flag, ArrowRight, Car, FileText, Loader2, User } from "lucide-react"
 
-type OrderStatus = "Borrador Taller" | "Cotizado Recepción" | "Aprobado" | "Terminado" | "Entregado"
 
-// Nueva estructura adaptada a tus tablas reales
-interface WorkOrder {
-  id: string
-  client: string
-  vehicle: string
-  licensePlate: string
-  status: OrderStatus
-  service: string
-}
-
-const statusConfig: Record<string, { className: string; dotColor: string }> = {
-  "Borrador Taller": {
-    className: "bg-secondary text-secondary-foreground border-border",
-    dotColor: "bg-muted-foreground",
-  },
-  "Cotizado Recepción": {
-    className: "bg-warning/10 text-warning border-warning/20",
-    dotColor: "bg-warning",
-  },
-  "Aprobado": {
-    className: "bg-primary/10 text-primary border-primary/20",
-    dotColor: "bg-primary",
-  },
-  "Terminado": {
-    className: "bg-success/10 text-success border-success/20",
-    dotColor: "bg-success",
-  },
-  "Entregado": {
-    className: "bg-primary/10 text-primary border-primary/20 opacity-70",
-    dotColor: "bg-primary opacity-70",
-  },
-}
-
-function StatusBadge({ status }: { status: string }) {
-  // Validación de seguridad por si viene un estado raro de la BD
-  const config = statusConfig[status] || statusConfig["Borrador Taller"]
-  
-  return (
-    <Badge 
-      variant="outline" 
-      className={cn("gap-1.5 font-medium", config.className)}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", config.dotColor)} />
-      {status}
-    </Badge>
-  )
-}
+// Definimos las columnas de nuestro taller
+const COLUMNAS = [
+  { id: "A Ingresar", titulo: "Esperando Ingreso", icono: Clock, color: "text-slate-500", border: "border-slate-200 dark:border-slate-800", bg: "bg-slate-50 dark:bg-slate-900/50" },
+  { id: "En Proceso", titulo: "En Proceso (Elevador)", icono: Wrench, color: "text-blue-500", border: "border-blue-200 dark:border-blue-800", bg: "bg-blue-50/50 dark:bg-blue-900/10" },
+  { id: "Terminado", titulo: "Terminado (A Lavar/Entregar)", icono: CheckCircle2, color: "text-emerald-500", border: "border-emerald-200 dark:border-emerald-800", bg: "bg-emerald-50/50 dark:bg-emerald-900/10" },
+  { id: "Entregado", titulo: "Entregado al Cliente", icono: Flag, color: "text-purple-500", border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/50 dark:bg-purple-900/10" },
+]
 
 export function WorkOrdersTable() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("Todos")
-  
-  // Variables de estado para los datos de Supabase
-  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [ordenes, setOrdenes] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Esta función va a buscar a Carlos Pérez a tu base de datos
-  useEffect(() => {
-    async function fetchOrders() {
-      try {
-        setLoading(true)
-        
-        // Hacemos una consulta "join" para traer Presupuesto + Auto + Cliente
-        const { data, error } = await supabase
-          .from('presupuestos')
-          .select(`
-            id,
-            estado,
-            observaciones,
-            vehiculos (
-              dominio,
-              marca,
-              modelo,
-              clientes (
-                nombre_completo
-              )
-            )
-          `)
-          .order('fecha_creacion', { ascending: false })
-
-        if (error) throw error
-
-        // Transformamos los datos complejos de Supabase a un formato simple para la tabla
-        if (data) {
-          const formattedOrders = data.map((order: any) => ({
-            id: order.id,
-            client: order.vehiculos?.clientes?.nombre_completo || 'Cliente sin nombre',
-            vehicle: `${order.vehiculos?.marca || ''} ${order.vehiculos?.modelo || ''}`,
-            licensePlate: order.vehiculos?.dominio || 'Sin Patente',
-            status: order.estado || 'Borrador Taller',
-            service: order.observaciones || 'Sin observaciones'
-          }))
-          
-          // Validación: Evitamos duplicados en pantalla usando un Map
-          const uniqueOrders = Array.from(
-            new Map(formattedOrders.map((item: WorkOrder) => [item.id, item])).values()
-          ) as WorkOrder[]
-          
-          setWorkOrders(uniqueOrders)
-        }
-      } catch (err: any) {
-        console.error("Error cargando órdenes:", err.message)
-        setError("No se pudieron cargar las órdenes de trabajo. Intente recargar la página.")
-      } finally {
-        setLoading(false)
-      }
+  const cargarOrdenes = async () => {
+    setIsLoading(true)
+    try {
+      // Traemos las órdenes y le pedimos a Supabase que nos traiga el Nro de Presupuesto asociado
+      const { data, error } = await supabase
+        .from('ordenes_trabajo')
+        .select('*, presupuestos(numero_correlativo, total_final)')
+        .order('created_at', { ascending: false })
+      
+      if (error) throw error
+      setOrdenes(data || [])
+    } catch (error) {
+      console.error("Error al cargar órdenes:", error)
+    } finally {
+      setIsLoading(false)
     }
-
-    fetchOrders()
-  }, [])
-
-  const filteredOrders = workOrders.filter((order) => {
-    const matchesSearch =
-      order.client.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.licensePlate.toLowerCase().includes(searchQuery.toLowerCase())
-    
-    const matchesStatus = statusFilter === "Todos" || order.status === statusFilter
-
-    return matchesSearch && matchesStatus
-  })
-
-  // Si está cargando, mostramos un indicador visual
-  if (loading) {
-    return (
-      <Card className="border-border bg-card p-12 flex flex-col items-center justify-center text-muted-foreground">
-        <Loader2 className="h-8 w-8 animate-spin mb-4" />
-        <p>Conectando con el taller y cargando órdenes...</p>
-      </Card>
-    )
   }
 
-  // Si hay error, mostramos un cartel rojo seguro
-  if (error) {
-    return (
-      <Card className="border-red-500/50 bg-red-500/10 p-6 text-red-500">
-        <p className="font-semibold">Atención:</p>
-        <p>{error}</p>
-      </Card>
-    )
+  useEffect(() => {
+    cargarOrdenes()
+  }, [])
+
+  // Función para mover el auto a la siguiente columna
+  const avanzarEstado = async (id: string, estadoActual: string) => {
+    const currentIndex = COLUMNAS.findIndex(c => c.id === estadoActual)
+    if (currentIndex >= COLUMNAS.length - 1) return // Ya está entregado
+
+    const nuevoEstado = COLUMNAS[currentIndex + 1].id
+    
+    // Actualizamos localmente para que sea instantáneo
+    setOrdenes(ordenes.map(o => o.id === id ? { ...o, estado: nuevoEstado } : o))
+
+    try {
+      await supabase.from('ordenes_trabajo').update({ estado: nuevoEstado }).eq('id', id)
+    } catch (error) {
+      alert("Error al mover el vehículo.")
+      cargarOrdenes() // Revertimos si falla
+    }
+  }
+
+  if (isLoading) {
+    return <div className="flex h-64 items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
   }
 
   return (
-    <Card className="border-border bg-card">
-      {/* Header */}
-      <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-card-foreground">
-            Órdenes de Trabajo
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Gestiona las órdenes de trabajo del taller
-          </p>
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cliente o patente..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 sm:w-64 bg-secondary border-border"
-            />
-          </div>
-
-          {/* Status filter */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2 border-border bg-secondary">
-                {statusFilter === "Todos" ? "Todos los estados" : statusFilter}
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="border-border bg-popover">
-              <DropdownMenuItem onClick={() => setStatusFilter("Todos")}>Todos los estados</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter("Borrador Taller")}>Borrador Taller</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter("Cotizado Recepción")}>Cotizado Recepción</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter("Aprobado")}>Aprobado</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter("Terminado")}>Terminado</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter("Entregado")}>Entregado</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* New order button */}
-          <Button className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90">
-            <Plus className="h-4 w-4" />
-            Nueva Orden
-          </Button>
-        </div>
+    <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col">
+      <div>
+        <h2 className="text-2xl font-semibold text-foreground">Control de Taller</h2>
+        <p className="text-sm text-muted-foreground">Flujo de trabajo de los vehículos ingresados.</p>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="text-muted-foreground">Cliente</TableHead>
-              <TableHead className="text-muted-foreground">Vehículo</TableHead>
-              <TableHead className="text-muted-foreground">Patente</TableHead>
-              <TableHead className="text-muted-foreground">Notas / Servicio</TableHead>
-              <TableHead className="text-muted-foreground">Estado</TableHead>
-              <TableHead className="text-right text-muted-foreground">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredOrders.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
-                  No se encontraron órdenes de trabajo.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredOrders.map((order) => (
-                <TableRow 
-                  key={order.id} 
-                  className="border-border transition-colors hover:bg-secondary/50"
-                >
-                  <TableCell className="font-medium text-card-foreground">{order.client}</TableCell>
-                  <TableCell className="text-muted-foreground">{order.vehicle}</TableCell>
-                  <TableCell>
-                    <code className="rounded bg-secondary px-2 py-1 text-sm font-mono text-card-foreground">
-                      {order.licensePlate}
-                    </code>
-                  </TableCell>
-                  <TableCell className="max-w-[200px] truncate text-muted-foreground">
-                    {order.service}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={order.status} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Abrir menú</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="border-border bg-popover">
-                        <DropdownMenuItem className="gap-2">
-                          <Eye className="h-4 w-4" />
-                          Ver detalle
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2">
-                          <Edit className="h-4 w-4" />
-                          Editar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {/* EL TABLERO KANBAN */}
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-4">
+        {COLUMNAS.map(columna => {
+          const Icono = columna.icono
+          const ordenesEnColumna = ordenes.filter(o => o.estado === columna.id)
 
-      {/* Footer */}
-      <div className="flex items-center justify-between border-t border-border p-4">
-        <p className="text-sm text-muted-foreground">
-          Mostrando {filteredOrders.length} de {workOrders.length} órdenes
-        </p>
+          return (
+            <div key={columna.id} className={`flex flex-col rounded-xl border ${columna.border} ${columna.bg} overflow-hidden h-full max-h-full`}>
+              {/* CABECERA DE LA COLUMNA */}
+              <div className={`p-3 border-b ${columna.border} bg-background/50 flex items-center justify-between shrink-0`}>
+                <div className="flex items-center gap-2 font-semibold">
+                  <Icono className={`w-4 h-4 ${columna.color}`} />
+                  {columna.titulo}
+                </div>
+                <Badge variant="secondary" className="font-mono">{ordenesEnColumna.length}</Badge>
+              </div>
+
+              {/* CUERPO DE LA COLUMNA (SCROLL INTERNO) */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {ordenesEnColumna.length === 0 ? (
+                  <div className="text-center text-sm text-muted-foreground py-8 italic border-2 border-dashed border-border/50 rounded-lg">
+                    Vacío
+                  </div>
+                ) : (
+                  ordenesEnColumna.map(orden => (
+                    <Card key={orden.id} className="border-border shadow-sm hover:shadow-md transition-all group">
+                      <CardContent className="p-3 relative">
+                        <div className="font-bold text-foreground mb-1">{orden.vehiculo_patente}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                          <User className="w-3 h-3"/> {orden.cliente_nombre}
+                        </div>
+                        
+                        {orden.presupuestos && (
+                          <div className="bg-primary/5 text-primary text-xs font-mono p-1.5 rounded flex justify-between items-center border border-primary/10">
+                            <span className="flex items-center gap-1"><FileText className="w-3 h-3"/> PRE-{orden.presupuestos.numero_correlativo}</span>
+                            <span className="font-bold">${orden.presupuestos.total_final?.toLocaleString()}</span>
+                          </div>
+                        )}
+
+                        {/* BOTÓN MAGICO PARA AVANZAR EL AUTO */}
+                        {columna.id !== "Entregado" && (
+                          <Button 
+                            size="sm" 
+                            variant="secondary" 
+                            className="w-full mt-3 h-7 text-xs bg-background hover:bg-emerald-50 hover:text-emerald-700 border border-border group-hover:border-emerald-200 transition-colors"
+                            onClick={() => avanzarEstado(orden.id, orden.estado)}
+                          >
+                            Avanzar <ArrowRight className="w-3 h-3 ml-1" />
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
-    </Card>
+    </div>
   )
 }

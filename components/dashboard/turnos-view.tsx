@@ -280,7 +280,23 @@ export function TurnosView() {
       const { error } = await supabase.from('turnos').update({ estado: nuevoEstado }).eq('id', id);
       if (error) throw error;
       
-      fetchTurnos(); // Refrescamos para ver el cambio
+      // LA MAGIA: Si el cliente llegó al turno, lo mandamos al Kanban del taller
+      if (nuevoEstado === "asistio") {
+        const turno = turnos.find(t => t.id === id);
+        if (turno) {
+          const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
+            presupuesto_id: turno.presupuesto_id || null,
+            vehiculo_patente: turno.patente,
+            cliente_nombre: turno.cliente,
+            estado: 'A Ingresar',
+            notas_mecanico: turno.observaciones || null // Pasamos las notas del cliente al mecánico
+          }]);
+          if (tallerError) throw tallerError;
+          alert("¡Turno confirmado! El vehículo ya está en el tablero del Taller esperando al mecánico.");
+        }
+      }
+
+      fetchTurnos(); // Refrescamos la lista de turnos
       setIsDetailModalOpen(false)
     } catch (error: any) {
       console.error("Error al cambiar estado:", error)

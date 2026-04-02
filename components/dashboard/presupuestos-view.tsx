@@ -532,6 +532,7 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
 
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     try {
+      // 1. Actualizamos el estado a Aprobado en DB
       await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', editandoId);
       setEstado("Aprobado");
       setIsAprobarModalOpen(false);
@@ -545,11 +546,22 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
         } else {
           alert("Navegación al calendario pendiente de conexión.");
         }
-      } else {
-        alert("¡Presupuesto Aprobado! La funcionalidad para ingresar el vehículo directamente al taller se conectará en el próximo paso.");
+      } else if (opcion === "inmediato") {
+        // LA MAGIA: Enviamos el auto directamente al tablero del taller
+        const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre} ${clienteActual?.apellido || ''}`.trim();
+        
+        const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
+          presupuesto_id: editandoId,
+          vehiculo_patente: vehiculoSeleccionado,
+          cliente_nombre: nombreCompleto || "Cliente",
+          estado: 'A Ingresar'
+        }]);
+
+        if (tallerError) throw tallerError;
+        alert("¡Presupuesto Aprobado! El vehículo ya ingresó automáticamente al Tablero del Taller.");
       }
     } catch (error) {
-      alert("Error al aprobar presupuesto.");
+      alert("Error al aprobar presupuesto o enviar al taller.");
     }
   }
 
