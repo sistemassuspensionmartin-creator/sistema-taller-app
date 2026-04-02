@@ -32,7 +32,9 @@ export default function DashboardPage() {
         return (
           <div className="space-y-6">
             <MetricsCards />
+            {/* ACÁ ESTÁ EL CAMBIO: LE DECIMOS readOnly={true} */}
             <WorkOrdersTable 
+              readOnly={true}
               onNavigateToPresupuesto={(id) => {
                 setPresupuestoParaAbrir(id);
                 setActiveSection("Presupuestos");
@@ -59,6 +61,7 @@ export default function DashboardPage() {
                  }}
                />
       case "Taller":
+        // EN TALLER NO LE PASAMOS EL READ ONLY, ASÍ DEJA AVANZAR
         return <WorkOrdersTable 
                  onNavigateToPresupuesto={(id) => {
                    setPresupuestoParaAbrir(id);
@@ -71,10 +74,9 @@ export default function DashboardPage() {
         return <TurnosView 
                  turnoAgendarInfo={turnoAgendarInfo}
                  onClearTurnoAgendarInfo={() => setTurnoAgendarInfo(null)}
-                 // --- AGREGÁ ESTA LÍNEA ---
                  onNavigateToBudgetDetail={(budgetId) => {
-                   setPresupuestoParaAbrir(budgetId); // Marca cuál abrir
-                   setActiveSection("Presupuestos"); // Cambia de pestaña
+                   setPresupuestoParaAbrir(budgetId);
+                   setActiveSection("Presupuestos");
                  }}
                />
       case "Presupuestos":

@@ -14,7 +14,8 @@ const COLUMNAS = [
   { id: "Entregado", titulo: "Entregado al Cliente", icono: Flag, color: "text-purple-500", border: "border-purple-200 dark:border-purple-800", bg: "bg-purple-50/50 dark:bg-purple-900/10" },
 ]
 
-export function WorkOrdersTable({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?: (id: string) => void }) {
+// AGREGAMOS LA PROP 'readOnly' (Por defecto es false)
+export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: { onNavigateToPresupuesto?: (id: string) => void, readOnly?: boolean }) {
   const [ordenes, setOrdenes] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -109,13 +110,14 @@ export function WorkOrdersTable({ onNavigateToPresupuesto }: { onNavigateToPresu
                           </div>
                         )}
 
-                        {columna.id !== "Entregado" && (
+                        {/* ACÁ ESTÁ LA MAGIA: Solo mostramos el botón si NO es de solo lectura y no está entregado */}
+                        {!readOnly && columna.id !== "Entregado" && (
                           <Button 
                             size="sm" 
                             variant="secondary" 
                             className="w-full mt-3 h-7 text-xs bg-background hover:bg-emerald-50 hover:text-emerald-700 border border-border group-hover:border-emerald-200 transition-colors"
                             onClick={(e) => {
-                              e.stopPropagation(); // Evita que se abra el presupuesto al tocar "Avanzar"
+                              e.stopPropagation(); 
                               avanzarEstado(orden.id, orden.estado);
                             }}
                           >
