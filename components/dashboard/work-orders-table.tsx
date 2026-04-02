@@ -140,8 +140,10 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
         if (!email) return alert("⚠️ El dueño no tiene un correo electrónico (email) registrado en el sistema.");
         const asunto = reemplazos(configuracion.msj_postventa_email_asunto);
         const cuerpo = reemplazos(configuracion.msj_postventa_email_cuerpo);
-        // Mailto abre el gestor de correos por defecto de la computadora (Gmail, Outlook, etc)
-        window.open(`mailto:${email}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`, '_self');
+        
+        // LA MAGIA DE GMAIL WEB: Salteamos a Windows y abrimos la web directa
+        const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+        window.open(gmailUrl, '_blank');
       }
 
       setIsPostVentaModalOpen(false);
