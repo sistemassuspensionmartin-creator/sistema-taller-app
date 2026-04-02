@@ -38,7 +38,7 @@ const getEstadoColor = (estado: string) => {
   }
 }
 
-export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presupuestoAbreDetalle, onClearPresupuestoDetalle }: { onNavigateToTurnos?: (vehiculoInfo: any) => void, onNavigateToTaller?: () => void, presupuestoAbreDetalle?: string | null, onClearPresupuestoDetalle?: () => void }) {
+export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presupuestoAbreDetalle, onClearPresupuestoDetalle, onVolver }: { onNavigateToTurnos?: (vehiculoInfo: any) => void, onNavigateToTaller?: () => void, presupuestoAbreDetalle?: string | null, onClearPresupuestoDetalle?: () => void, onVolver?: () => void }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   const [isEditing, setIsEditing] = useState(false)
   const [mostrarCostos, setMostrarCostos] = useState(false)
@@ -606,7 +606,13 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
-          <Button variant="ghost" onClick={() => { setVista("lista"); setEditandoId(null); setIsEditing(false); }} className="text-muted-foreground hover:text-foreground w-fit">
+          <Button variant="ghost" onClick={() => { 
+            setVista("lista"); 
+            setEditandoId(null); 
+            setIsEditing(false); 
+            if (onClearPresupuestoDetalle) onClearPresupuestoDetalle();
+            if (onVolver) onVolver(); // Si hay una ruta de retorno, la ejecuta
+          }} className="text-muted-foreground hover:text-foreground w-fit">
             <ArrowLeft className="h-4 w-4 mr-2"/> Volver
           </Button>
           

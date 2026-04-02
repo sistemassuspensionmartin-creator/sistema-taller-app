@@ -38,7 +38,7 @@ const MARCAS_COMUNES = [
   "Kia", "Chery", "Suzuki", "Otra"
 ]
 
-export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNavigateToClients }: { vehiculoAbreDetalle?: any, onClearVehiculoDetalle?: () => void, onNavigateToClients?: (cliente: any) => void }) {
+export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNavigateToClients, onNavigateToPresupuesto }: { vehiculoAbreDetalle?: any, onClearVehiculoDetalle?: () => void, onNavigateToClients?: (cliente: any) => void, onNavigateToPresupuesto?: (id: string) => void }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   
   // EL ESTADO QUE LEE LA ETIQUETA PARA SABER DE DÓNDE VENIMOS
@@ -644,8 +644,12 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                     <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">No hay presupuestos registrados para este vehículo.</TableCell></TableRow>
                   ) : (
                     historialPresupuestos.map(hp => (
-                      <TableRow key={hp.id} className="hover:bg-secondary/30 transition-colors">
-                        <TableCell className="font-mono font-bold">PRE-{hp.numero_correlativo}</TableCell>
+                      <TableRow 
+                        key={hp.id} 
+                        className="hover:bg-secondary/30 transition-colors cursor-pointer group" 
+                        onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(hp.id)}
+                      >
+                        <TableCell className="font-mono font-bold group-hover:text-emerald-600 transition-colors">PRE-{hp.numero_correlativo}</TableCell>
                         <TableCell>{new Date(hp.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
                         <TableCell className="font-bold font-mono text-emerald-700 dark:text-emerald-500">${hp.total_final?.toLocaleString()}</TableCell>
                         <TableCell className="text-center"><Badge variant="outline">{hp.estado}</Badge></TableCell>
