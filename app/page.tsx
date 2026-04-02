@@ -71,6 +71,11 @@ export default function DashboardPage() {
         return <TurnosView 
                  turnoAgendarInfo={turnoAgendarInfo}
                  onClearTurnoAgendarInfo={() => setTurnoAgendarInfo(null)}
+                 // --- AGREGÁ ESTA LÍNEA ---
+                 onNavigateToBudgetDetail={(budgetId) => {
+                   setPresupuestoParaAbrir(budgetId); // Marca cuál abrir
+                   setActiveSection("Presupuestos"); // Cambia de pestaña
+                 }}
                />
       case "Presupuestos":
         return <PresupuestosView 

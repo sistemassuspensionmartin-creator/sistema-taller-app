@@ -50,24 +50,47 @@ const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
   "Cubiertas": { sigla: "CUB", color: "bg-stone-500/10 text-stone-500 border-stone-500/20" },
 }
 
-export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turnoAgendarInfo?: any, onClearTurnoAgendarInfo?: () => void }) {
+// --- FUNCIÓN MAGICA CORREGIDA PARA ZONA HORARIA ARGENTINA ---
+// Obtiene la fecha local en formato YYYY-MM-DD sin importar la hora UTC
+const getLocalDateString = (d: Date) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// DEFINIMOS LAS PROPS QUE ACEPTA LA VISTA
+interface TurnosViewProps {
+  turnoAgendarInfo?: any;
+  onClearTurnoAgendarInfo?: () => void;
+  // --- NUEVA PROP PARA NAVEGACIÓN ---
+  onNavigateToBudgetDetail?: (budgetId: string) => void;
+}
+
+export function TurnosView({ 
+  turnoAgendarInfo, 
+  onClearTurnoAgendarInfo,
+  onNavigateToBudgetDetail // RECIBIMOS LA PROP
+}: TurnosViewProps) {
   const [fechaActual, setFechaActual] = useState(new Date())
   const [isLoading, setIsLoading] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
+  // Modales
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<any>(null)
   const [isReprogramming, setIsReprogramming] = useState(false)
   const [reprogramData, setReprogramData] = useState({ fecha: "", hora: "" })
+
+  const [sugerenciasVehiculos, setSugerenciasVehiculos] = useState<any[]>([])
   
   const [diasNoLaborables, setDiasNoLaborables] = useState<string[]>([])
   const [tipoRegistro, setTipoRegistro] = useState("registrado")
   const [busquedaPatente, setBusquedaPatente] = useState("")
   const [autoEncontrado, setAutoEncontrado] = useState<any>(null)
-  const [sugerenciasVehiculos, setSugerenciasVehiculos] = useState<any[]>([])
 
   const [formData, setFormData] = useState({
     fecha: "", hora: "", servicio: "", patente: "", marcaModelo: "", nombreDueño: "", telefono: "", observaciones: "", presupuesto_id: ""
@@ -75,12 +98,17 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
 
   const [turnos, setTurnos] = useState<any[]>([])
 
-  const hoyString = new Date().toISOString().split("T")[0]
+  // --- USAMOS LA FUNCIÓN CORREGIDA PARA "HOY" ---
+  const hoyString = getLocalDateString(new Date())
 
+  // Cargar turnos desde Supabase
   const fetchTurnos = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('turnos').select('*, presupuestos(numero_correlativo)')
+      const { data, error } = await supabase
+        .from('turnos')
+        .select('*, presupuestos(numero_correlativo)')
+      
       if (error) throw error
       setTurnos(data || [])
     } catch (error) {
@@ -90,18 +118,19 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
     }
   }
 
-  useEffect(() => { fetchTurnos() }, [])
+  useEffect(() => {
+    fetchTurnos()
+  }, [])
 
+  // EFECTO MODO AGENDAMIENTO
   useEffect(() => {
     const cargarAutoPredefinido = async (patente: string, pres_id: string) => {
       setIsSearching(true);
       try {
-        const patenteLimpia = patente.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-
         const { data: auto, error } = await supabase
           .from('vehiculos')
           .select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono)')
-          .ilike('patente', `%${patenteLimpia}%`)
+          .eq('patente', patente)
           .single();
 
         if (error || !auto) return;
@@ -109,7 +138,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         const { data: presups } = await supabase
           .from('presupuestos')
           .select('id, numero_correlativo, total_final, detalle, estado')
-          .ilike('vehiculo_patente', `%${patenteLimpia}%`)
+          .eq('vehiculo_patente', auto.patente)
           .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
 
         const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
@@ -122,16 +151,19 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
           presupuestos: presups || []
         });
 
+        // Auto-selecciona el presupuesto si hay ID
+        const presIdASeleccionar = pres_id || (presups && presups.length > 0 ? presups[0].id : "");
+
         setFormData(prev => ({ 
           ...prev, 
-          patente: patenteLimpia, 
+          patente: auto.patente, 
           marcaModelo: `${auto.marca} ${auto.modelo}`, 
           nombreDueño: nombreCliente, 
           telefono: telefonoCliente, 
-          presupuesto_id: pres_id 
+          presupuesto_id: presIdASeleccionar
         }));
         
-        setBusquedaPatente(patenteLimpia);
+        setBusquedaPatente(auto.patente);
       } catch (err) {
         console.error(err);
       } finally {
@@ -152,11 +184,13 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
   limitePasado.setDate(limitePasado.getDate() - 14)
   const isPrevDisabled = fechaActual <= limitePasado
 
+  // --- LÓGICA DE SEMANAS CORREGIDA ---
   const obtenerFechasSemana = (fechaBase: Date) => {
     const fechas = []
     const diaSemana = fechaBase.getDay()
     const diff = fechaBase.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1) 
-    const lunes = new Date(fechaBase.setDate(diff))
+    const lunes = new Date(fechaBase)
+    lunes.setDate(diff)
     for (let i = 0; i < 5; i++) {
       const fecha = new Date(lunes)
       fecha.setDate(lunes.getDate() + i)
@@ -189,8 +223,8 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
   }
 
   const buscarAuto = async () => {
-    const patenteLimpia = busquedaPatente.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-    if(!patenteLimpia) return;
+    const pBusqueda = busquedaPatente.trim();
+    if(!pBusqueda) return;
 
     setIsSearching(true);
     setSugerenciasVehiculos([]); 
@@ -198,7 +232,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
       const { data: auto, error } = await supabase
         .from('vehiculos')
         .select('*, clientes(nombre, apellido, razon_social, tipo_cliente, telefono)')
-        .ilike('patente', `%${patenteLimpia}%`)
+        .ilike('patente', `%${pBusqueda}%`)
         .single();
 
       if (error || !auto) {
@@ -210,7 +244,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
       const { data: presups } = await supabase
         .from('presupuestos')
         .select('id, numero_correlativo, total_final, detalle, estado')
-        .ilike('vehiculo_patente', `%${patenteLimpia}%`)
+        .eq('vehiculo_patente', auto.patente)
         .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
 
       const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
@@ -223,13 +257,16 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
         presupuestos: presups || []
       });
 
+      // Auto-asigna el presupuesto
+      const presIdAuto = presups && presups.length > 0 ? presups[0].id : "";
+
       setFormData({ 
         ...formData, 
-        patente: patenteLimpia, 
+        patente: auto.patente, 
         marcaModelo: `${auto.marca} ${auto.modelo}`, 
         nombreDueño: nombreCliente, 
         telefono: telefonoCliente, 
-        presupuesto_id: "" 
+        presupuesto_id: presIdAuto 
       });
 
     } catch (err) {
@@ -297,7 +334,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
       const { error } = await supabase.from('turnos').insert([payload]);
       if (error) throw error;
 
-      // LA TRANSACCIÓN SEGURA: APROBAMOS EL PRESUPUESTO ACÁ SÓLO SI EL TURNO SE GUARDÓ
+      // Transacción: Aprobamos presupuesto SOLO si hay ID
       if (payload.presupuesto_id) {
         await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', payload.presupuesto_id);
       }
@@ -355,6 +392,22 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
     }
   }
 
+  // --- NUEVA FUNCIÓN: VALIDA INGRESO POR FECHA ---
+  const handleValidarIngreso = (turno: any) => {
+    // Calculamos "hoy" local
+    const hoyLocal = getLocalDateString(new Date());
+
+    if (turno.fecha !== hoyLocal) {
+      alert(`⚠️ ATENCIÓN: No se puede ingresar el vehículo. El turno está agendado para el día ${turno.fecha} y hoy es ${hoyLocal}. 
+
+Si el vehículo llegó antes, primero debe reprogramar el turno para el día de la fecha en la agenda.`);
+      return;
+    }
+
+    // Si la fecha coincide, procedemos al ingreso
+    cambiarEstadoTurno(turno.id, "asistio");
+  }
+
   const guardarReprogramacion = async () => {
     if (!reprogramData.fecha || !reprogramData.hora) {
       alert("Debe seleccionar una fecha y hora válidas.")
@@ -394,6 +447,8 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
 
   const getTurnoStyle = (estado: string, esPasado: boolean) => {
     let baseStyle = "group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden";
+    
+    // --- ESTILO PASADO CORREGIDO ---
     if (esPasado) {
       return `${baseStyle} bg-slate-100 border-slate-300 dark:bg-slate-800/20 opacity-60 grayscale`;
     }
@@ -462,7 +517,8 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
           {fechasSemana.map(fecha => {
-            const fechaString = fecha.toISOString().split("T")[0]
+            // --- USAMOS LA FUNCIÓN CORREGIDA ---
+            const fechaString = getLocalDateString(fecha)
             const esHoy = fechaString === hoyString
             const esPasado = fechaString < hoyString
             const esNoLaborable = diasNoLaborables.includes(fechaString)
@@ -501,7 +557,8 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
                   {hora}
                 </div>
                 {fechasSemana.map(fecha => {
-                  const fechaString = fecha.toISOString().split("T")[0]
+                  // --- USAMOS LA FUNCIÓN CORREGIDA ---
+                  const fechaString = getLocalDateString(fecha)
                   const turnosEnCelda = turnos.filter(t => t.fecha === fechaString && t.hora === hora)
                   const esHoy = fechaString === hoyString
                   const esPasado = fechaString < hoyString
@@ -571,7 +628,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
                     <div>
                       <div className="text-2xl font-bold text-foreground flex items-center gap-2">
                         {turnoSeleccionado.hora}
-                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">Ingresó</Badge>}
+                        {turnoSeleccionado.estado === "asistio" && <Badge className="bg-green-100 text-green-700 border-green-200">Ingresó</Badge>}
                         {turnoSeleccionado.estado === "cancelado" && <Badge variant="destructive">Cancelado</Badge>}
                       </div>
                       <div className="text-sm text-muted-foreground">{turnoSeleccionado.fecha}</div>
@@ -602,13 +659,23 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
               </div>
 
               {turnoSeleccionado.presupuesto_id && (
-                <button className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors">
-                  <div className="flex items-center gap-2 text-sm text-primary font-medium"><FileText className="w-4 h-4" /> Presupuesto Asociado</div>
+                // --- BOTÓN DE PRESUPUESTO ACTUALIZADO ---
+                <button 
+                  onClick={() => {
+                    // Llama a la navegación que definimos en el puente
+                    onNavigateToBudgetDetail?.(turnoSeleccionado.presupuesto_id);
+                    setIsDetailModalOpen(false); // Cierra este modal
+                  }}
+                  className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors group"
+                >
+                  <div className="flex items-center gap-2 text-sm text-primary font-medium">
+                    <FileText className="w-4 h-4" /> Presupuesto Asociado
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs text-primary font-bold">
                       {turnoSeleccionado.presupuestos?.numero_correlativo ? `PRE-${turnoSeleccionado.presupuestos.numero_correlativo}` : 'Ver'}
                     </span>
-                    <ExternalLink className="w-4 h-4 text-primary opacity-50" />
+                    <ExternalLink className="w-4 h-4 text-primary opacity-50 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </button>
               )}
@@ -634,7 +701,8 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
               <div className="flex flex-col w-full gap-2">
                 <div className="grid grid-cols-3 gap-2 w-full">
                     {turnoSeleccionado?.estado !== "cancelado" && turnoSeleccionado?.estado !== "asistio" && (
-                        <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "asistio")} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
+                        // --- BOTÓN INGRESÓ CON VALIDACIÓN ---
+                        <Button variant="outline" onClick={() => handleValidarIngreso(turnoSeleccionado)} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
                             <CheckCircle2 className="w-4 h-4 mr-2" /> Ingresó
                         </Button>
                     )}
@@ -747,6 +815,7 @@ export function TurnosView({ turnoAgendarInfo, onClearTurnoAgendarInfo }: { turn
                                   onClick={() => {
                                     setBusquedaPatente(v.patente);
                                     setSugerenciasVehiculos([]);
+                                    buscarAuto();
                                   }}
                                 >
                                   <div className="font-mono font-bold tracking-widest">{v.patente}</div>
