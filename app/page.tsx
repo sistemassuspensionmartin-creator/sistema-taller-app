@@ -16,11 +16,12 @@ import { CatalogoView } from "@/components/dashboard/catalogo-view"
 import { AjustesView } from "@/components/dashboard/ajustes-view"
 
 export default function DashboardPage() {
-  const [activeSection, setActiveSection] = useState("Vehículos")
+  const [activeSection, setActiveSection] = useState("Inicio")
   
   // ESTADOS PARA LA MEMORIA DEL PUENTE
   const [vehiculoParaAbrir, setVehiculoParaAbrir] = useState<any>(null)
   const [clienteParaAbrir, setClienteParaAbrir] = useState<any>(null)
+  const [presupuestoParaAbrir, setPresupuestoParaAbrir] = useState<string | null>(null) // NUEVO
 
   const renderContent = () => {
     switch (activeSection) {
@@ -28,7 +29,12 @@ export default function DashboardPage() {
         return (
           <div className="space-y-6">
             <MetricsCards />
-            <WorkOrdersTable />
+            <WorkOrdersTable 
+              onNavigateToPresupuesto={(id) => {
+                setPresupuestoParaAbrir(id);
+                setActiveSection("Presupuestos");
+              }}
+            />
           </div>
         )
       case "Clientes":
@@ -50,41 +56,39 @@ export default function DashboardPage() {
                  }}
                />
       case "Taller":
-        return <WorkOrdersTable />
+        return <WorkOrdersTable 
+                 onNavigateToPresupuesto={(id) => {
+                   setPresupuestoParaAbrir(id);
+                   setActiveSection("Presupuestos");
+                 }}
+               />
       case "Caja":              
         return <CajaView />
       case "Turnos":
         return <TurnosView />
       case "Presupuestos":
-        return <PresupuestosView />
+        return <PresupuestosView 
+                 presupuestoAbreDetalle={presupuestoParaAbrir}
+                 onClearPresupuestoDetalle={() => setPresupuestoParaAbrir(null)}
+                 onNavigateToTaller={() => setActiveSection("Taller")}
+                 onNavigateToTurnos={(vehiculo) => {
+                   // Acá enviaremos a turnos pronto
+                   setActiveSection("Turnos");
+                 }}
+               />
       case "Stock/Repuestos":
         return <CatalogoView />
       case "Configuración":
         return <AjustesView />
       default:
-        return <ClientsView 
-                 clienteAbreDetalle={clienteParaAbrir}
-                 onClearClienteDetalle={() => setClienteParaAbrir(null)}
-                 onNavigateToVehicles={(vehiculo) => { 
-                   setVehiculoParaAbrir(vehiculo);
-                   setActiveSection("Vehículos"); 
-                 }} 
-               />
+        return <MetricsCards />
     }
   }
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="dark"
-      enableSystem
-      disableTransitionOnChange
-    >
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <div className="flex h-screen bg-background">
-        <DashboardSidebar 
-          activeSection={activeSection} 
-          onSectionChange={setActiveSection} 
-        />
+        <DashboardSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <DashboardHeader activeSection={activeSection} />
           <main className="flex-1 overflow-y-auto p-6">

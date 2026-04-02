@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
 
-// FUNCIÓN PARA LOS COLORES DE LOS ESTADOS
 const getEstadoColor = (estado: string) => {
   switch (estado) {
     case "Borrador": return "bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700";
@@ -39,7 +38,7 @@ const getEstadoColor = (estado: string) => {
   }
 }
 
-export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: (vehiculoInfo: any) => void }) {
+export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presupuestoAbreDetalle, onClearPresupuestoDetalle }: { onNavigateToTurnos?: (vehiculoInfo: any) => void, onNavigateToTaller?: () => void, presupuestoAbreDetalle?: string | null, onClearPresupuestoDetalle?: () => void }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   const [isEditing, setIsEditing] = useState(false)
   const [mostrarCostos, setMostrarCostos] = useState(false)
@@ -105,6 +104,17 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
       setIsEditing(false)
     }
   }, [vista])
+
+  // MAGIA DE RECEPCIÓN: Si nos mandan un ID desde el Taller, lo abrimos
+  useEffect(() => {
+    if (presupuestoAbreDetalle && presupuestos.length > 0) {
+      const pres = presupuestos.find(p => p.id === presupuestoAbreDetalle);
+      if (pres) {
+        handleAbrirPresupuesto(pres);
+      }
+      if (onClearPresupuestoDetalle) onClearPresupuestoDetalle();
+    }
+  }, [presupuestoAbreDetalle, presupuestos])
 
   useEffect(() => {
     if (clienteSeleccionado && !editandoId && isEditing) {
@@ -530,24 +540,37 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
     }
   }
 
+  // --- LA MAGIA: VALIDACIÓN Y CONEXIÓN AL TALLER ---
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     try {
-      // 1. Actualizamos el estado a Aprobado en DB
+      // 1. VERIFICACIÓN CRÍTICA: ¿Ya está en el taller?
+      const { data: tallerExistente, error: errExistente } = await supabase
+        .from('ordenes_trabajo')
+        .select('id')
+        .eq('presupuesto_id', editandoId);
+        
+      if (errExistente) throw errExistente;
+
+      if (tallerExistente && tallerExistente.length > 0) {
+        alert("⚠️ ATENCIÓN: Este presupuesto ya tiene una Orden de Trabajo ingresada en el Taller. No se puede volver a ingresar ni generar otro turno duplicado.");
+        setIsAprobarModalOpen(false);
+        return;
+      }
+
+      // 2. Si pasó la validación, lo aprobamos
       await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', editandoId);
       setEstado("Aprobado");
       setIsAprobarModalOpen(false);
 
+      // 3. Ejecutamos la acción seleccionada
       if (opcion === "turnos") {
         if (onNavigateToTurnos) {
           onNavigateToTurnos({ 
             patente: vehiculoSeleccionado,
             presupuesto_id: editandoId 
           });
-        } else {
-          alert("Navegación al calendario pendiente de conexión.");
         }
       } else if (opcion === "inmediato") {
-        // LA MAGIA: Enviamos el auto directamente al tablero del taller
         const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre} ${clienteActual?.apellido || ''}`.trim();
         
         const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
@@ -558,15 +581,16 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
         }]);
 
         if (tallerError) throw tallerError;
-        alert("¡Presupuesto Aprobado! El vehículo ya ingresó automáticamente al Tablero del Taller.");
+        
+        // Cierra la vista detalle y nos manda al taller
+        setVista("lista");
+        if (onNavigateToTaller) onNavigateToTaller();
       }
     } catch (error) {
-      alert("Error al aprobar presupuesto o enviar al taller.");
+      alert("Error al procesar la aprobación.");
     }
   }
 
-
-  // VISTA DETALLE / CREAR
   if (vista === "detalle") {
     return (
       <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
@@ -589,7 +613,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
                   <Link2 className="w-4 h-4 mr-2"/> Asociar
                 </Button>
                 
-                {/* BOTÓN ACTIVAR EDICIÓN (NARANJA/ÁMBAR) */}
                 <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
                   <Pencil className="w-4 h-4 mr-2"/> Activar Edición
                 </Button>
@@ -614,7 +637,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
               <ClipboardList className="w-4 h-4 mr-2"/> Orden Trabajo
             </Button>
             
-            {/* BOTÓN PDF / IMPRIMIR (VIOLETA/PÚRPURA) */}
             <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
               <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
             </Button>
@@ -856,7 +878,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
               </CardContent>
             </Card>
 
-            {/* BOTÓN ELIMINAR ABAJO DE TODO */}
             {!isEditing && editandoId && (
               <div className="flex justify-end print:hidden">
                 <Button variant="outline" onClick={() => handleEliminarPresupuesto(editandoId)} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-900/20">
@@ -953,7 +974,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
     )
   }
 
-  // VISTA LISTA PRINCIPAL
   return (
     <div className="space-y-6 pb-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -995,7 +1015,6 @@ export function PresupuestosView({ onNavigateToTurnos }: { onNavigateToTurnos?: 
                     </TableCell>
                     <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
                     
-                    {/* ESTADO CON COLOR */}
                     <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
                         <SelectTrigger className={`h-8 text-xs w-[130px] mx-auto border ${getEstadoColor(p.estado)}`}>
