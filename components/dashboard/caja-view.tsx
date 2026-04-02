@@ -76,32 +76,38 @@ export function CajaView() {
         .limit(50)
       setMovimientos(movData || [])
 
-      // 3. Cargar Cuentas por Cobrar (Autos en el Taller)
+      // 3. Cargar Autos y Pagos cruzados
       const { data: ordenesData, error: ordenesError } = await supabase
         .from('ordenes_trabajo')
-        .select(`
-          vehiculo_patente, 
-          cliente_nombre,
-          presupuestos (
-            id, numero_correlativo, total_final, estado_pago, estado_facturacion,
-            movimientos_caja ( monto )
-          )
-        `)
+        .select(`vehiculo_patente, cliente_nombre, presupuestos (*)`)
         .not('presupuesto_id', 'is', null)
 
       if (ordenesError) throw ordenesError;
 
-      // Procesamos los datos con protecciones
-      const procesadas = (ordenesData || []).map((orden: any) => {
-        const pres = orden.presupuestos;
-        if (!pres) return null;
+      const { data: pagosData, error: pagosError } = await supabase
+        .from('movimientos_caja')
+        .select('presupuesto_id, monto')
+        .eq('tipo_movimiento', 'ingreso_cobro')
 
-        // Sumamos los movimientos de caja asociados a este presupuesto
-        const totalPagado = pres.movimientos_caja ? pres.movimientos_caja.reduce((acc: number, p: any) => acc + Number(p.monto || 0), 0) : 0;
+      if (pagosError) throw pagosError;
+
+      // ELIMINADOR DE DUPLICADOS: Usamos un Map para que cada presupuesto pase una sola vez
+      const presupuestosUnicos = new Map();
+
+      (ordenesData || []).forEach((orden: any) => {
+        const pres = orden.presupuestos;
+        
+        // Si el presupuesto no existe, o ya lo metimos en la lista, lo ignoramos
+        if (!pres || presupuestosUnicos.has(pres.id)) return;
+
+        const pagosDeEstePresupuesto = (pagosData || []).filter((p: any) => p.presupuesto_id === pres.id);
+        const totalPagado = pagosDeEstePresupuesto.reduce((acc: number, p: any) => acc + Number(p.monto || 0), 0);
+        
         const total = Number(pres.total_final || 0);
         const restante = total - totalPagado;
 
-        return {
+        // Lo guardamos en el Map con su ID como llave
+        presupuestosUnicos.set(pres.id, {
           id: pres.id,
           numero: pres.numero_correlativo,
           patente: orden.vehiculo_patente,
@@ -111,9 +117,11 @@ export function CajaView() {
           restante: restante,
           estado_pago: pres.estado_pago || 'Pendiente',
           estado_facturacion: pres.estado_facturacion || 'No Facturado'
-        }
-      }).filter(Boolean) // Eliminamos los nulos
+        });
+      });
 
+      // Convertimos el Map de vuelta a un Array y lo ordenamos
+      const procesadas = Array.from(presupuestosUnicos.values());
       setCuentasPorCobrar(procesadas.sort((a: any, b: any) => b.restante - a.restante))
 
     } catch (error) {
@@ -125,13 +133,10 @@ export function CajaView() {
 
   useEffect(() => { cargarDatos() }, [])
 
-  // --- CÁLCULOS DEL DASHBOARD (Protegidos contra NaN) ---
   const cajaMostrador = cajas.find(c => c.tipo === 'operativa');
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
-  
   const saldoGeneral = cajas.filter(c => c.tipo !== 'operativa').reduce((acc, c) => acc + Number(c.saldo || 0), 0);
 
-  // --- FUNCIONES DE ACCIÓN ---
   const abrirModalCobro = (cuenta: any) => {
     setPresupuestoACobrar(cuenta);
     setMontoCobro(cuenta.restante.toString());
@@ -157,7 +162,7 @@ export function CajaView() {
         throw new Error("No se encontró la caja destino para este método de pago.");
       }
 
-      // Registrar el Pago
+      // 1. Registrar el Pago
       const { error: errorPago } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
         caja_destino_id: cajaDestinoId,
@@ -169,13 +174,16 @@ export function CajaView() {
       }]);
       if (errorPago) throw errorPago;
 
-      // Sumar el saldo a la Caja Física/Virtual
+      // 2. Sumar el saldo a la Caja con ALARMA de error
       if (cajaDestinoId) {
         const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
-        await supabase.from('cajas').update({ saldo: Number(cajaAfectada.saldo || 0) + monto }).eq('id', cajaDestinoId);
+        const nuevoSaldo = Number(cajaAfectada.saldo || 0) + monto;
+        
+        const { error: updateCajaError } = await supabase.from('cajas').update({ saldo: nuevoSaldo }).eq('id', cajaDestinoId);
+        if (updateCajaError) throw new Error("No se pudo sumar el saldo a la caja. Verifique los permisos.");
       }
 
-      // Actualizar el estado del Presupuesto
+      // 3. Actualizar el estado del Presupuesto
       const nuevoRestante = presupuestoACobrar.restante - monto;
       const nuevoEstado = nuevoRestante <= 0 ? 'Cobrado' : 'Parcial';
       
@@ -216,10 +224,12 @@ export function CajaView() {
       }]);
       if (errorMov) throw errorMov;
 
-      await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
+      const { error: errorOrigen } = await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
+      if (errorOrigen) throw errorOrigen;
 
       const cajaDestObj = cajas.find(c => c.id === cajaDestino);
-      await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
+      const { error: errorDestino } = await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
+      if (errorDestino) throw errorDestino;
 
       alert("Movimiento realizado con éxito.");
       setIsMovimientoModalOpen(false);
