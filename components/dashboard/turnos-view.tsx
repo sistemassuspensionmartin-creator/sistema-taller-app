@@ -63,6 +63,8 @@ export function TurnosView() {
   const [turnoSeleccionado, setTurnoSeleccionado] = useState<any>(null)
   const [isReprogramming, setIsReprogramming] = useState(false)
   const [reprogramData, setReprogramData] = useState({ fecha: "", hora: "" })
+
+  const [sugerenciasVehiculos, setSugerenciasVehiculos] = useState<any[]>([])
   
   const [diasNoLaborables, setDiasNoLaborables] = useState<string[]>([])
   const [tipoRegistro, setTipoRegistro] = useState("registrado")
@@ -626,13 +628,53 @@ export function TurnosView() {
                     <div className="flex gap-2 items-end">
                       <div className="space-y-2 flex-1">
                         <Label className="text-card-foreground">Patente del Vehículo</Label>
+                        <div className="relative">
                         <Input 
                           placeholder="Ej: AB 123 CD" 
                           className="bg-secondary border-border uppercase" 
                           value={busquedaPatente} 
-                          onChange={(e: any) => setBusquedaPatente(e.target.value)}
-                          onKeyDown={(e: any) => e.key === 'Enter' && buscarAuto()}
+                          onChange={async (e: any) => {
+                            const val = e.target.value;
+                            setBusquedaPatente(val);
+                            const limpia = val.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+                            if (limpia.length >= 2) {
+                              const { data } = await supabase
+                                .from('vehiculos')
+                                .select('patente, marca, modelo')
+                                .ilike('patente', `%${limpia}%`)
+                                .limit(5);
+                              setSugerenciasVehiculos(data || []);
+                            } else {
+                              setSugerenciasVehiculos([]);
+                            }
+                          }}
+                          onKeyDown={(e: any) => {
+                            if (e.key === 'Enter') {
+                              setSugerenciasVehiculos([]);
+                              buscarAuto();
+                            }
+                          }}
                         />
+                        {sugerenciasVehiculos.length > 0 && (
+                          <div className="absolute top-11 left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
+                            {sugerenciasVehiculos.map(v => (
+                              <div 
+                                key={v.patente} 
+                                className="p-3 hover:bg-secondary cursor-pointer border-b border-border/50 last:border-0 flex justify-between items-center"
+                                onClick={() => {
+                                  setBusquedaPatente(v.patente);
+                                  setSugerenciasVehiculos([]);
+                                  // Al hacer clic, podrías incluso llamar a buscarAuto() directamente si quisieras, 
+                                  // pero con que se llene el campo ya el usuario le da a "Buscar".
+                                }}
+                              >
+                                <div className="font-mono font-bold tracking-widest">{v.patente}</div>
+                                <div className="text-xs text-muted-foreground">{v.marca} {v.modelo}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                       </div>
                       <Button onClick={buscarAuto} disabled={isSearching} className="bg-primary text-primary-foreground">
                         {isSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Buscar"}
