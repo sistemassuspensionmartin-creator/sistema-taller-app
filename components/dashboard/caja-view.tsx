@@ -77,39 +77,44 @@ export function CajaView() {
       setMovimientos(movData || [])
 
       // 3. Cargar Cuentas por Cobrar (Autos en el Taller)
-      // Buscamos órdenes de trabajo que tengan presupuesto asociado
-      const { data: ordenesData } = await supabase
+      const { data: ordenesData, error: ordenesError } = await supabase
         .from('ordenes_trabajo')
         .select(`
           vehiculo_patente, 
           cliente_nombre,
           presupuestos (
             id, numero_correlativo, total_final, estado_pago, estado_facturacion,
-            pagos ( monto )
+            movimientos_caja ( monto )
           )
         `)
         .not('presupuesto_id', 'is', null)
 
-      // Procesamos los datos para calcular cuánto se pagó y cuánto resta
+      if (ordenesError) throw ordenesError;
+
+      // Procesamos los datos con protecciones
       const procesadas = (ordenesData || []).map((orden: any) => {
         const pres = orden.presupuestos;
-        const totalPagado = pres.pagos ? pres.pagos.reduce((acc: number, p: any) => acc + Number(p.monto), 0) : 0;
-        const restante = Number(pres.total_final) - totalPagado;
+        if (!pres) return null;
+
+        // Sumamos los movimientos de caja asociados a este presupuesto
+        const totalPagado = pres.movimientos_caja ? pres.movimientos_caja.reduce((acc: number, p: any) => acc + Number(p.monto || 0), 0) : 0;
+        const total = Number(pres.total_final || 0);
+        const restante = total - totalPagado;
 
         return {
           id: pres.id,
           numero: pres.numero_correlativo,
           patente: orden.vehiculo_patente,
-          cliente: orden.cliente_nombre,
-          total: Number(pres.total_final),
+          cliente: orden.cliente_nombre || 'Sin registrar',
+          total: total,
           pagado: totalPagado,
           restante: restante,
           estado_pago: pres.estado_pago || 'Pendiente',
           estado_facturacion: pres.estado_facturacion || 'No Facturado'
         }
-      })
+      }).filter(Boolean) // Eliminamos los nulos
 
-      setCuentasPorCobrar(procesadas.sort((a: any, b: any) => b.restante - a.restante)) // Ordenamos los que deben más arriba
+      setCuentasPorCobrar(procesadas.sort((a: any, b: any) => b.restante - a.restante))
 
     } catch (error) {
       console.error("Error al cargar la caja:", error)
@@ -120,17 +125,16 @@ export function CajaView() {
 
   useEffect(() => { cargarDatos() }, [])
 
-  // --- CÁLCULOS DEL DASHBOARD ---
+  // --- CÁLCULOS DEL DASHBOARD (Protegidos contra NaN) ---
   const cajaMostrador = cajas.find(c => c.tipo === 'operativa');
-  const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo) : 0;
+  const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
   
-  // Caja General (Suma de todo menos el Mostrador)
-  const saldoGeneral = cajas.filter(c => c.tipo !== 'operativa').reduce((acc, c) => acc + Number(c.saldo), 0);
+  const saldoGeneral = cajas.filter(c => c.tipo !== 'operativa').reduce((acc, c) => acc + Number(c.saldo || 0), 0);
 
   // --- FUNCIONES DE ACCIÓN ---
   const abrirModalCobro = (cuenta: any) => {
     setPresupuestoACobrar(cuenta);
-    setMontoCobro(cuenta.restante.toString()); // Sugerimos cobrar el total restante
+    setMontoCobro(cuenta.restante.toString());
     setMetodoPago("Efectivo");
     setNotasCobro("");
     setIsCobrarModalOpen(true);
@@ -143,7 +147,6 @@ export function CajaView() {
 
     setIsSaving(true);
     try {
-      // 1. Determinar a qué caja va la plata según el método de pago
       let cajaDestinoId = null;
       if (metodoPago === 'Efectivo') cajaDestinoId = cajas.find(c => c.nombre === 'Caja Mostrador')?.id;
       if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre === 'Caja Transferencia')?.id;
@@ -154,38 +157,37 @@ export function CajaView() {
         throw new Error("No se encontró la caja destino para este método de pago.");
       }
 
-      // 2. Registrar el Pago en el Libro Mayor
+      // Registrar el Pago
       const { error: errorPago } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
         caja_destino_id: cajaDestinoId,
         monto: monto,
         metodo_pago: metodoPago,
         presupuesto_id: presupuestoACobrar.id,
-        detalle: `Cobro de PRE-${presupuestoACobrar.numero} - Patente: ${presupuestoACobrar.patente}`,
+        detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})`,
         notas: notasCobro
       }]);
       if (errorPago) throw errorPago;
 
-      // 3. Sumar el saldo a la Caja Física/Virtual (Si no es Cuenta Corriente)
+      // Sumar el saldo a la Caja Física/Virtual
       if (cajaDestinoId) {
         const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
-        await supabase.from('cajas').update({ saldo: Number(cajaAfectada.saldo) + monto }).eq('id', cajaDestinoId);
+        await supabase.from('cajas').update({ saldo: Number(cajaAfectada.saldo || 0) + monto }).eq('id', cajaDestinoId);
       }
 
-      // 4. Actualizar el estado del Presupuesto (Parcial o Cobrado)
+      // Actualizar el estado del Presupuesto
       const nuevoRestante = presupuestoACobrar.restante - monto;
       const nuevoEstado = nuevoRestante <= 0 ? 'Cobrado' : 'Parcial';
       
       await supabase.from('presupuestos').update({ estado_pago: nuevoEstado }).eq('id', presupuestoACobrar.id);
 
-      // Si se cobró todo, actualizamos en cascada para no tener bugs si se usa en otros lados
       if(nuevoEstado === 'Cobrado') {
           await supabase.from('presupuestos').update({ estado: 'Facturado' }).eq('id', presupuestoACobrar.id);
       }
 
       alert("¡Cobro registrado con éxito!");
       setIsCobrarModalOpen(false);
-      cargarDatos(); // Refrescamos todo
+      cargarDatos();
     } catch (err: any) {
       alert("Error al registrar el cobro: " + err.message);
     } finally {
@@ -200,27 +202,24 @@ export function CajaView() {
     if (cajaOrigen === cajaDestino) return alert("La caja de origen y destino no pueden ser la misma.");
 
     const cajaOrigObj = cajas.find(c => c.id === cajaOrigen);
-    if (Number(cajaOrigObj.saldo) < monto) return alert("No hay saldo suficiente en la caja de origen.");
+    if (Number(cajaOrigObj.saldo || 0) < monto) return alert("No hay saldo suficiente en la caja de origen.");
 
     setIsSaving(true);
     try {
-      // 1. Anotamos el movimiento
       const { error: errorMov } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'transferencia_interna',
         caja_origen_id: cajaOrigen,
         caja_destino_id: cajaDestino,
         monto: monto,
-        metodo_pago: 'Efectivo', // Los movs internos suelen ser físico, pero se podría ajustar
+        metodo_pago: 'Efectivo',
         detalle: notasMovimiento || "Movimiento interno de fondos"
       }]);
       if (errorMov) throw errorMov;
 
-      // 2. Descontamos de Origen
-      await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo) - monto }).eq('id', cajaOrigen);
+      await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
 
-      // 3. Sumamos en Destino
       const cajaDestObj = cajas.find(c => c.id === cajaDestino);
-      await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo) + monto }).eq('id', cajaDestino);
+      await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
 
       alert("Movimiento realizado con éxito.");
       setIsMovimientoModalOpen(false);
@@ -235,7 +234,7 @@ export function CajaView() {
   }
 
   const marcarComoFacturado = async (id: string, numero: string) => {
-    if(!confirm(`¿Confirmás que el presupuesto PRE-${numero} fue facturado en ARCA/AFIP?\n\nEsta acción es solo a nivel registro y no se puede deshacer.`)) return;
+    if(!confirm(`¿Confirmás que el presupuesto PRE-${numero} fue facturado?\n\nEsta acción es solo a nivel registro y no se puede deshacer.`)) return;
 
     try {
       await supabase.from('presupuestos').update({ estado_facturacion: 'Facturado' }).eq('id', id);
@@ -246,9 +245,9 @@ export function CajaView() {
   }
 
   const cuentasFiltradas = cuentasPorCobrar.filter(c => 
-    c.patente.includes(busqueda.replace(/\s/g, "").toUpperCase()) || 
-    c.cliente.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.numero.toString().includes(busqueda)
+    c.patente?.includes(busqueda.replace(/\s/g, "").toUpperCase()) || 
+    c.cliente?.toLowerCase().includes(busqueda.toLowerCase()) ||
+    c.numero?.toString().includes(busqueda)
   );
 
   return (
@@ -263,7 +262,6 @@ export function CajaView() {
         </Button>
       </div>
 
-      {/* DASHBOARD DE CAJAS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
         <Card className="border-border shadow-sm border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/10">
           <CardContent className="p-6">
@@ -330,7 +328,7 @@ export function CajaView() {
                   <TableHead className="text-right text-emerald-600">Pagado</TableHead>
                   <TableHead className="text-right text-red-500">Deuda Restante</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
-                  <TableHead className="text-right">Acciones (Tesorería)</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -366,9 +364,9 @@ export function CajaView() {
                       <TableCell className="text-center">
                         <div className="flex flex-col gap-1 items-center">
                           {cuenta.estado_pago === 'Cobrado' ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-none shadow-none">Cobrado</Badge>
+                            <Badge className="bg-emerald-100 text-emerald-800 border-none shadow-none">Cobrado</Badge>
                           ) : cuenta.estado_pago === 'Parcial' ? (
-                            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border-none shadow-none">Pago Parcial</Badge>
+                            <Badge className="bg-amber-100 text-amber-800 border-none shadow-none">Pago Parcial</Badge>
                           ) : (
                             <Badge variant="outline" className="text-slate-500 border-slate-300">Pendiente</Badge>
                           )}
@@ -409,7 +407,6 @@ export function CajaView() {
           </div>
         </TabsContent>
 
-        {/* PESTAÑA HISTORIAL DE CAJA */}
         <TabsContent value="movimientos" className="flex-1 flex flex-col min-h-0 mt-4 border border-border rounded-xl shadow-sm bg-card">
           <div className="flex-1 overflow-y-auto p-0">
             <Table>
@@ -429,8 +426,8 @@ export function CajaView() {
                       {new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
                     </TableCell>
                     <TableCell>
-                      {mov.tipo_movimiento === 'ingreso_cobro' ? <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 shadow-none"><ArrowDownRight className="w-3 h-3 mr-1"/> Ingreso</Badge> :
-                       mov.tipo_movimiento === 'transferencia_interna' ? <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 shadow-none"><ArrowRightLeft className="w-3 h-3 mr-1"/> Interno</Badge> :
+                      {mov.tipo_movimiento === 'ingreso_cobro' ? <Badge className="bg-emerald-100 text-emerald-800 shadow-none"><ArrowDownRight className="w-3 h-3 mr-1"/> Ingreso</Badge> :
+                       mov.tipo_movimiento === 'transferencia_interna' ? <Badge className="bg-blue-100 text-blue-800 shadow-none"><ArrowRightLeft className="w-3 h-3 mr-1"/> Interno</Badge> :
                        <Badge variant="destructive">Egreso</Badge>}
                     </TableCell>
                     <TableCell className="font-medium text-sm">
