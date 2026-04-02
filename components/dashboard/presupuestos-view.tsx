@@ -26,6 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
+import { PresupuestoImprimible, OrdenTrabajoImprimible } from "./impresion-templates"
 
 const getEstadoColor = (estado: string) => {
   switch (estado) {
@@ -74,6 +75,10 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
   const [presupuestoAFusionar, setPresupuestoAFusionar] = useState<string>("")
   const [isAprobarModalOpen, setIsAprobarModalOpen] = useState(false)
 
+  // Estados para imprimir con las nuevas plantillas
+  const [printType, setPrintType] = useState<'presupuesto' | 'orden' | null>(null)
+  const [printData, setPrintData] = useState<any>(null)
+
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
@@ -105,7 +110,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     }
   }, [vista])
 
-  // MAGIA DE RECEPCIÓN: Si nos mandan un ID desde el Taller, lo abrimos
   useEffect(() => {
     if (presupuestoAbreDetalle && presupuestos.length > 0) {
       const pres = presupuestos.find(p => p.id === presupuestoAbreDetalle);
@@ -382,28 +386,48 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     }
   }
 
-  const handleWhatsApp = async () => {
+  // --- WHATSAPP DIVIDIDO EN DOS (CLIENTE O MECÁNICO) ---
+  const handleWhatsApp = async (tipo: 'presupuesto' | 'orden') => {
     if (!clienteActual || !vehiculoActual) return alert("Seleccione un cliente y vehículo para enviar el mensaje.")
-    if (!clienteActual.telefono) return alert("El cliente no tiene un número de teléfono registrado.")
+    if (!clienteActual.telefono && tipo === 'presupuesto') return alert("El cliente no tiene un número de teléfono registrado.")
     
     await actualizarAEnEsperaSiEsBorrador();
 
-    const telefonoLimpio = clienteActual.telefono.replace(/\D/g, '')
+    const telefonoLimpio = clienteActual.telefono ? clienteActual.telefono.replace(/\D/g, '') : '';
+    let mensaje = "";
+
+    if (tipo === 'presupuesto') {
+      mensaje = configuracion.msj_presupuesto || "Hola {{cliente}}, te enviamos el presupuesto para tu {{vehiculo}} ({{patente}}). Total: {{total}}. Saludos!";
+      mensaje = mensaje
+        .replace(/{{cliente}}/g, clienteActual.nombre)
+        .replace(/{{vehiculo}}/g, `${vehiculoActual.marca} ${vehiculoActual.modelo}`)
+        .replace(/{{patente}}/g, vehiculoActual.patente)
+        .replace(/{{total}}/g, `$${totalFinal.toLocaleString()}`)
+        .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
+      
+      window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
     
-    // LA MAGIA DE LAS VARIABLES: Traemos tu plantilla y reemplazamos los corchetes
-    let mensaje = configuracion.msj_presupuesto || "Hola {{cliente}}, te enviamos el presupuesto para tu {{vehiculo}} ({{patente}}). Total: {{total}}. Saludos!";
-    
-    // Usamos una expresión regular (/g) por si pusiste la misma variable dos veces en el texto
-    mensaje = mensaje
-      .replace(/{{cliente}}/g, clienteActual.nombre)
-      .replace(/{{vehiculo}}/g, `${vehiculoActual.marca} ${vehiculoActual.modelo}`)
-      .replace(/{{patente}}/g, vehiculoActual.patente)
-      .replace(/{{total}}/g, `$${totalFinal.toLocaleString()}`)
-      .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
-    
-    window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
+    } else if (tipo === 'orden') {
+      // Mensaje estructurado tipo Checklist para el mecánico
+      const trabajosStr = filas.filter(f => f.detalle.trim() !== "" && f.tipo !== 'Repuesto' && f.tipo !== 'Neumático')
+                              .map(f => `👉 ${f.detalle}`).join('\n');
+      
+      const repuestosStr = filas.filter(f => f.detalle.trim() !== "" && (f.tipo === 'Repuesto' || f.tipo === 'Neumático'))
+                               .map(f => `📦 ${f.cant}x ${f.detalle}`).join('\n');
+
+      mensaje = `*🛠️ ORDEN DE TRABAJO: ${vehiculoActual.patente}*\n`;
+      mensaje += `Vehículo: ${vehiculoActual.marca} ${vehiculoActual.modelo}\n\n`;
+      
+      if (trabajosStr) mensaje += `*TAREAS A REALIZAR:*\n${trabajosStr}\n\n`;
+      if (repuestosStr) mensaje += `*REPUESTOS NECESARIOS:*\n${repuestosStr}\n\n`;
+      if (notasInternas) mensaje += `*⚠️ NOTAS INTERNAS:*\n${notasInternas}`;
+      
+      // Abre WhatsApp web para elegir el contacto (ej: grupo del taller o mecánico)
+      window.open(`https://wa.me/?text=${encodeURIComponent(mensaje)}`, '_blank')
+    }
   }
 
+  // --- LA MAGIA DE LA IMPRESIÓN CON PLANTILLAS REACT ---
   const generarDocumento = async (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     if (tipo === 'presupuesto') await actualizarAEnEsperaSiEsBorrador();
 
@@ -416,144 +440,43 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "");
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
     
-    const formatearFecha = (fechaString: string) => {
-      if (!fechaString) return "";
-      const partes = fechaString.split('T')[0].split('-');
-      if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
-      return fechaString;
-    }
-    const v_fecha = esHistorico ? formatearFecha(datosHistoricos.fecha_emision) : formatearFecha(fecha);
-    const v_nro = esHistorico ? `PRE-${datosHistoricos.numero_correlativo}` : (numeroCorrelativo ? `PRE-${numeroCorrelativo}` : "PRE-BORRADOR");
-    const v_notas = esHistorico ? datosHistoricos.observaciones_publicas : notasCliente;
-    const v_notas_int = esHistorico ? datosHistoricos.notas_internas : notasInternas;
+    const serviciosParaImprimir = v_filas.filter((f: any) => f.tipo !== 'Repuesto' && f.tipo !== 'Neumático').map((f: any) => ({
+      descripcion: f.detalle,
+      precio: parseFloat(f.precio_unitario || f.precio || 0) * parseFloat(f.cantidad || f.cant || 1)
+    }));
 
-    const nombreTaller = configuracion.nombre_taller || "Mi Taller Automotor";
-    const telTaller = configuracion.telefono || "";
-    const dirTaller = configuracion.direccion || "";
+    const repuestosParaImprimir = v_filas.filter((f: any) => f.tipo === 'Repuesto' || f.tipo === 'Neumático').map((f: any) => ({
+      cantidad: parseFloat(f.cantidad || f.cant || 1),
+      descripcion: f.detalle,
+      precio_total: parseFloat(f.precio_unitario || f.precio || 0) * parseFloat(f.cantidad || f.cant || 1)
+    }));
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>${tipo === 'orden' ? 'Orden de Trabajo' : 'Presupuesto'} - ${v_nro}</title>
-        <style>
-          @page { size: A4 portrait; margin: 15mm; }
-          * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          body { font-family: Arial, sans-serif; color: #111; margin: 0 auto; padding: 0; width: 100%; max-width: 800px; }
-          .header { border-bottom: 2px solid #008A4B; padding-bottom: 15px; margin-bottom: 25px; overflow: hidden; width: 100%; }
-          .taller-info { float: left; width: 60%; }
-          .taller-info h1 { margin: 0 0 5px 0; color: #008A4B; font-size: 26px; text-transform: uppercase; }
-          .taller-info p { margin: 2px 0; font-size: 14px; color: #555; }
-          .doc-info { float: right; width: 35%; text-align: right; }
-          .doc-info h2 { margin: 0 0 5px 0; font-size: 22px; color: #333; text-transform: uppercase; }
-          .doc-info p { margin: 2px 0; font-size: 14px; color: #444; }
-          .box { width: 100%; border: 1px solid #ccc; padding: 15px; border-radius: 4px; margin-bottom: 25px; background: #fafafa; overflow: hidden; }
-          .box-col { float: left; width: 50%; font-size: 14px; line-height: 1.6; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: fixed; }
-          th { background: #008A4B; color: white; padding: 10px; text-align: left; font-size: 14px; border: 1px solid #008A4B; }
-          td { padding: 10px; border-bottom: 1px solid #ddd; border-left: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 14px; }
-          .text-right { text-align: right; }
-          .text-center { text-align: center; }
-          .totales { width: 350px; float: right; border-top: 2px solid #008A4B; padding-top: 10px; margin-top: 10px; }
-          .total-row { overflow: hidden; font-size: 15px; margin-bottom: 8px; }
-          .total-row span:first-child { float: left; font-weight: bold; }
-          .total-row span:last-child { float: right; font-family: monospace; }
-          .total-final { font-size: 22px; color: #008A4B; margin-top: 10px; }
-          .notas { clear: both; padding-top: 30px; font-size: 13px; color: #444; }
-          .orden-box { clear: both; border: 2px dashed #999; padding: 20px; margin-top: 30px; border-radius: 4px; background: #fffdf5; }
-          .firmas { width: 100%; overflow: hidden; margin-top: 50px; padding-top: 20px; }
-          .firma-col { float: left; width: 50%; font-weight: bold; font-size: 14px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="taller-info">
-            <h1>${nombreTaller}</h1>
-            <p>📍 ${dirTaller || 'Dirección no configurada'}</p>
-            <p>📞 ${telTaller || 'Teléfono no configurado'}</p>
-          </div>
-          <div class="doc-info">
-            <h2>${tipo === 'orden' ? 'ORDEN DE TRABAJO' : 'PRESUPUESTO'}</h2>
-            <p>Nro: <b>${v_nro}</b></p>
-            <p>Fecha: ${v_fecha}</p>
-          </div>
-        </div>
+    const datosFormateadosParaPlantilla = {
+      cliente_nombre: v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`,
+      cliente_telefono: v_cliente.telefono,
+      vehiculo_patente: v_vehiculo.patente,
+      vehiculo_modelo: `${v_vehiculo.marca} ${v_vehiculo.modelo}`,
+      numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
+      fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
+      servicios: serviciosParaImprimir,
+      repuestos: repuestosParaImprimir,
+      total_final: v_total,
+      observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
+      observaciones: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente // Mapeo doble por si acaso
+    };
 
-        <div class="box">
-          <div class="box-col">
-            <strong>Cliente:</strong> ${v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`}<br>
-            <strong>Teléfono:</strong> ${v_cliente.telefono || 'Sin registrar'}
-          </div>
-          <div class="box-col">
-            <strong>Vehículo:</strong> ${v_vehiculo.marca} ${v_vehiculo.modelo}<br>
-            <strong>Patente:</strong> <span style="font-family: monospace; font-size:15px; font-weight:bold;">${v_vehiculo.patente}</span>
-          </div>
-        </div>
+    // 1. Configuramos qué queremos imprimir y le pasamos los datos
+    setPrintType(tipo);
+    setPrintData(datosFormateadosParaPlantilla);
 
-        <table>
-          <thead>
-            <tr>
-              <th width="15%">Tipo</th>
-              <th width="${tipo === 'presupuesto' ? '45%' : '70%'}">Descripción del Trabajo / Repuesto</th>
-              <th width="10%" class="text-center">Cant.</th>
-              ${tipo === 'presupuesto' ? '<th width="15%" class="text-right">Precio Unit.</th><th width="15%" class="text-right">Subtotal</th>' : ''}
-            </tr>
-          </thead>
-          <tbody>
-            ${v_filas.length > 0 ? v_filas.map((f:any) => `
-              <tr>
-                <td>${f.tipo}</td>
-                <td>${f.detalle}</td>
-                <td class="text-center">${f.cantidad || f.cant || 1}</td>
-                ${tipo === 'presupuesto' ? `
-                  <td class="text-right">$${(f.precio_unitario || parseFloat(f.precio) || 0).toLocaleString()}</td>
-                  <td class="text-right font-bold">$${((f.precio_unitario || parseFloat(f.precio) || 0) * (f.cantidad || parseFloat(f.cant) || 1)).toLocaleString()}</td>
-                ` : ''}
-              </tr>
-            `).join('') : '<tr><td colspan="5" class="text-center"><i>No hay ítems cargados.</i></td></tr>'}
-          </tbody>
-        </table>
-
-        ${tipo === 'presupuesto' ? `
-          <div class="totales">
-            <div class="total-row total-final">
-              <span>TOTAL FINAL:</span>
-              <span>$${(v_total || 0).toLocaleString()}</span>
-            </div>
-          </div>
-          <div class="notas">
-            <strong>Condiciones / Observaciones:</strong><br><br>
-            ${(v_notas || '').replace(/\n/g, '<br>')}
-          </div>
-        ` : `
-          <div class="orden-box">
-            <strong>📋 Tareas y Notas Internas para el Taller:</strong><br><br>
-            ${v_notas_int ? v_notas_int.replace(/\n/g, '<br>') : '<i>(Sin instrucciones adicionales cargadas)</i>'}
-          </div>
-          <div class="firmas">
-            <div class="firma-col">Firma Mecánico: ________________________</div>
-            <div class="firma-col">Km Ingreso: ________________________</div>
-          </div>
-        `}
-      </body>
-      </html>
-    `;
-
-    const ventana = window.open('', '_blank');
-    if (ventana) {
-      ventana.document.write(html);
-      ventana.document.close();
-      setTimeout(() => {
-        ventana.print();
-        ventana.onafterprint = () => ventana.close();
-      }, 300);
-    }
+    // 2. Le damos 300ms a React para que dibuje la plantilla oculta y disparamos la impresión nativa
+    setTimeout(() => {
+      window.print();
+    }, 300);
   }
 
-  // --- LA MAGIA: VALIDACIÓN Y CONEXIÓN AL TALLER ---
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     try {
-      // 1. VERIFICACIÓN CRÍTICA: ¿Ya está en el taller?
       const { data: tallerExistente, error: errExistente } = await supabase
         .from('ordenes_trabajo')
         .select('id')
@@ -568,7 +491,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       }
 
       if (opcion === "turnos") {
-        // LA APROBACIÓN DIFERIDA: ¡NO ACTUALIZAMOS LA BASE DE DATOS ACÁ!
         setIsAprobarModalOpen(false);
         if (onNavigateToTurnos) {
           onNavigateToTurnos({ 
@@ -577,7 +499,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
           });
         }
       } else if (opcion === "inmediato") {
-        // APROBACIÓN INMEDIATA (Acá sí guardamos todo porque ya está el auto)
         await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', editandoId);
         setEstado("Aprobado");
         setIsAprobarModalOpen(false);
@@ -601,484 +522,500 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     }
   }
 
-  if (vista === "detalle") {
-    return (
-      <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
+  return (
+    <>
+      {/* ============================================================== */}
+      {/* ESTA ES LA APP NORMAL (Se oculta al tocar imprimir: print:hidden) */}
+      {/* ============================================================== */}
+      <div className="space-y-6 pb-8 print:hidden">
         
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4 print:hidden">
-          <Button variant="ghost" onClick={() => { 
-            setVista("lista"); 
-            setEditandoId(null); 
-            setIsEditing(false); 
-            if (onClearPresupuestoDetalle) onClearPresupuestoDetalle();
-            if (onVolver) onVolver(); // Si hay una ruta de retorno, la ejecuta
-          }} className="text-muted-foreground hover:text-foreground w-fit">
-            <ArrowLeft className="h-4 w-4 mr-2"/> Volver
-          </Button>
-          
-          <div className="flex flex-wrap items-center gap-2">
-            {!isEditing && editandoId && (
-              <>
-                {estado !== "Aprobado" && estado !== "Facturado" && (
-                  <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
-                    <CheckCircle className="w-4 h-4 mr-2"/> Aprobar Presupuesto
-                  </Button>
+        {vista === "detalle" ? (
+          <div className="max-w-7xl mx-auto animate-in fade-in duration-300 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
+              <Button variant="ghost" onClick={() => { 
+                setVista("lista"); 
+                setEditandoId(null); 
+                setIsEditing(false); 
+                if (onClearPresupuestoDetalle) onClearPresupuestoDetalle();
+                if (onVolver) onVolver(); 
+              }} className="text-muted-foreground hover:text-foreground w-fit">
+                <ArrowLeft className="h-4 w-4 mr-2"/> Volver
+              </Button>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                {!isEditing && editandoId && (
+                  <>
+                    {estado !== "Aprobado" && estado !== "Facturado" && (
+                      <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
+                        <CheckCircle className="w-4 h-4 mr-2"/> Aprobar Presupuesto
+                      </Button>
+                    )}
+
+                    <Button variant="outline" onClick={() => setIsAsociarModalOpen(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
+                      <Link2 className="w-4 h-4 mr-2"/> Asociar
+                    </Button>
+                    
+                    <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
+                      <Pencil className="w-4 h-4 mr-2"/> Activar Edición
+                    </Button>
+
+                    <div className="h-6 w-px bg-border mx-2"></div>
+                  </>
                 )}
 
-                <Button variant="outline" onClick={() => setIsAsociarModalOpen(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
-                  <Link2 className="w-4 h-4 mr-2"/> Asociar
+                {isEditing && (
+                  <>
+                    <Button variant="ghost" onClick={() => { if(editandoId) { setIsEditing(false); handleAbrirPresupuesto(presupuestos.find(p=>p.id === editandoId)); } else { setVista("lista"); } }} className="text-muted-foreground hover:text-destructive">
+                      <X className="w-4 h-4 mr-2"/> Cancelar Edición
+                    </Button>
+                    <Button onClick={handleGuardarPresupuesto} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+                      {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} {editandoId ? "Guardar Cambios" : "Crear Presupuesto"}
+                    </Button>
+                    <div className="h-6 w-px bg-border mx-2"></div>
+                  </>
+                )}
+
+                <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
+                  <ClipboardList className="w-4 h-4 mr-2"/> Orden Papel
                 </Button>
                 
-                <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
-                  <Pencil className="w-4 h-4 mr-2"/> Activar Edición
+                <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
+                  <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
                 </Button>
 
-                <div className="h-6 w-px bg-border mx-2"></div>
-              </>
-            )}
-
-            {isEditing && (
-              <>
-                <Button variant="ghost" onClick={() => { if(editandoId) { setIsEditing(false); handleAbrirPresupuesto(presupuestos.find(p=>p.id === editandoId)); } else { setVista("lista"); } }} className="text-muted-foreground hover:text-destructive">
-                  <X className="w-4 h-4 mr-2"/> Cancelar Edición
+                {/* BOTONES WHATSAPP SEPARADOS */}
+                <Button onClick={() => handleWhatsApp('presupuesto')} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
+                  <MessageCircle className="w-4 h-4 mr-2"/> Wpp Cliente
                 </Button>
-                <Button onClick={handleGuardarPresupuesto} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
-                  {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} {editandoId ? "Guardar Cambios" : "Crear Presupuesto"}
+                <Button onClick={() => handleWhatsApp('orden')} className="bg-[#3b82f6] hover:bg-[#2563eb] text-white shadow-sm border-none">
+                  <MessageCircle className="w-4 h-4 mr-2"/> Wpp Orden
                 </Button>
-                <div className="h-6 w-px bg-border mx-2"></div>
-              </>
-            )}
+              </div>
+            </div>
 
-            <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
-              <ClipboardList className="w-4 h-4 mr-2"/> Orden Trabajo
-            </Button>
-            
-            <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
-              <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
-            </Button>
-            
-            <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none">
-              <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
-            </Button>
-          </div>
-        </div>
+            <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
+              <CardHeader className="bg-secondary/10 border-b border-border pb-4">
+                <CardTitle className="text-lg flex justify-between items-center text-emerald-700 dark:text-emerald-500">
+                  <div className="flex items-center gap-2"><FileText className="w-5 h-5" /> Datos del Presupuesto</div>
+                  {editandoId && <Badge variant="outline" className="font-mono text-base bg-background px-3 py-1">PRE-{numeroCorrelativo}</Badge>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
+                  
+                  {isEditing && (
+                    <div className="md:col-span-6 space-y-2 relative">
+                      <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span></Label>
+                      <div className="flex">
+                        <Input 
+                          placeholder="Escriba aquí para buscar..." 
+                          className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
+                          value={busquedaEntidad}
+                          onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
+                          onFocus={() => setMostrarResultados(true)}
+                          onBlur={() => setTimeout(() => setMostrarResultados(false), 300)}
+                        />
+                        <Button variant="outline" className="rounded-l-none bg-emerald-50 border-emerald-500 text-emerald-700 hover:bg-emerald-100 px-4 h-10 border-l-0"><Search className="h-4 w-4"/></Button>
+                      </div>
 
-        <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
-          <CardHeader className="bg-secondary/10 border-b border-border pb-4">
-            <CardTitle className="text-lg flex justify-between items-center text-emerald-700 dark:text-emerald-500">
-              <div className="flex items-center gap-2"><FileText className="w-5 h-5" /> Datos del Presupuesto</div>
-              {editandoId && <Badge variant="outline" className="font-mono text-base bg-background px-3 py-1">PRE-{numeroCorrelativo}</Badge>}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
-              
-              {isEditing && (
-                <div className="md:col-span-6 space-y-2 relative">
-                  <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span></Label>
-                  <div className="flex">
-                    <Input 
-                      placeholder="Escriba aquí para buscar..." 
-                      className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
-                      value={busquedaEntidad}
-                      onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
-                      onFocus={() => setMostrarResultados(true)}
-                      onBlur={() => setTimeout(() => setMostrarResultados(false), 300)}
-                    />
-                    <Button variant="outline" className="rounded-l-none bg-emerald-50 border-emerald-500 text-emerald-700 hover:bg-emerald-100 px-4 h-10 border-l-0"><Search className="h-4 w-4"/></Button>
-                  </div>
-
-                  {mostrarResultados && busquedaEntidad.length > 0 && (vehiculosBusqueda.length > 0 || clientesBusqueda.length > 0) && (
-                    <div className="absolute top-[72px] left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
-                      {vehiculosBusqueda.map(v => {
-                        const c = clientes.find(cl => cl.id === v.cliente_id)
-                        return (
-                          <div key={v.id} onMouseDown={() => seleccionarVehiculoBuscador(v)} className="p-2.5 hover:bg-emerald-600 hover:text-white cursor-pointer flex items-center gap-3 border-b border-border/50 text-sm transition-colors group">
-                            <span className="bg-[#008A4B] text-white px-2 py-1 rounded font-mono font-bold tracking-widest">{v.patente}</span>
-                            <span className="font-medium">- {c?.tipo_cliente === 'empresa' ? c.razon_social : `${c?.nombre} ${c?.apellido}`} ({v.marca} {v.modelo})</span>
-                          </div>
-                        )
-                      })}
-                      {clientesBusqueda.map(c => (
-                        <div key={c.id} onMouseDown={() => seleccionarClienteBuscador(c)} className="p-3 hover:bg-secondary cursor-pointer flex items-center gap-2 border-b border-border/50 text-sm transition-colors">
-                          <User className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-bold">{c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido}`}</span>
-                          <span className="text-muted-foreground text-xs">({c.documento || 'Sin DNI'})</span>
+                      {mostrarResultados && busquedaEntidad.length > 0 && (vehiculosBusqueda.length > 0 || clientesBusqueda.length > 0) && (
+                        <div className="absolute top-[72px] left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
+                          {vehiculosBusqueda.map(v => {
+                            const c = clientes.find(cl => cl.id === v.cliente_id)
+                            return (
+                              <div key={v.id} onMouseDown={() => seleccionarVehiculoBuscador(v)} className="p-2.5 hover:bg-emerald-600 hover:text-white cursor-pointer flex items-center gap-3 border-b border-border/50 text-sm transition-colors group">
+                                <span className="bg-[#008A4B] text-white px-2 py-1 rounded font-mono font-bold tracking-widest">{v.patente}</span>
+                                <span className="font-medium">- {c?.tipo_cliente === 'empresa' ? c.razon_social : `${c?.nombre} ${c?.apellido}`} ({v.marca} {v.modelo})</span>
+                              </div>
+                            )
+                          })}
+                          {clientesBusqueda.map(c => (
+                            <div key={c.id} onMouseDown={() => seleccionarClienteBuscador(c)} className="p-3 hover:bg-secondary cursor-pointer flex items-center gap-2 border-b border-border/50 text-sm transition-colors">
+                              <User className="w-4 h-4 text-muted-foreground" />
+                              <span className="font-bold">{c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido}`}</span>
+                              <span className="text-muted-foreground text-xs">({c.documento || 'Sin DNI'})</span>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              <div className={isEditing ? "md:col-span-2 space-y-2" : "md:col-span-4 space-y-2"}>
-                <Label>Fecha de Emisión</Label>
-                <Input type="date" value={fecha} onChange={(e: any) => setFecha(e.target.value)} disabled={!isEditing} className="bg-slate-50 dark:bg-slate-900 h-10 disabled:opacity-100 disabled:font-medium" />
-              </div>
-              <div className={isEditing ? "md:col-span-2 space-y-2" : "md:col-span-4 space-y-2"}>
-                <Label>Validez (Días)</Label>
-                <Input type="number" value={validez} onChange={(e: any) => setValidez(e.target.value)} readOnly={!isEditing} className={`h-10 ${!isEditing ? 'bg-secondary/20 font-medium' : 'bg-slate-50 dark:bg-slate-900'}`} />
-              </div>
-              <div className="md:col-span-4 space-y-2">
-                <Label>Estado</Label>
-                <Select value={estado} onValueChange={setEstado} disabled={!isEditing}>
-                  <SelectTrigger className={`h-10 border-border font-medium disabled:opacity-100 ${getEstadoColor(estado)}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Borrador">Borrador</SelectItem>
-                    <SelectItem value="En Espera">En Espera</SelectItem>
-                    <SelectItem value="Aprobado">Aprobado</SelectItem>
-                    <SelectItem value="Rechazado">Rechazado</SelectItem>
-                    <SelectItem value="Facturado">Facturado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
-                <Input 
-                  readOnly 
-                  placeholder={isEditing ? "Se completa al buscar arriba..." : "Sin registrar"}
-                  value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} 
-                  className="bg-secondary/20 text-foreground font-bold h-10 border-border pointer-events-none" 
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar {isEditing && <span className="text-destructive">*</span>}</Label>
-                <select
-                  className={`flex h-10 w-full rounded-md border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-bold ${!isEditing ? 'bg-secondary/20 pointer-events-none appearance-none' : 'bg-white dark:bg-slate-950'}`}
-                  value={vehiculoSeleccionado}
-                  onChange={(e) => setVehiculoSeleccionado(e.target.value)}
-                  disabled={!isEditing || !clienteSeleccionado}
-                >
-                  <option value="" disabled>
-                    {clienteSeleccionado ? "Seleccione un vehículo..." : (isEditing ? "Esperando cliente..." : "Sin registrar")}
-                  </option>
-                  {vehiculosDelCliente.map(v => (
-                    <option key={v.patente} value={v.patente}>
-                      {v.marca} {v.modelo} ({v.patente})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</Label>
-                <Input 
-                  readOnly 
-                  placeholder="-"
-                  value={clienteActual?.telefono || ""} 
-                  className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none" 
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 2. TABLA DE DETALLE */}
-        <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
-          <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-lg">Detalle de Repuestos y Trabajos</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}`}>
-              {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>} {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
-            </Button>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-secondary/5 hover:bg-secondary/5">
-                    <TableHead className="w-[160px] print:hidden">Tipo</TableHead>
-                    <TableHead>Descripción del Trabajo / Repuesto</TableHead>
-                    <TableHead className="w-[80px] text-center">Cant.</TableHead>
-                    {mostrarCostos && <TableHead className="w-[120px] text-right text-amber-600 print:hidden">Costo Unit.</TableHead>}
-                    <TableHead className="w-[140px] text-right text-emerald-600">Precio Venta</TableHead>
-                    <TableHead className="w-[140px] text-right">Subtotal</TableHead>
-                    {isEditing && <TableHead className="w-[50px] print:hidden"></TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filas.map((fila) => {
-                    const catalogoFiltrado = catalogo.filter(c => c.tipo === fila.tipo)
-
-                    return (
-                      <TableRow key={fila.id} className="hover:bg-transparent">
-                        <TableCell className="print:hidden">
-                          <Select value={fila.tipo} onValueChange={(v: string) => actualizarFila(fila.id, 'tipo', v)} disabled={!isEditing}>
-                            <SelectTrigger className={`h-10 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium disabled:opacity-100 appearance-none' : 'bg-white dark:bg-slate-950'}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Servicio">Servicio</SelectItem>
-                              <SelectItem value="Mano de Obra">Mano de Obra</SelectItem>
-                              <SelectItem value="Repuesto">Repuesto</SelectItem>
-                              <SelectItem value="Neumático">Neumático</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            {isEditing && (
-                              <Select onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}>
-                                <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
-                                  <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {catalogoFiltrado.length === 0 ? (
-                                    <SelectItem value="none" disabled>No hay {fila.tipo.toLowerCase()}s</SelectItem>
-                                  ) : (
-                                    catalogoFiltrado.map(c => <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>)
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Escriba el detalle..." : ""} className={`h-10 flex-1 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} />
-                          </div>
-                        </TableCell>
-                        <TableCell><Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} readOnly={!isEditing} className={`h-10 text-center font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
-                        {mostrarCostos && (
-                          <TableCell className="print:hidden"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 text-amber-700' : 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400'}`} /></TableCell>
-                        )}
-                        <TableCell><Input value={fila.precio} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
-                        <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)).toLocaleString()}</TableCell>
-                        {isEditing && (
-                          <TableCell className="print:hidden"><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
-                        )}
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-            {isEditing && (
-              <div className="p-4 border-t border-border bg-slate-50 dark:bg-slate-900/30 print:hidden">
-                <Button variant="outline" size="sm" onClick={agregarFilaVacia} className="bg-background"><Plus className="w-4 h-4 mr-2"/> Agregar Fila</Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 3. TOTALES Y NOTAS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
-          <div className="space-y-6">
-            <Card className={`border-border shadow-sm ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
-              <CardContent className="p-4 space-y-2">
-                <Label className="font-semibold text-foreground">Observaciones para el Cliente <span className="text-muted-foreground font-normal text-xs">(Sale en el PDF)</span></Label>
-                <Textarea value={notasCliente} onChange={(e: any) => setNotasCliente(e.target.value)} readOnly={!isEditing} className={`min-h-[80px] ${!isEditing ? 'bg-secondary/10 border-transparent resize-none' : 'bg-slate-50 dark:bg-slate-900 border-border'}`} />
-              </CardContent>
-            </Card>
-            <Card className={`border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm print:hidden ${isEditing ? 'ring-2 ring-amber-500/30' : ''}`}>
-              <CardContent className="p-4 space-y-2">
-                <Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label>
-                <Textarea value={notasInternas} onChange={(e: any) => setNotasInternas(e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Información solo visible para el taller..." : "Sin notas internas."} className={`min-h-[80px] ${!isEditing ? 'bg-transparent border-transparent resize-none' : 'bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400'}`} />
-              </CardContent>
-            </Card>
-          </div>
-          <div className="flex flex-col justify-between">
-            <Card className="border-border shadow-md mb-6">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
-                <div className="flex justify-between items-center text-muted-foreground">
-                  <span>Descuento / Atención:</span>
-                  <div className="relative w-32">
-                    <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span>
-                    <Input value={descuento} onChange={(e: any) => setDescuento(e.target.value)} readOnly={!isEditing} className={`h-10 pl-7 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-slate-50 dark:bg-slate-900'}`} />
+                  <div className={isEditing ? "md:col-span-2 space-y-2" : "md:col-span-4 space-y-2"}>
+                    <Label>Fecha de Emisión</Label>
+                    <Input type="date" value={fecha} onChange={(e: any) => setFecha(e.target.value)} disabled={!isEditing} className="bg-slate-50 dark:bg-slate-900 h-10 disabled:opacity-100 disabled:font-medium" />
+                  </div>
+                  <div className={isEditing ? "md:col-span-2 space-y-2" : "md:col-span-4 space-y-2"}>
+                    <Label>Validez (Días)</Label>
+                    <Input type="number" value={validez} onChange={(e: any) => setValidez(e.target.value)} readOnly={!isEditing} className={`h-10 ${!isEditing ? 'bg-secondary/20 font-medium' : 'bg-slate-50 dark:bg-slate-900'}`} />
+                  </div>
+                  <div className="md:col-span-4 space-y-2">
+                    <Label>Estado</Label>
+                    <Select value={estado} onValueChange={setEstado} disabled={!isEditing}>
+                      <SelectTrigger className={`h-10 border-border font-medium disabled:opacity-100 ${getEstadoColor(estado)}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Borrador">Borrador</SelectItem>
+                        <SelectItem value="En Espera">En Espera</SelectItem>
+                        <SelectItem value="Aprobado">Aprobado</SelectItem>
+                        <SelectItem value="Rechazado">Rechazado</SelectItem>
+                        <SelectItem value="Facturado">Facturado</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
-                {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
+                    <Input 
+                      readOnly 
+                      placeholder={isEditing ? "Se completa al buscar arriba..." : "Sin registrar"}
+                      value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} 
+                      className="bg-secondary/20 text-foreground font-bold h-10 border-border pointer-events-none" 
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar {isEditing && <span className="text-destructive">*</span>}</Label>
+                    <select
+                      className={`flex h-10 w-full rounded-md border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-bold ${!isEditing ? 'bg-secondary/20 pointer-events-none appearance-none' : 'bg-white dark:bg-slate-950'}`}
+                      value={vehiculoSeleccionado}
+                      onChange={(e) => setVehiculoSeleccionado(e.target.value)}
+                      disabled={!isEditing || !clienteSeleccionado}
+                    >
+                      <option value="" disabled>
+                        {clienteSeleccionado ? "Seleccione un vehículo..." : (isEditing ? "Esperando cliente..." : "Sin registrar")}
+                      </option>
+                      {vehiculosDelCliente.map(v => (
+                        <option key={v.patente} value={v.patente}>
+                          {v.marca} {v.modelo} ({v.patente})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</Label>
+                    <Input 
+                      readOnly 
+                      placeholder="-"
+                      value={clienteActual?.telefono || ""} 
+                      className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none" 
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
-            {!isEditing && editandoId && (
-              <div className="flex justify-end print:hidden">
-                <Button variant="outline" onClick={() => handleEliminarPresupuesto(editandoId)} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-900/20">
-                  <Trash2 className="w-4 h-4 mr-2" /> Eliminar Presupuesto Permanentemente
+            <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
+              <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-lg">Detalle de Repuestos y Trabajos</CardTitle>
+                <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}`}>
+                  {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>} {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
                 </Button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* MODAL ASOCIAR/FUSIONAR */}
-        <Dialog open={isAsociarModalOpen} onOpenChange={setIsAsociarModalOpen}>
-          <DialogContent className="border-border bg-card max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
-                <Link2 className="w-5 h-5 text-blue-600" /> Asociar Presupuesto
-              </DialogTitle>
-              <DialogDescription>
-                Seleccioná otro presupuesto abierto de este mismo vehículo. Los repuestos se fusionarán y el presupuesto viejo será eliminado de la lista.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="py-4">
-              <Label className="mb-2 block">Presupuestos Disponibles (Borrador o En Espera)</Label>
-              <Select value={presupuestoAFusionar} onValueChange={setPresupuestoAFusionar}>
-                <SelectTrigger className="bg-slate-50 dark:bg-slate-900">
-                  <SelectValue placeholder="Elegir presupuesto a fusionar..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {presupuestos
-                    .filter(p => p.vehiculo_patente === vehiculoSeleccionado && p.id !== editandoId && (p.estado === 'Borrador' || p.estado === 'En Espera'))
-                    .map(p => (
-                      <SelectItem key={p.id} value={p.id}>
-                        PRE-{p.numero_correlativo} - ${p.total_final?.toLocaleString()} ({p.estado})
-                      </SelectItem>
-                    ))
-                  }
-                  {presupuestos.filter(p => p.vehiculo_patente === vehiculoSeleccionado && p.id !== editandoId && (p.estado === 'Borrador' || p.estado === 'En Espera')).length === 0 && (
-                    <SelectItem value="none" disabled>No hay otros presupuestos abiertos para este vehículo.</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setIsAsociarModalOpen(false)}>Cancelar</Button>
-              <Button onClick={confirmarFusion} disabled={!presupuestoAFusionar || isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
-                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Fusionar Ítems
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* MODAL APROBACIÓN -> TURNERO O INMEDIATO */}
-        <Dialog open={isAprobarModalOpen} onOpenChange={setIsAprobarModalOpen}>
-          <DialogContent className="border-border bg-card max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
-                <CheckCircle className="w-6 h-6 text-emerald-600" /> Presupuesto Aprobado
-              </DialogTitle>
-              <DialogDescription>
-                ¡Excelente! El cliente aprobó el trabajo. ¿Cómo desea ingresar el vehículo al sistema del taller?
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid grid-cols-1 gap-4 py-4">
-              <Button 
-                variant="outline" 
-                className="h-24 flex flex-col items-center justify-center gap-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
-                onClick={() => procesarAprobacion("turnos")}
-              >
-                <CalendarDays className="w-6 h-6 mb-1" />
-                <span className="font-bold">Programar Turno</span>
-                <span className="text-xs opacity-80 font-normal">Agendar en el calendario para otro día</span>
-              </Button>
-
-              <Button 
-                variant="outline" 
-                className="h-24 flex flex-col items-center justify-center gap-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
-                onClick={() => procesarAprobacion("inmediato")}
-              >
-                <Wrench className="w-6 h-6 mb-1" />
-                <span className="font-bold">Recepción Inmediata</span>
-                <span className="text-xs opacity-80 font-normal">El vehículo ya está en el taller</span>
-              </Button>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setIsAprobarModalOpen(false)}>Cancelar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2><p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p></div>
-        <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto</Button>
-      </div>
-      <Card className="border-border bg-card">
-        <CardHeader className="border-b border-border bg-secondary/10 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-md w-full">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar por cliente, patente o Nro..." 
-              className="pl-9 bg-background" 
-              value={busquedaLista}
-              onChange={(e) => setBusquedaLista(e.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader><TableRow className="bg-secondary/20"><TableHead>Nro</TableHead><TableHead>Fecha</TableHead><TableHead>Cliente y Vehículo</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-center">Estado</TableHead><TableHead className="text-right">Acciones Rápidas</TableHead></TableRow></TableHeader>
-            <TableBody>
-                  {isLoading ? (
-                    /* MAGIA VISUAL: Esqueletos para Presupuestos (6 columnas) */
-                    Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell><div className="h-6 w-24 bg-secondary/60 rounded animate-pulse"></div></TableCell>
-                        <TableCell><div className="h-5 w-28 bg-secondary/40 rounded animate-pulse"></div></TableCell>
-                        <TableCell>
-                          <div className="space-y-2">
-                            <div className="h-5 w-48 bg-secondary/60 rounded animate-pulse"></div>
-                            <div className="h-4 w-32 bg-secondary/40 rounded animate-pulse"></div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right"><div className="h-6 w-28 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
-                        <TableCell className="text-center"><div className="h-8 w-32 bg-secondary/60 rounded animate-pulse mx-auto"></div></TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
-                            <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
-                          </div>
-                        </TableCell>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-secondary/5 hover:bg-secondary/5">
+                        <TableHead className="w-[160px] print:hidden">Tipo</TableHead>
+                        <TableHead>Descripción del Trabajo / Repuesto</TableHead>
+                        <TableHead className="w-[80px] text-center">Cant.</TableHead>
+                        {mostrarCostos && <TableHead className="w-[120px] text-right text-amber-600 print:hidden">Costo Unit.</TableHead>}
+                        <TableHead className="w-[140px] text-right text-emerald-600">Precio Venta</TableHead>
+                        <TableHead className="w-[140px] text-right">Subtotal</TableHead>
+                        {isEditing && <TableHead className="w-[50px] print:hidden"></TableHead>}
                       </TableRow>
-                    ))
-                  ) : presupuestosFiltrados.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No se encontraron presupuestos.</TableCell></TableRow>
-              ) : (
-                presupuestosFiltrados.map((p) => (
-                  <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group transition-colors" onClick={() => handleAbrirPresupuesto(p)}>
-                    <TableCell className="font-mono font-bold">PRE-{p.numero_correlativo}</TableCell>
-                    <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
-                    <TableCell>
-                      <div className="font-medium text-foreground group-hover:text-emerald-600 transition-colors">
-                        {p.vehiculos?.clientes?.tipo_cliente === 'empresa' 
-                          ? p.vehiculos?.clientes?.razon_social 
-                          : `${p.vehiculos?.clientes?.nombre || ''} ${p.vehiculos?.clientes?.apellido || ''}`}
-                      </div>
-                      <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
-                    </TableCell>
-                    <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
-                    
-                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                      <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
-                        <SelectTrigger className={`h-8 text-xs w-[130px] mx-auto border ${getEstadoColor(p.estado)}`}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Borrador">Borrador</SelectItem>
-                          <SelectItem value="En Espera">En Espera</SelectItem>
-                          <SelectItem value="Aprobado">Aprobado</SelectItem>
-                          <SelectItem value="Rechazado">Rechazado</SelectItem>
-                          <SelectItem value="Facturado">Facturado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
+                    </TableHeader>
+                    <TableBody>
+                      {filas.map((fila) => {
+                        const catalogoFiltrado = catalogo.filter(c => c.tipo === fila.tipo)
 
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => generarDocumento('orden', p)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Orden de Trabajo"><ClipboardList className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => generarDocumento('presupuesto', p)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
+                        return (
+                          <TableRow key={fila.id} className="hover:bg-transparent">
+                            <TableCell className="print:hidden">
+                              <Select value={fila.tipo} onValueChange={(v: string) => actualizarFila(fila.id, 'tipo', v)} disabled={!isEditing}>
+                                <SelectTrigger className={`h-10 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium disabled:opacity-100 appearance-none' : 'bg-white dark:bg-slate-950'}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Servicio">Servicio</SelectItem>
+                                  <SelectItem value="Mano de Obra">Mano de Obra</SelectItem>
+                                  <SelectItem value="Repuesto">Repuesto</SelectItem>
+                                  <SelectItem value="Neumático">Neumático</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                {isEditing && (
+                                  <Select onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}>
+                                    <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
+                                      <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {catalogoFiltrado.length === 0 ? (
+                                        <SelectItem value="none" disabled>No hay {fila.tipo.toLowerCase()}s</SelectItem>
+                                      ) : (
+                                        catalogoFiltrado.map(c => <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>)
+                                      )}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Escriba el detalle..." : ""} className={`h-10 flex-1 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} />
+                              </div>
+                            </TableCell>
+                            <TableCell><Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} readOnly={!isEditing} className={`h-10 text-center font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
+                            {mostrarCostos && (
+                              <TableCell className="print:hidden"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 text-amber-700' : 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400'}`} /></TableCell>
+                            )}
+                            <TableCell><Input value={fila.precio} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
+                            <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)).toLocaleString()}</TableCell>
+                            {isEditing && (
+                              <TableCell className="print:hidden"><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
+                            )}
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+                {isEditing && (
+                  <div className="p-4 border-t border-border bg-slate-50 dark:bg-slate-900/30 print:hidden">
+                    <Button variant="outline" size="sm" onClick={agregarFilaVacia} className="bg-background"><Plus className="w-4 h-4 mr-2"/> Agregar Fila</Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+              <div className="space-y-6">
+                <Card className={`border-border shadow-sm ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
+                  <CardContent className="p-4 space-y-2">
+                    <Label className="font-semibold text-foreground">Observaciones para el Cliente <span className="text-muted-foreground font-normal text-xs">(Sale en el PDF)</span></Label>
+                    <Textarea value={notasCliente} onChange={(e: any) => setNotasCliente(e.target.value)} readOnly={!isEditing} className={`min-h-[80px] ${!isEditing ? 'bg-secondary/10 border-transparent resize-none' : 'bg-slate-50 dark:bg-slate-900 border-border'}`} />
+                  </CardContent>
+                </Card>
+                <Card className={`border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm print:hidden ${isEditing ? 'ring-2 ring-amber-500/30' : ''}`}>
+                  <CardContent className="p-4 space-y-2">
+                    <Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label>
+                    <Textarea value={notasInternas} onChange={(e: any) => setNotasInternas(e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Información solo visible para el taller..." : "Sin notas internas."} className={`min-h-[80px] ${!isEditing ? 'bg-transparent border-transparent resize-none' : 'bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400'}`} />
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="flex flex-col justify-between">
+                <Card className="border-border shadow-md mb-6">
+                  <CardContent className="p-6 space-y-4">
+                    <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
+                    <div className="flex justify-between items-center text-muted-foreground">
+                      <span>Descuento / Atención:</span>
+                      <div className="relative w-32">
+                        <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span>
+                        <Input value={descuento} onChange={(e: any) => setDescuento(e.target.value)} readOnly={!isEditing} className={`h-10 pl-7 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-slate-50 dark:bg-slate-900'}`} />
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+                    </div>
+                    <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
+                    {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
+                  </CardContent>
+                </Card>
+
+                {!isEditing && editandoId && (
+                  <div className="flex justify-end print:hidden">
+                    <Button variant="outline" onClick={() => handleEliminarPresupuesto(editandoId)} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-900/20">
+                      <Trash2 className="w-4 h-4 mr-2" /> Eliminar Presupuesto Permanentemente
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* MODALES OCULTOS EN IMPRESION */}
+            <div className="print:hidden">
+              <Dialog open={isAsociarModalOpen} onOpenChange={setIsAsociarModalOpen}>
+                <DialogContent className="border-border bg-card max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+                      <Link2 className="w-5 h-5 text-blue-600" /> Asociar Presupuesto
+                    </DialogTitle>
+                    <DialogDescription>
+                      Seleccioná otro presupuesto abierto de este mismo vehículo. Los repuestos se fusionarán y el presupuesto viejo será eliminado de la lista.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="py-4">
+                    <Label className="mb-2 block">Presupuestos Disponibles (Borrador o En Espera)</Label>
+                    <Select value={presupuestoAFusionar} onValueChange={setPresupuestoAFusionar}>
+                      <SelectTrigger className="bg-slate-50 dark:bg-slate-900">
+                        <SelectValue placeholder="Elegir presupuesto a fusionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {presupuestos
+                          .filter(p => p.vehiculo_patente === vehiculoSeleccionado && p.id !== editandoId && (p.estado === 'Borrador' || p.estado === 'En Espera'))
+                          .map(p => (
+                            <SelectItem key={p.id} value={p.id}>
+                              PRE-{p.numero_correlativo} - ${p.total_final?.toLocaleString()} ({p.estado})
+                            </SelectItem>
+                          ))
+                        }
+                        {presupuestos.filter(p => p.vehiculo_patente === vehiculoSeleccionado && p.id !== editandoId && (p.estado === 'Borrador' || p.estado === 'En Espera')).length === 0 && (
+                          <SelectItem value="none" disabled>No hay otros presupuestos abiertos para este vehículo.</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsAsociarModalOpen(false)}>Cancelar</Button>
+                    <Button onClick={confirmarFusion} disabled={!presupuestoAFusionar || isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Fusionar Ítems
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isAprobarModalOpen} onOpenChange={setIsAprobarModalOpen}>
+                <DialogContent className="border-border bg-card max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+                      <CheckCircle className="w-6 h-6 text-emerald-600" /> Presupuesto Aprobado
+                    </DialogTitle>
+                    <DialogDescription>
+                      ¡Excelente! El cliente aprobó el trabajo. ¿Cómo desea ingresar el vehículo al sistema del taller?
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="grid grid-cols-1 gap-4 py-4">
+                    <Button 
+                      variant="outline" 
+                      className="h-24 flex flex-col items-center justify-center gap-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                      onClick={() => procesarAprobacion("turnos")}
+                    >
+                      <CalendarDays className="w-6 h-6 mb-1" />
+                      <span className="font-bold">Programar Turno</span>
+                      <span className="text-xs opacity-80 font-normal">Agendar en el calendario para otro día</span>
+                    </Button>
+
+                    <Button 
+                      variant="outline" 
+                      className="h-24 flex flex-col items-center justify-center gap-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                      onClick={() => procesarAprobacion("inmediato")}
+                    >
+                      <Wrench className="w-6 h-6 mb-1" />
+                      <span className="font-bold">Recepción Inmediata</span>
+                      <span className="text-xs opacity-80 font-normal">El vehículo ya está en el taller</span>
+                    </Button>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsAprobarModalOpen(false)}>Cancelar</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div><h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2><p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p></div>
+              <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto</Button>
+            </div>
+            <Card className="border-border bg-card">
+              <CardHeader className="border-b border-border bg-secondary/10 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="relative flex-1 max-w-md w-full">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Buscar por cliente, patente o Nro..." 
+                    className="pl-9 bg-background" 
+                    value={busquedaLista}
+                    onChange={(e) => setBusquedaLista(e.target.value)}
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader><TableRow className="bg-secondary/20"><TableHead>Nro</TableHead><TableHead>Fecha</TableHead><TableHead>Cliente y Vehículo</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-center">Estado</TableHead><TableHead className="text-right">Acciones Rápidas</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                        {isLoading ? (
+                          Array.from({ length: 5 }).map((_, i) => (
+                            <TableRow key={i}>
+                              <TableCell><div className="h-6 w-24 bg-secondary/60 rounded animate-pulse"></div></TableCell>
+                              <TableCell><div className="h-5 w-28 bg-secondary/40 rounded animate-pulse"></div></TableCell>
+                              <TableCell>
+                                <div className="space-y-2">
+                                  <div className="h-5 w-48 bg-secondary/60 rounded animate-pulse"></div>
+                                  <div className="h-4 w-32 bg-secondary/40 rounded animate-pulse"></div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right"><div className="h-6 w-28 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                              <TableCell className="text-center"><div className="h-8 w-32 bg-secondary/60 rounded animate-pulse mx-auto"></div></TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                                  <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : presupuestosFiltrados.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No se encontraron presupuestos.</TableCell></TableRow>
+                    ) : (
+                      presupuestosFiltrados.map((p) => (
+                        <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group transition-colors" onClick={() => handleAbrirPresupuesto(p)}>
+                          <TableCell className="font-mono font-bold">PRE-{p.numero_correlativo}</TableCell>
+                          <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
+                          <TableCell>
+                            <div className="font-medium text-foreground group-hover:text-emerald-600 transition-colors">
+                              {p.vehiculos?.clientes?.tipo_cliente === 'empresa' 
+                                ? p.vehiculos?.clientes?.razon_social 
+                                : `${p.vehiculos?.clientes?.nombre || ''} ${p.vehiculos?.clientes?.apellido || ''}`}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
+                          </TableCell>
+                          <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
+                          
+                          <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                            <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
+                              <SelectTrigger className={`h-8 text-xs w-[130px] mx-auto border ${getEstadoColor(p.estado)}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Borrador">Borrador</SelectItem>
+                                <SelectItem value="En Espera">En Espera</SelectItem>
+                                <SelectItem value="Aprobado">Aprobado</SelectItem>
+                                <SelectItem value="Rechazado">Rechazado</SelectItem>
+                                <SelectItem value="Facturado">Facturado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => generarDocumento('orden', p)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Orden de Trabajo"><ClipboardList className="h-4 w-4" /></Button>
+                              <Button variant="ghost" size="icon" onClick={() => generarDocumento('presupuesto', p)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+      </div>
+
+      {/* ============================================================== */}
+      {/* ZONA DE IMPRESIÓN (Solo visible al tocar Ctrl+P o Imprimir)  */}
+      {/* Usamos 'absolute z-50' para que tape a toda la aplicación.  */}
+      {/* ============================================================== */}
+      <div className="hidden print:block absolute top-0 left-0 w-full bg-white z-50">
+        {printType === 'presupuesto' && <PresupuestoImprimible datos={printData} />}
+        {printType === 'orden' && <OrdenTrabajoImprimible datos={printData} />}
+      </div>
+    </>
   )
 }
