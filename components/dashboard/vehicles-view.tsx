@@ -38,10 +38,8 @@ const MARCAS_COMUNES = [
   "Kia", "Chery", "Suzuki", "Otra"
 ]
 
-export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNavigateToClients, onNavigateToPresupuesto }: { vehiculoAbreDetalle?: any, onClearVehiculoDetalle?: () => void, onNavigateToClients?: (cliente: any) => void, onNavigateToPresupuesto?: (id: string) => void }) {
-  const [vista, setVista] = useState<"lista" | "detalle">("lista")
-  
-  // EL ESTADO QUE LEE LA ETIQUETA PARA SABER DE DÓNDE VENIMOS
+export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNavigateToClients, onNavigateToPresupuesto }: { vehiculoAbreDetalle?: any, onClearVehiculoDetalle?: () => void, onNavigateToClients?: (cliente: any) => void, onNavigateToPresupuesto?: (id: string, vehiculo?: any) => void }) {  const [vista, setVista] = useState<"lista" | "detalle">("lista")
+
   const [vieneDeCliente, setVieneDeCliente] = useState(false)
 
   const [vehiculos, setVehiculos] = useState<any[]>([])
@@ -647,7 +645,7 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                       <TableRow 
                         key={hp.id} 
                         className="hover:bg-secondary/30 transition-colors cursor-pointer group" 
-                        onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(hp.id)}
+                        onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(hp.id, vehiculoSeleccionado)}
                       >
                         <TableCell className="font-mono font-bold group-hover:text-emerald-600 transition-colors">PRE-{hp.numero_correlativo}</TableCell>
                         <TableCell>{new Date(hp.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
@@ -698,7 +696,26 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    <TableRow><TableCell colSpan={5} className="h-32 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></TableCell></TableRow>
+                    /* MAGIA VISUAL: Esqueletos de carga en vez del círculo giratorio */
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><div className="h-8 w-24 bg-secondary/60 rounded animate-pulse"></div></TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <div className="h-4 w-32 bg-secondary/60 rounded animate-pulse"></div>
+                            <div className="h-3 w-20 bg-secondary/40 rounded animate-pulse"></div>
+                          </div>
+                        </TableCell>
+                        <TableCell><div className="h-5 w-32 bg-secondary/60 rounded animate-pulse"></div></TableCell>
+                        <TableCell>
+                          <div className="space-y-2">
+                            <div className="h-3 w-24 bg-secondary/40 rounded animate-pulse"></div>
+                            <div className="h-3 w-28 bg-secondary/40 rounded animate-pulse"></div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right"><div className="h-8 w-8 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                      </TableRow>
+                    ))
                   ) : vehiculosFiltrados.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No se encontraron vehículos.</TableCell></TableRow>
                   ) : (

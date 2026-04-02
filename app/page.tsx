@@ -23,9 +23,7 @@ export default function DashboardPage() {
   const [clienteParaAbrir, setClienteParaAbrir] = useState<any>(null)
   const [presupuestoParaAbrir, setPresupuestoParaAbrir] = useState<string | null>(null) 
   
-  // NUEVA MEMORIA: Saber a dónde volver
   const [volverA, setVolverA] = useState<string | null>(null)
-  
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
 
   const renderContent = () => {
@@ -38,7 +36,7 @@ export default function DashboardPage() {
               readOnly={true}
               onNavigateToPresupuesto={(id) => {
                 setPresupuestoParaAbrir(id);
-                setVolverA("Inicio"); // Anotamos que venimos del inicio
+                setVolverA("Inicio");
                 setActiveSection("Presupuestos");
               }}
             />
@@ -61,10 +59,11 @@ export default function DashboardPage() {
                    setClienteParaAbrir(cliente);
                    setActiveSection("Clientes");
                  }}
-                 // MAGIA: Navegar al presupuesto desde el historial del vehículo
-                 onNavigateToPresupuesto={(id) => {
+                 // MAGIA: Antes de ir al presupuesto, guardamos el auto actual en memoria
+                 onNavigateToPresupuesto={(id, vehiculoInfo) => {
                    setPresupuestoParaAbrir(id);
-                   setVolverA("Vehículos"); // Anotamos que venimos de la ficha del vehículo
+                   setVehiculoParaAbrir(vehiculoInfo); // Guardamos el auto
+                   setVolverA("Vehículos");
                    setActiveSection("Presupuestos");
                  }}
                />
@@ -72,7 +71,7 @@ export default function DashboardPage() {
         return <WorkOrdersTable 
                  onNavigateToPresupuesto={(id) => {
                    setPresupuestoParaAbrir(id);
-                   setVolverA("Taller"); // Anotamos que venimos del Taller
+                   setVolverA("Taller");
                    setActiveSection("Presupuestos");
                  }}
                />
@@ -84,7 +83,7 @@ export default function DashboardPage() {
                  onClearTurnoAgendarInfo={() => setTurnoAgendarInfo(null)}
                  onNavigateToBudgetDetail={(budgetId) => {
                    setPresupuestoParaAbrir(budgetId);
-                   setVolverA("Turnos"); // Anotamos que venimos de los Turnos
+                   setVolverA("Turnos");
                    setActiveSection("Presupuestos");
                  }}
                />
@@ -97,7 +96,6 @@ export default function DashboardPage() {
                    setTurnoAgendarInfo(vehiculoInfo);
                    setActiveSection("Turnos");
                  }}
-                 // MAGIA: Función que se ejecuta al tocar "Volver" en el presupuesto
                  onVolver={() => {
                    if (volverA) {
                      setActiveSection(volverA);
