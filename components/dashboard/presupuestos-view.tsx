@@ -386,7 +386,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     }
   }
 
-  // --- WHATSAPP RESTAURADO ---
   const handleWhatsApp = async () => {
     if (!clienteActual || !vehiculoActual) return alert("Seleccione un cliente y vehículo para enviar el mensaje.")
     if (!clienteActual.telefono) return alert("El cliente no tiene un número de teléfono registrado.")
@@ -424,14 +423,23 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       cliente_nombre: v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`,
       cliente_telefono: v_cliente.telefono,
       vehiculo_patente: v_vehiculo.patente,
-      vehiculo_modelo: `${v_vehiculo.marca} ${v_vehiculo.modelo}`,
+      
+      // CONEXIÓN BLINDADA: Busca directo en las columnas de tu DB
+      vehiculo_modelo: `${v_vehiculo.marca || ''} ${v_vehiculo.modelo || ''}`.trim(),
+      vehiculo_anio: v_vehiculo.anio,
+      vehiculo_color: v_vehiculo.color,
+      vehiculo_kilometros: v_vehiculo.kilometraje,
+      
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
-      items: v_filas, // Pasamos los ítems completos y unificados
+      items: v_filas,
       total_final: v_total,
       validez_dias: validez,
+      
+      // Mapeo preciso de notas
       observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
-      observaciones: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
+      notas_internas: esHistorico ? datosHistoricos.notas_internas : notasInternas,
+      
       config: configuracion
     };
 

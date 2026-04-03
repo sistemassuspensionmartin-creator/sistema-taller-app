@@ -1,13 +1,12 @@
 import React from "react"
 import { Car, User, Palette, Gauge, Calendar, Tag } from "lucide-react"
 
-// --- PLANTILLA 1: EL PRESUPUESTO (Con detalle de tabla: Cantidad, Unitario, Subtotal) ---
+// --- PLANTILLA 1: EL PRESUPUESTO (INTACTO Y PERFECTO) ---
 export function PresupuestoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
   return (
     <div className="bg-white text-slate-800 p-6 font-sans max-w-[210mm] mx-auto border-t-[8px] border-emerald-600">
-      {/* HEADER COMPACTO CON COLOR */}
       <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-4 mt-2">
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
@@ -31,7 +30,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* DATOS DEL CLIENTE Y VEHÍCULO */}
       <div className="grid grid-cols-2 gap-3 mb-5">
         <div className="border border-slate-200 p-3 rounded-lg bg-slate-50/50">
           <p className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider mb-1">Datos del Cliente</p>
@@ -51,9 +49,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* LISTA DETALLADA (Estilo Tabla) */}
       <div className="mb-6">
-        {/* Cabecera de la tabla */}
         <div className="flex justify-between items-end border-b-2 border-slate-200 pb-2 mb-2">
           <div className="w-10 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">Cant.</div>
           <div className="flex-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-2">Descripción del Trabajo / Repuesto</div>
@@ -61,7 +57,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
           <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-right">Subtotal</div>
         </div>
 
-        {/* Filas */}
         <div className="space-y-1">
           {datos.items?.map((item: any, idx: number) => {
             const cantidad = parseFloat(item.cantidad || item.cant || 1);
@@ -80,7 +75,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* FOOTER COMPACTO */}
       <div className="mt-6 pt-4 flex justify-end">
         <div className="w-[240px]">
           <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
@@ -96,7 +90,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
   )
 }
 
-// --- PLANTILLA 2: LA ORDEN DE TRABAJO (Súper compacta para media hoja, con datos en línea) ---
+// --- PLANTILLA 2: LA ORDEN DE TRABAJO (Notas movidas al fondo y mapeo ajustado) ---
 export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
@@ -114,7 +108,7 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* FICHA TÉCNICA (Marca/Cliente arriba, Año/Color/KM juntos abajo) */}
+      {/* FICHA TÉCNICA */}
       <div className="border border-slate-200 rounded-xl mb-4 overflow-hidden shadow-sm">
         <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 flex justify-between items-center">
           <div className="flex items-center gap-1.5 text-emerald-700 font-bold text-[11px] uppercase tracking-wider">
@@ -127,7 +121,6 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
         </div>
         
         <div className="p-3 flex flex-col gap-3">
-          {/* Fila 1: Marca/Modelo y Cliente */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Marca y Modelo</span>
@@ -139,7 +132,6 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
             </div>
           </div>
           
-          {/* Fila 2: Año, Color, KM en la misma línea */}
           <div className="flex justify-between border-t border-slate-100 pt-2.5">
             <div>
               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5 flex items-center gap-1"><Calendar className="w-3 h-3"/> Año</span>
@@ -156,14 +148,6 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
           </div>
         </div>
       </div>
-
-      {/* NOTAS INTERNAS */}
-      {datos.notas_internas && (
-        <div className="mb-4 border-l-4 border-amber-400 pl-3 py-1.5 bg-amber-50 rounded-r-lg">
-          <p className="text-[9px] font-bold text-amber-700 uppercase tracking-widest mb-0.5">Notas Internas</p>
-          <p className="text-slate-900 font-medium text-sm italic">"{datos.notas_internas}"</p>
-        </div>
-      )}
 
       {/* TAREAS A REALIZAR */}
       <div className="mb-4">
@@ -198,6 +182,14 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
           ))}
         </div>
       </div>
+
+      {/* NOTAS INTERNAS (MOVIDAS AL FINAL COMO AVISO) */}
+      {datos.notas_internas && (
+        <div className="mt-8 border-l-4 border-amber-400 pl-3 py-2 bg-amber-50 rounded-r-lg">
+          <p className="text-[9px] font-bold text-amber-700 uppercase tracking-widest mb-0.5">Notas Internas / Advertencias</p>
+          <p className="text-slate-900 font-medium text-sm italic">"{datos.notas_internas}"</p>
+        </div>
+      )}
 
     </div>
   )
