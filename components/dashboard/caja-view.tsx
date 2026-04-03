@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
   Wallet, ArrowRightLeft, FileText, DollarSign, CreditCard, Landmark, 
-  Receipt, Search, Plus, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2 
+  Receipt, Search, Plus, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, Lock
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,6 +17,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
 import {
@@ -42,28 +43,49 @@ export function CajaView() {
   const [cajas, setCajas] = useState<any[]>([])
   const [cuentasPorCobrar, setCuentasPorCobrar] = useState<any[]>([])
   const [movimientos, setMovimientos] = useState<any[]>([])
+  const [ultimoCierre, setUltimoCierre] = useState<any>(null)
   
   const [busqueda, setBusqueda] = useState("")
 
   const [isCobrarModalOpen, setIsCobrarModalOpen] = useState(false)
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false)
+  const [isCierreModalOpen, setIsCierreModalOpen] = useState(false)
 
+  // Estados Cobro
   const [presupuestoACobrar, setPresupuestoACobrar] = useState<any>(null)
   const [montoCobro, setMontoCobro] = useState("")
   const [metodoPago, setMetodoPago] = useState("Efectivo")
   const [notasCobro, setNotasCobro] = useState("")
 
+  // Estados Movimiento
   const [cajaOrigen, setCajaOrigen] = useState("")
   const [cajaDestino, setCajaDestino] = useState("")
   const [montoMovimiento, setMontoMovimiento] = useState("")
   const [notasMovimiento, setNotasMovimiento] = useState("")
 
+  // Estados Cierre de Caja
+  const [efectivoContado, setEfectivoContado] = useState("")
+  const [notasCierre, setNotasCierre] = useState("")
+  const [reporteCierre, setReporteCierre] = useState({ transferencias: 0, tarjetas: 0, cheques: 0 })
+
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
+      // 1. Cargar Cajas
       const { data: cajasData } = await supabase.from('cajas').select('*').order('nombre')
       setCajas(cajasData || [])
 
+      // 2. Cargar Último Cierre para saber desde cuándo reportar
+      const { data: ultimoCierreData } = await supabase
+        .from('cierres_caja')
+        .select('*')
+        .order('fecha_cierre', { ascending: false })
+        .limit(1)
+        .single()
+      
+      setUltimoCierre(ultimoCierreData || null)
+
+      // 3. Cargar Historial de Movimientos
       const { data: movData } = await supabase
         .from('movimientos_caja')
         .select('*, caja_origen:caja_origen_id(nombre), caja_destino:caja_destino_id(nombre)')
@@ -71,6 +93,7 @@ export function CajaView() {
         .limit(50)
       setMovimientos(movData || [])
 
+      // 4. Cargar Cuentas por Cobrar (Lógica compleja de agrupamiento)
       const { data: ordenesData, error: ordenesError } = await supabase
         .from('ordenes_trabajo')
         .select(`vehiculo_patente, cliente_nombre, presupuestos (*)`)
@@ -122,7 +145,7 @@ export function CajaView() {
 
   useEffect(() => { cargarDatos() }, [])
 
-  // Buscamos explícitamente por nombre para que nunca falle
+  // Búsqueda estricta por nombre para evitar bugs
   const cajaMostrador = cajas.find(c => c.nombre === 'Caja Mostrador');
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
   const saldoGeneral = cajas.filter(c => c.nombre !== 'Caja Mostrador').reduce((acc, c) => acc + Number(c.saldo || 0), 0);
@@ -135,7 +158,6 @@ export function CajaView() {
     setIsCobrarModalOpen(true);
   }
 
-  // --- LÓGICA BLINDADA DE COBRO (CON DEBUG) ---
   const procesarCobro = async () => {
     const monto = parseFloat(montoCobro);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
@@ -153,22 +175,13 @@ export function CajaView() {
         throw new Error("No se encontró la caja destino para este método de pago.");
       }
 
-      // PASO 1: Actualizamos la caja PRIMERO.
       if (cajaDestinoId) {
         const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
         const nuevoSaldo = Number(cajaAfectada.saldo || 0) + monto;
-        
-        console.log("🛠️ DEBUG: Intentando actualizar Caja ID:", cajaDestinoId, "Nuevo Saldo:", nuevoSaldo);
-
         const { error: updateCajaError } = await supabase.from('cajas').update({ saldo: nuevoSaldo }).eq('id', cajaDestinoId);
-        
-        if (updateCajaError) {
-          console.error("🚨 ERROR CRÍTICO DE SUPABASE AL ACTUALIZAR CAJA:", updateCajaError);
-          throw new Error(`Error BD al sumar saldo: ${updateCajaError.message || updateCajaError.code}`);
-        }
+        if (updateCajaError) throw new Error(`Error BD al sumar saldo.`);
       }
 
-      // PASO 2: Anotamos el recibo.
       const { error: errorPago } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
         caja_destino_id: cajaDestinoId,
@@ -178,23 +191,17 @@ export function CajaView() {
         detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})`,
         notas: notasCobro
       }]);
-      if (errorPago) {
-         console.error("🚨 ERROR CRÍTICO DE SUPABASE AL INSERTAR HISTORIAL:", errorPago);
-         throw new Error("La caja recibió la plata pero falló el registro del historial.");
-      }
+      if (errorPago) throw new Error("Fallo el registro del historial.");
 
-      // PASO 3: Actualizamos el Presupuesto
       const nuevoRestante = presupuestoACobrar.restante - monto;
       const nuevoEstado = nuevoRestante <= 0 ? 'Cobrado' : 'Parcial';
       
-      const { error: errorPres } = await supabase.from('presupuestos').update({ estado_pago: nuevoEstado }).eq('id', presupuestoACobrar.id);
-      if(errorPres) console.error("🚨 Error al actualizar el estado del presupuesto:", errorPres);
-
+      await supabase.from('presupuestos').update({ estado_pago: nuevoEstado }).eq('id', presupuestoACobrar.id);
       if(nuevoEstado === 'Cobrado') {
           await supabase.from('presupuestos').update({ estado: 'Facturado' }).eq('id', presupuestoACobrar.id);
       }
 
-      alert("¡Cobro registrado con éxito en la caja y el historial!");
+      alert("¡Cobro registrado con éxito!");
       setIsCobrarModalOpen(false);
       cargarDatos();
     } catch (err: any) {
@@ -204,7 +211,6 @@ export function CajaView() {
     }
   }
 
-  // --- LÓGICA BLINDADA DE MOVIMIENTO INTERNO ---
   const procesarMovimientoInterno = async () => {
     const monto = parseFloat(montoMovimiento);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
@@ -217,13 +223,13 @@ export function CajaView() {
     setIsSaving(true);
     try {
       const { error: errorOrigen } = await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
-      if (errorOrigen) throw new Error("Fallo al descontar saldo de la caja origen. Operación CANCELADA.");
+      if (errorOrigen) throw new Error("Fallo al descontar saldo.");
 
       const cajaDestObj = cajas.find(c => c.id === cajaDestino);
       const { error: errorDestino } = await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
       if (errorDestino) {
         await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) }).eq('id', cajaOrigen);
-        throw new Error("Fallo al sumar saldo a la caja destino. Se devolvió el dinero al origen. Operación CANCELADA.");
+        throw new Error("Fallo al sumar saldo a la caja destino. Se revirtió la operación.");
       }
 
       const { error: errorMov } = await supabase.from('movimientos_caja').insert([{
@@ -234,12 +240,87 @@ export function CajaView() {
         metodo_pago: 'Efectivo',
         detalle: notasMovimiento || "Movimiento interno de fondos"
       }]);
-      if (errorMov) throw new Error("Se movió el dinero pero falló el registro en el historial.");
+      if (errorMov) throw new Error("Fallo el registro en el historial.");
 
       alert("Movimiento realizado con éxito.");
       setIsMovimientoModalOpen(false);
       setMontoMovimiento("");
       setNotasMovimiento("");
+      cargarDatos();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  // --- LÓGICA DE CIERRE DE CAJA ---
+  const abrirModalCierre = async () => {
+    setIsSaving(true);
+    try {
+      // Calculamos qué pasó HOY (desde el último cierre)
+      const fechaInicio = ultimoCierre ? ultimoCierre.fecha_cierre : '2000-01-01T00:00:00Z';
+      
+      const { data: movsDesdeCierre } = await supabase
+        .from('movimientos_caja')
+        .select('monto, metodo_pago')
+        .gte('fecha', fechaInicio)
+        .eq('tipo_movimiento', 'ingreso_cobro'); // Solo nos importan los ingresos para el reporte de tarjetas/transf.
+
+      let transf = 0, tarj = 0, cheq = 0;
+      (movsDesdeCierre || []).forEach((m: any) => {
+        if (m.metodo_pago === 'Transferencia') transf += Number(m.monto);
+        if (m.metodo_pago === 'Tarjeta') tarj += Number(m.monto);
+        if (m.metodo_pago === 'Cheque') cheq += Number(m.monto);
+      });
+
+      setReporteCierre({ transferencias: transf, tarjetas: tarj, cheques: cheq });
+      setEfectivoContado(saldoMostrador.toString()); // Por defecto sugerimos que está todo bien
+      setNotasCierre("");
+      setIsCierreModalOpen(true);
+    } catch (err) {
+      alert("Error al calcular datos para el cierre.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const procesarCierre = async () => {
+    const real = parseFloat(efectivoContado);
+    if (isNaN(real) || real < 0) return alert("Ingrese un monto real válido.");
+
+    const diferencia = real - saldoMostrador;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('cierres_caja').insert([{
+        saldo_esperado_efectivo: saldoMostrador,
+        saldo_real_efectivo: real,
+        diferencia: diferencia,
+        total_tarjetas: reporteCierre.tarjetas,
+        total_transferencias: reporteCierre.transferencias,
+        total_cheques: reporteCierre.cheques,
+        notas: notasCierre
+      }]);
+
+      if (error) throw new Error("No se pudo guardar el reporte de cierre.");
+
+      // Si hubo diferencia, ajustamos la caja mostrador para que arranque el próximo turno con la plata real que hay
+      if (diferencia !== 0) {
+        await supabase.from('cajas').update({ saldo: real }).eq('id', cajaMostrador?.id);
+        
+        // Dejamos registro del ajuste
+        await supabase.from('movimientos_caja').insert([{
+          tipo_movimiento: diferencia > 0 ? 'ajuste_sobrante' : 'ajuste_faltante',
+          caja_destino_id: cajaMostrador?.id,
+          monto: Math.abs(diferencia),
+          metodo_pago: 'Efectivo',
+          detalle: `Ajuste automático por cierre de caja. ${diferencia > 0 ? 'Sobrante' : 'Faltante'}.`
+        }]);
+      }
+
+      alert("¡Caja cerrada y auditada con éxito!");
+      setIsCierreModalOpen(false);
       cargarDatos();
     } catch (err: any) {
       alert(err.message);
@@ -272,9 +353,14 @@ export function CajaView() {
           <h2 className="text-2xl font-semibold text-foreground">Tesorería y Caja</h2>
           <p className="text-sm text-muted-foreground">Gestión de cobros, facturación y flujo de fondos.</p>
         </div>
-        <Button onClick={() => setIsMovimientoModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
-          <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
+            <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
+          </Button>
+          <Button onClick={abrirModalCierre} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200">
+            <Lock className="mr-2 h-4 w-4" /> Cierre de Caja
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
@@ -291,7 +377,10 @@ export function CajaView() {
                 <Wallet className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
               </div>
             </div>
-            <p className="text-xs text-emerald-700/70 dark:text-emerald-400/70 mt-4">Dinero actualmente en el cajón del local.</p>
+            <p className="text-xs text-emerald-700/70 dark:text-emerald-400/70 mt-4 flex items-center justify-between">
+              <span>Dinero en el cajón del local.</span>
+              {ultimoCierre && <span>Últ. Cierre: {new Date(ultimoCierre.fecha_cierre).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</span>}
+            </p>
           </CardContent>
         </Card>
 
@@ -316,7 +405,7 @@ export function CajaView() {
       <Tabs defaultValue="cuentas" className="flex-1 flex flex-col min-h-0">
         <TabsList className="grid w-full grid-cols-2 max-w-md shrink-0">
           <TabsTrigger value="cuentas">Cuentas por Cobrar</TabsTrigger>
-          <TabsTrigger value="movimientos">Historial de Movimientos</TabsTrigger>
+          <TabsTrigger value="movimientos">Historial Mostrador</TabsTrigger>
         </TabsList>
         
         <TabsContent value="cuentas" className="flex-1 flex flex-col min-h-0 mt-4 border border-border rounded-xl shadow-sm bg-card">
@@ -443,7 +532,7 @@ export function CajaView() {
                     <TableCell>
                       {mov.tipo_movimiento === 'ingreso_cobro' ? <Badge className="bg-emerald-100 text-emerald-800 shadow-none"><ArrowDownRight className="w-3 h-3 mr-1"/> Ingreso</Badge> :
                        mov.tipo_movimiento === 'transferencia_interna' ? <Badge className="bg-blue-100 text-blue-800 shadow-none"><ArrowRightLeft className="w-3 h-3 mr-1"/> Interno</Badge> :
-                       <Badge variant="destructive">Egreso</Badge>}
+                       <Badge variant="destructive">Egreso / Ajuste</Badge>}
                     </TableCell>
                     <TableCell className="font-medium text-sm">
                       {mov.detalle}
@@ -580,7 +669,7 @@ export function CajaView() {
             <div className="space-y-2">
               <Label>Motivo / Observaciones</Label>
               <Input 
-                placeholder="Ej: Retiro para pagar al proveedor de pintura..." 
+                placeholder="Ej: Retiro para depositar en Banco..." 
                 value={notasMovimiento}
                 onChange={(e) => setNotasMovimiento(e.target.value)}
               />
@@ -591,6 +680,78 @@ export function CajaView() {
             <Button variant="ghost" onClick={() => setIsMovimientoModalOpen(false)} disabled={isSaving}>Cancelar</Button>
             <Button onClick={procesarMovimientoInterno} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Transferir Fondos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL CIERRE DE CAJA --- */}
+      <Dialog open={isCierreModalOpen} onOpenChange={setIsCierreModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-slate-800 dark:text-slate-100">
+              <Lock className="w-6 h-6" /> Cierre de Caja Diario
+            </DialogTitle>
+            <DialogDescription>
+              Auditoría desde el último cierre: {ultimoCierre?.fecha_cierre ? new Date(ultimoCierre.fecha_cierre).toLocaleString('es-AR') : 'Nunca'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            
+            {/* Resumen Digital */}
+            <div className="bg-secondary/30 p-4 rounded-lg border border-border space-y-2">
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border/50 pb-1">Reporte de Medios Digitales</p>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Transferencias procesadas:</span><span className="font-mono font-bold">${reporteCierre.transferencias.toLocaleString()}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Tarjetas procesadas:</span><span className="font-mono font-bold">${reporteCierre.tarjetas.toLocaleString()}</span></div>
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Cheques recibidos:</span><span className="font-mono font-bold">${reporteCierre.cheques.toLocaleString()}</span></div>
+              <p className="text-[10px] text-muted-foreground italic pt-2">* Estos montos ya ingresaron a sus respectivas cuentas.</p>
+            </div>
+
+            {/* Auditoría Físico */}
+            <div className="space-y-4 border-t border-border pt-4">
+              <div className="flex justify-between items-center">
+                <Label className="text-base text-muted-foreground">Saldo Esperado en Sistema:</Label>
+                <span className="text-xl font-mono font-bold text-foreground">${saldoMostrador.toLocaleString()}</span>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-emerald-700 dark:text-emerald-400 font-bold">Dinero Físico Real (Billetes contados):</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-3 font-mono font-bold text-muted-foreground">$</span>
+                  <Input 
+                    type="number" 
+                    className="pl-7 text-2xl font-mono font-bold h-14 bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800"
+                    value={efectivoContado}
+                    onChange={(e) => setEfectivoContado(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {efectivoContado !== "" && parseFloat(efectivoContado) !== saldoMostrador && (
+                <div className={`p-3 rounded-lg flex justify-between items-center font-bold ${parseFloat(efectivoContado) > saldoMostrador ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>
+                  <span>{parseFloat(efectivoContado) > saldoMostrador ? 'Sobrante detectado:' : 'Faltante detectado:'}</span>
+                  <span className="font-mono">${Math.abs(parseFloat(efectivoContado) - saldoMostrador).toLocaleString()}</span>
+                </div>
+              )}
+
+              <div className="space-y-2 pt-2">
+                <Label>Observaciones del Cierre</Label>
+                <Input 
+                  placeholder="Ej: Faltan $100 de un vuelto no cobrado..." 
+                  value={notasCierre}
+                  onChange={(e) => setNotasCierre(e.target.value)}
+                />
+              </div>
+            </div>
+
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsCierreModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+            <Button onClick={procesarCierre} disabled={isSaving || !efectivoContado} className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200">
+              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Confirmar Cierre
             </Button>
           </DialogFooter>
         </DialogContent>
