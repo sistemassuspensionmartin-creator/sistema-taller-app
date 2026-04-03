@@ -46,7 +46,7 @@ export function OverviewView({
         let enProcesoCount = 0
         let entregadosHoyCount = 0
 
-        ;(ordenes || []).forEach(o => {
+        ;(ordenes || []).forEach((o: any) => {
           if (o.estado !== 'Entregado al Cliente' && o.estado !== 'Entregado') {
             enProcesoCount++
           } else if (o.fecha_entrega && o.fecha_entrega.startsWith(hoyString)) {
