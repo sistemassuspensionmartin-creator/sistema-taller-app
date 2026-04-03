@@ -183,7 +183,7 @@ export function CajaView() {
 
   useEffect(() => { cargarDatos() }, [])
 
-  const cajaMostrador = cajas.find(c => c.nombre.includes('Mostrador') || c.nombre.includes('Efectivo'));
+  const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
 
   const abrirModalCobro = (cuenta: any) => {
