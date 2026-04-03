@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
   Wallet, ArrowRightLeft, FileText, DollarSign, CreditCard, Landmark, 
-  Receipt, Search, Plus, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, Lock
+  Receipt, Search, Plus, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, Lock, Printer
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,8 +17,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -35,6 +35,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+
+// Importamos la nueva plantilla
+import { CierreCajaImprimible } from "./impresion-templates"
 
 export function CajaView() {
   const [isLoading, setIsLoading] = useState(true)
@@ -56,6 +59,12 @@ export function CajaView() {
   const [montoCobro, setMontoCobro] = useState("")
   const [metodoPago, setMetodoPago] = useState("Efectivo")
   const [notasCobro, setNotasCobro] = useState("")
+  
+  // NUEVO: Sub-campos para método de pago
+  const [bancoOrigen, setBancoOrigen] = useState("")
+  const [tipoTarjeta, setTipoTarjeta] = useState("Crédito")
+  const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
+  const [bancoTarjeta, setBancoTarjeta] = useState("")
 
   // Estados Movimiento
   const [cajaOrigen, setCajaOrigen] = useState("")
@@ -67,15 +76,17 @@ export function CajaView() {
   const [efectivoContado, setEfectivoContado] = useState("")
   const [notasCierre, setNotasCierre] = useState("")
   const [reporteCierre, setReporteCierre] = useState({ transferencias: 0, tarjetas: 0, cheques: 0 })
+  const [movimientosTurnoCierre, setMovimientosTurnoCierre] = useState<any[]>([])
+
+  // Estado Impresión
+  const [printData, setPrintData] = useState<any>(null)
 
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
-      // 1. Cargar Cajas
       const { data: cajasData } = await supabase.from('cajas').select('*').order('nombre')
       setCajas(cajasData || [])
 
-      // 2. Cargar Último Cierre para saber desde cuándo reportar
       const { data: ultimoCierreData } = await supabase
         .from('cierres_caja')
         .select('*')
@@ -85,7 +96,6 @@ export function CajaView() {
       
       setUltimoCierre(ultimoCierreData || null)
 
-      // 3. Cargar Historial de Movimientos
       const { data: movData } = await supabase
         .from('movimientos_caja')
         .select('*, caja_origen:caja_origen_id(nombre), caja_destino:caja_destino_id(nombre)')
@@ -93,7 +103,6 @@ export function CajaView() {
         .limit(50)
       setMovimientos(movData || [])
 
-      // 4. Cargar Cuentas por Cobrar (Lógica compleja de agrupamiento)
       const { data: ordenesData, error: ordenesError } = await supabase
         .from('ordenes_trabajo')
         .select(`vehiculo_patente, cliente_nombre, presupuestos (*)`)
@@ -145,16 +154,18 @@ export function CajaView() {
 
   useEffect(() => { cargarDatos() }, [])
 
-  // Búsqueda estricta por nombre para evitar bugs
-  const cajaMostrador = cajas.find(c => c.nombre === 'Caja Mostrador');
+  // Buscar por nombre o por aproximación (por si quedaron con 's' al final)
+  const cajaMostrador = cajas.find(c => c.nombre.includes('Mostrador') || c.nombre.includes('Efectivo'));
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
-  const saldoGeneral = cajas.filter(c => c.nombre !== 'Caja Mostrador').reduce((acc, c) => acc + Number(c.saldo || 0), 0);
+  const saldoGeneral = cajas.filter(c => c.id !== cajaMostrador?.id).reduce((acc, c) => acc + Number(c.saldo || 0), 0);
 
   const abrirModalCobro = (cuenta: any) => {
     setPresupuestoACobrar(cuenta);
     setMontoCobro(cuenta.restante.toString());
     setMetodoPago("Efectivo");
     setNotasCobro("");
+    setBancoOrigen("");
+    setBancoTarjeta("");
     setIsCobrarModalOpen(true);
   }
 
@@ -165,14 +176,15 @@ export function CajaView() {
 
     setIsSaving(true);
     try {
+      // Búsqueda inteligente de caja destino tolerando pequeñas variaciones de nombre
       let cajaDestinoId = null;
-      if (metodoPago === 'Efectivo') cajaDestinoId = cajas.find(c => c.nombre === 'Caja Mostrador')?.id;
-      if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre === 'Caja Transferencia')?.id;
-      if (metodoPago === 'Tarjeta') cajaDestinoId = cajas.find(c => c.nombre === 'Caja Tarjeta')?.id;
-      if (metodoPago === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre === 'Caja Cheque')?.id;
+      if (metodoPago === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
+      if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.includes('Transferencia'))?.id;
+      if (metodoPago === 'Tarjeta') cajaDestinoId = cajas.find(c => c.nombre.includes('Tarjeta'))?.id;
+      if (metodoPago === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.includes('Cheque'))?.id;
 
       if (!cajaDestinoId && metodoPago !== 'Cuenta Corriente') {
-        throw new Error("No se encontró la caja destino para este método de pago.");
+        throw new Error("No se encontró la caja destino para este método de pago. Revise los nombres de las cajas en la base de datos.");
       }
 
       if (cajaDestinoId) {
@@ -182,13 +194,18 @@ export function CajaView() {
         if (updateCajaError) throw new Error(`Error BD al sumar saldo.`);
       }
 
+      // NUEVO: Construimos el detalle extra
+      let detalleMetodo = "";
+      if (metodoPago === 'Transferencia' && bancoOrigen) detalleMetodo = ` [Banco: ${bancoOrigen}]`;
+      if (metodoPago === 'Tarjeta') detalleMetodo = ` [${marcaTarjeta} ${tipoTarjeta}${bancoTarjeta ? ' - ' + bancoTarjeta : ''}]`;
+
       const { error: errorPago } = await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
         caja_destino_id: cajaDestinoId,
         monto: monto,
         metodo_pago: metodoPago,
         presupuesto_id: presupuestoACobrar.id,
-        detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})`,
+        detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})${detalleMetodo}`,
         notas: notasCobro
       }]);
       if (errorPago) throw new Error("Fallo el registro del historial.");
@@ -254,28 +271,29 @@ export function CajaView() {
     }
   }
 
-  // --- LÓGICA DE CIERRE DE CAJA ---
   const abrirModalCierre = async () => {
     setIsSaving(true);
     try {
-      // Calculamos qué pasó HOY (desde el último cierre)
       const fechaInicio = ultimoCierre ? ultimoCierre.fecha_cierre : '2000-01-01T00:00:00Z';
       
       const { data: movsDesdeCierre } = await supabase
         .from('movimientos_caja')
-        .select('monto, metodo_pago')
+        .select('*') // Traemos todo para el PDF
         .gte('fecha', fechaInicio)
-        .eq('tipo_movimiento', 'ingreso_cobro'); // Solo nos importan los ingresos para el reporte de tarjetas/transf.
+        .order('fecha', { ascending: true }); 
 
       let transf = 0, tarj = 0, cheq = 0;
       (movsDesdeCierre || []).forEach((m: any) => {
-        if (m.metodo_pago === 'Transferencia') transf += Number(m.monto);
-        if (m.metodo_pago === 'Tarjeta') tarj += Number(m.monto);
-        if (m.metodo_pago === 'Cheque') cheq += Number(m.monto);
+        if (m.tipo_movimiento === 'ingreso_cobro') {
+          if (m.metodo_pago === 'Transferencia') transf += Number(m.monto);
+          if (m.metodo_pago === 'Tarjeta') tarj += Number(m.monto);
+          if (m.metodo_pago === 'Cheque') cheq += Number(m.monto);
+        }
       });
 
+      setMovimientosTurnoCierre(movsDesdeCierre || []);
       setReporteCierre({ transferencias: transf, tarjetas: tarj, cheques: cheq });
-      setEfectivoContado(saldoMostrador.toString()); // Por defecto sugerimos que está todo bien
+      setEfectivoContado(saldoMostrador.toString()); 
       setNotasCierre("");
       setIsCierreModalOpen(true);
     } catch (err) {
@@ -305,11 +323,9 @@ export function CajaView() {
 
       if (error) throw new Error("No se pudo guardar el reporte de cierre.");
 
-      // Si hubo diferencia, ajustamos la caja mostrador para que arranque el próximo turno con la plata real que hay
       if (diferencia !== 0) {
         await supabase.from('cajas').update({ saldo: real }).eq('id', cajaMostrador?.id);
         
-        // Dejamos registro del ajuste
         await supabase.from('movimientos_caja').insert([{
           tipo_movimiento: diferencia > 0 ? 'ajuste_sobrante' : 'ajuste_faltante',
           caja_destino_id: cajaMostrador?.id,
@@ -319,9 +335,29 @@ export function CajaView() {
         }]);
       }
 
-      alert("¡Caja cerrada y auditada con éxito!");
+      // Preparamos la data para el PDF
+      setPrintData({
+        ultimoCierre: ultimoCierre?.fecha_cierre || null,
+        efectivo_esperado: saldoMostrador,
+        efectivo_real: real,
+        diferencia: diferencia,
+        transferencias: reporteCierre.transferencias,
+        tarjetas: reporteCierre.tarjetas,
+        cheques: reporteCierre.cheques,
+        notas: notasCierre,
+        movimientos: movimientosTurnoCierre
+      });
+
+      alert("¡Caja cerrada y auditada con éxito! Preparando el comprobante PDF...");
       setIsCierreModalOpen(false);
       cargarDatos();
+
+      // Disparamos la impresión
+      setTimeout(() => {
+        window.print();
+        setPrintData(null); // Limpiamos después de imprimir
+      }, 500);
+
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -347,415 +383,471 @@ export function CajaView() {
   );
 
   return (
-    <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
-        <div>
-          <h2 className="text-2xl font-semibold text-foreground">Tesorería y Caja</h2>
-          <p className="text-sm text-muted-foreground">Gestión de cobros, facturación y flujo de fondos.</p>
+    <>
+      <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300 print:hidden">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
+          <div>
+            <h2 className="text-2xl font-semibold text-foreground">Tesorería y Caja</h2>
+            <p className="text-sm text-muted-foreground">Gestión de cobros, facturación y flujo de fondos.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
+              <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
+            </Button>
+            <Button onClick={abrirModalCierre} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200">
+              <Lock className="mr-2 h-4 w-4" /> Cierre de Caja
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
-            <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
-          </Button>
-          <Button onClick={abrirModalCierre} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200">
-            <Lock className="mr-2 h-4 w-4" /> Cierre de Caja
-          </Button>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
-        <Card className="border-border shadow-sm border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/10">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-emerald-800 dark:text-emerald-400 mb-1">Caja Mostrador (Efectivo Físico)</p>
-                <h3 className="text-3xl font-bold text-emerald-900 dark:text-emerald-100 font-mono">
-                  ${saldoMostrador.toLocaleString()}
-                </h3>
-              </div>
-              <div className="p-3 bg-emerald-200/50 dark:bg-emerald-800/50 rounded-full">
-                <Wallet className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
-              </div>
-            </div>
-            <p className="text-xs text-emerald-700/70 dark:text-emerald-400/70 mt-4 flex items-center justify-between">
-              <span>Dinero en el cajón del local.</span>
-              {ultimoCierre && <span>Últ. Cierre: {new Date(ultimoCierre.fecha_cierre).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</span>}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border shadow-sm">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Caja General (Patrimonio)</p>
-                <h3 className="text-3xl font-bold text-foreground font-mono">
-                  ${saldoGeneral.toLocaleString()}
-                </h3>
-              </div>
-              <div className="p-3 bg-secondary rounded-full">
-                <Landmark className="h-5 w-5 text-primary" />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-4">Suma de Cajas Fuerte, Transferencias, Tarjetas y Cheques.</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs defaultValue="cuentas" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-full grid-cols-2 max-w-md shrink-0">
-          <TabsTrigger value="cuentas">Cuentas por Cobrar</TabsTrigger>
-          <TabsTrigger value="movimientos">Historial Mostrador</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="cuentas" className="flex-1 flex flex-col min-h-0 mt-4 border border-border rounded-xl shadow-sm bg-card">
-          <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
-            <div className="relative max-w-md w-full">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar por patente o cliente..." 
-                className="pl-9 bg-background" 
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-              />
-            </div>
-            <Badge variant="secondary" className="hidden sm:flex">Vehículos en Taller</Badge>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-0">
-            <Table>
-              <TableHeader className="bg-secondary/20 sticky top-0 backdrop-blur-sm">
-                <TableRow>
-                  <TableHead>Presupuesto</TableHead>
-                  <TableHead>Vehículo / Cliente</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right text-emerald-600">Pagado</TableHead>
-                  <TableHead className="text-right text-red-500">Deuda Restante</TableHead>
-                  <TableHead className="text-center">Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse"></div></TableCell>
-                      <TableCell><div className="space-y-2"><div className="h-4 w-32 bg-secondary/60 rounded animate-pulse"></div><div className="h-3 w-24 bg-secondary/40 rounded animate-pulse"></div></div></TableCell>
-                      <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
-                      <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
-                      <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
-                      <TableCell><div className="h-6 w-24 bg-secondary/60 rounded-full animate-pulse mx-auto"></div></TableCell>
-                      <TableCell><div className="flex justify-end gap-2"><div className="h-8 w-20 bg-secondary/60 rounded animate-pulse"></div><div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div></div></TableCell>
-                    </TableRow>
-                  ))
-                ) : cuentasFiltradas.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground italic">No hay vehículos con deudas pendientes en el taller.</TableCell></TableRow>
-                ) : (
-                  cuentasFiltradas.map(cuenta => (
-                    <TableRow key={cuenta.id} className="hover:bg-secondary/30 transition-colors">
-                      <TableCell className="font-mono font-bold text-muted-foreground">PRE-{cuenta.numero}</TableCell>
-                      <TableCell>
-                        <div className="font-bold tracking-widest uppercase">{cuenta.patente}</div>
-                        <div className="text-xs text-muted-foreground">{cuenta.cliente}</div>
-                      </TableCell>
-                      <TableCell className="text-right font-mono font-bold">${cuenta.total.toLocaleString()}</TableCell>
-                      <TableCell className="text-right font-mono text-emerald-600 font-bold">${cuenta.pagado.toLocaleString()}</TableCell>
-                      
-                      <TableCell className={`text-right font-mono font-bold ${cuenta.restante > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                        ${cuenta.restante.toLocaleString()}
-                      </TableCell>
-
-                      <TableCell className="text-center">
-                        <div className="flex flex-col gap-1 items-center">
-                          {cuenta.estado_pago === 'Cobrado' ? (
-                            <Badge className="bg-emerald-100 text-emerald-800 border-none shadow-none">Cobrado</Badge>
-                          ) : cuenta.estado_pago === 'Parcial' ? (
-                            <Badge className="bg-amber-100 text-amber-800 border-none shadow-none">Pago Parcial</Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-slate-500 border-slate-300">Pendiente</Badge>
-                          )}
-                          
-                          {cuenta.estado_facturacion === 'Facturado' && (
-                            <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Facturado</span>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button 
-                            size="sm" 
-                            disabled={cuenta.restante <= 0}
-                            onClick={() => abrirModalCobro(cuenta)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          >
-                            <DollarSign className="w-4 h-4 mr-1" /> Cobrar
-                          </Button>
-                          
-                          <Button 
-                            size="sm" 
-                            variant={cuenta.estado_facturacion === 'Facturado' ? "secondary" : "outline"}
-                            disabled={cuenta.estado_facturacion === 'Facturado'}
-                            onClick={() => marcarComoFacturado(cuenta.id, cuenta.numero)}
-                            className={cuenta.estado_facturacion !== 'Facturado' ? "border-blue-200 text-blue-700 hover:bg-blue-50" : ""}
-                          >
-                            {cuenta.estado_facturacion === 'Facturado' ? "Facturado" : <><Receipt className="w-4 h-4 mr-1" /> Facturar</>}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="movimientos" className="flex-1 flex flex-col min-h-0 mt-4 border border-border rounded-xl shadow-sm bg-card">
-          <div className="flex-1 overflow-y-auto p-0">
-            <Table>
-              <TableHeader className="bg-secondary/20 sticky top-0">
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Detalle</TableHead>
-                  <TableHead>Método / Caja</TableHead>
-                  <TableHead className="text-right">Monto</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movimientos.map(mov => (
-                  <TableRow key={mov.id}>
-                    <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
-                    </TableCell>
-                    <TableCell>
-                      {mov.tipo_movimiento === 'ingreso_cobro' ? <Badge className="bg-emerald-100 text-emerald-800 shadow-none"><ArrowDownRight className="w-3 h-3 mr-1"/> Ingreso</Badge> :
-                       mov.tipo_movimiento === 'transferencia_interna' ? <Badge className="bg-blue-100 text-blue-800 shadow-none"><ArrowRightLeft className="w-3 h-3 mr-1"/> Interno</Badge> :
-                       <Badge variant="destructive">Egreso / Ajuste</Badge>}
-                    </TableCell>
-                    <TableCell className="font-medium text-sm">
-                      {mov.detalle}
-                      {mov.notas && <span className="block text-xs text-muted-foreground font-normal mt-0.5 italic">{mov.notas}</span>}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 font-medium text-sm"><CreditCard className="w-3 h-3 text-muted-foreground"/> {mov.metodo_pago}</div>
-                      {mov.caja_destino && <div className="text-[10px] text-muted-foreground mt-0.5">A: {mov.caja_destino.nombre}</div>}
-                    </TableCell>
-                    <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : 'text-foreground'}`}>
-                      ${Number(mov.monto).toLocaleString()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {movimientos.length === 0 && !isLoading && (
-                  <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay movimientos registrados recientes.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      {/* --- MODAL DE COBRO --- */}
-      <Dialog open={isCobrarModalOpen} onOpenChange={setIsCobrarModalOpen}>
-        <DialogContent className="max-w-md border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
-              <DollarSign className="w-6 h-6" /> Registrar Pago
-            </DialogTitle>
-          </DialogHeader>
-
-          {presupuestoACobrar && (
-            <div className="space-y-4 py-4">
-              <div className="bg-secondary/30 p-3 rounded-lg border border-border flex justify-between items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
+          <Card className="border-border shadow-sm border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/10">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Patente</p>
-                  <p className="font-mono font-bold text-lg">{presupuestoACobrar.patente}</p>
+                  <p className="text-sm font-medium text-emerald-800 dark:text-emerald-400 mb-1">Caja Mostrador (Efectivo Físico)</p>
+                  <h3 className="text-3xl font-bold text-emerald-900 dark:text-emerald-100 font-mono">
+                    ${saldoMostrador.toLocaleString()}
+                  </h3>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Resta Cobrar</p>
-                  <p className="font-mono font-bold text-xl text-red-500">${presupuestoACobrar.restante.toLocaleString()}</p>
+                <div className="p-3 bg-emerald-200/50 dark:bg-emerald-800/50 rounded-full">
+                  <Wallet className="h-5 w-5 text-emerald-700 dark:text-emerald-300" />
+                </div>
+              </div>
+              <p className="text-xs text-emerald-700/70 dark:text-emerald-400/70 mt-4 flex items-center justify-between">
+                <span>Dinero en el cajón del local.</span>
+                {ultimoCierre && <span>Últ. Cierre: {new Date(ultimoCierre.fecha_cierre).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</span>}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">Caja General (Patrimonio)</p>
+                  <h3 className="text-3xl font-bold text-foreground font-mono">
+                    ${saldoGeneral.toLocaleString()}
+                  </h3>
+                </div>
+                <div className="p-3 bg-secondary rounded-full">
+                  <Landmark className="h-5 w-5 text-primary" />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-4">Suma de Cajas Fuerte, Transferencias, Tarjetas y Cheques.</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="cuentas" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-2 max-w-md shrink-0">
+            <TabsTrigger value="cuentas">Cuentas por Cobrar</TabsTrigger>
+            <TabsTrigger value="movimientos">Historial Mostrador</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="cuentas" className="flex-1 flex flex-col min-h-0 mt-4 border border-border rounded-xl shadow-sm bg-card">
+            <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
+              <div className="relative max-w-md w-full">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar por patente o cliente..." 
+                  className="pl-9 bg-background" 
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+              </div>
+              <Badge variant="secondary" className="hidden sm:flex">Vehículos en Taller</Badge>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-0">
+              <Table>
+                <TableHeader className="bg-secondary/20 sticky top-0 backdrop-blur-sm">
+                  <TableRow>
+                    <TableHead>Presupuesto</TableHead>
+                    <TableHead>Vehículo / Cliente</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right text-emerald-600">Pagado</TableHead>
+                    <TableHead className="text-right text-red-500">Deuda Restante</TableHead>
+                    <TableHead className="text-center">Estado</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse"></div></TableCell>
+                        <TableCell><div className="space-y-2"><div className="h-4 w-32 bg-secondary/60 rounded animate-pulse"></div><div className="h-3 w-24 bg-secondary/40 rounded animate-pulse"></div></div></TableCell>
+                        <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                        <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                        <TableCell><div className="h-5 w-20 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                        <TableCell><div className="h-6 w-24 bg-secondary/60 rounded-full animate-pulse mx-auto"></div></TableCell>
+                        <TableCell><div className="flex justify-end gap-2"><div className="h-8 w-20 bg-secondary/60 rounded animate-pulse"></div><div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div></div></TableCell>
+                      </TableRow>
+                    ))
+                  ) : cuentasFiltradas.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground italic">No hay vehículos con deudas pendientes en el taller.</TableCell></TableRow>
+                  ) : (
+                    cuentasFiltradas.map(cuenta => (
+                      <TableRow key={cuenta.id} className="hover:bg-secondary/30 transition-colors">
+                        <TableCell className="font-mono font-bold text-muted-foreground">PRE-{cuenta.numero}</TableCell>
+                        <TableCell>
+                          <div className="font-bold tracking-widest uppercase">{cuenta.patente}</div>
+                          <div className="text-xs text-muted-foreground">{cuenta.cliente}</div>
+                        </TableCell>
+                        <TableCell className="text-right font-mono font-bold">${cuenta.total.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-mono text-emerald-600 font-bold">${cuenta.pagado.toLocaleString()}</TableCell>
+                        
+                        <TableCell className={`text-right font-mono font-bold ${cuenta.restante > 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                          ${cuenta.restante.toLocaleString()}
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          <div className="flex flex-col gap-1 items-center">
+                            {cuenta.estado_pago === 'Cobrado' ? (
+                              <Badge className="bg-emerald-100 text-emerald-800 border-none shadow-none">Cobrado</Badge>
+                            ) : cuenta.estado_pago === 'Parcial' ? (
+                              <Badge className="bg-amber-100 text-amber-800 border-none shadow-none">Pago Parcial</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-slate-500 border-slate-300">Pendiente</Badge>
+                            )}
+                            
+                            {cuenta.estado_facturacion === 'Facturado' && (
+                              <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> Facturado</span>
+                            )}
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              size="sm" 
+                              disabled={cuenta.restante <= 0}
+                              onClick={() => abrirModalCobro(cuenta)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            >
+                              <DollarSign className="w-4 h-4 mr-1" /> Cobrar
+                            </Button>
+                            
+                            <Button 
+                              size="sm" 
+                              variant={cuenta.estado_facturacion === 'Facturado' ? "secondary" : "outline"}
+                              disabled={cuenta.estado_facturacion === 'Facturado'}
+                              onClick={() => marcarComoFacturado(cuenta.id, cuenta.numero)}
+                              className={cuenta.estado_facturacion !== 'Facturado' ? "border-blue-200 text-blue-700 hover:bg-blue-50" : ""}
+                            >
+                              {cuenta.estado_facturacion === 'Facturado' ? "Facturado" : <><Receipt className="w-4 h-4 mr-1" /> Facturar</>}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="movimientos" className="flex-1 flex flex-col min-h-0 mt-4 border border-border rounded-xl shadow-sm bg-card">
+            <div className="flex-1 overflow-y-auto p-0">
+              <Table>
+                <TableHeader className="bg-secondary/20 sticky top-0">
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Detalle</TableHead>
+                    <TableHead>Método / Caja</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {movimientos.map(mov => (
+                    <TableRow key={mov.id}>
+                      <TableCell className="text-muted-foreground whitespace-nowrap">
+                        {new Date(mov.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                      </TableCell>
+                      <TableCell>
+                        {mov.tipo_movimiento === 'ingreso_cobro' ? <Badge className="bg-emerald-100 text-emerald-800 shadow-none"><ArrowDownRight className="w-3 h-3 mr-1"/> Ingreso</Badge> :
+                         mov.tipo_movimiento === 'transferencia_interna' ? <Badge className="bg-blue-100 text-blue-800 shadow-none"><ArrowRightLeft className="w-3 h-3 mr-1"/> Interno</Badge> :
+                         <Badge variant="destructive">Egreso / Ajuste</Badge>}
+                      </TableCell>
+                      <TableCell className="font-medium text-sm">
+                        {mov.detalle}
+                        {mov.notas && <span className="block text-xs text-muted-foreground font-normal mt-0.5 italic">{mov.notas}</span>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 font-medium text-sm"><CreditCard className="w-3 h-3 text-muted-foreground"/> {mov.metodo_pago}</div>
+                        {mov.caja_destino && <div className="text-[10px] text-muted-foreground mt-0.5">A: {mov.caja_destino.nombre}</div>}
+                      </TableCell>
+                      <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : 'text-foreground'}`}>
+                        ${Number(mov.monto).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {movimientos.length === 0 && !isLoading && (
+                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay movimientos registrados recientes.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* --- MODAL DE COBRO --- */}
+        <Dialog open={isCobrarModalOpen} onOpenChange={setIsCobrarModalOpen}>
+          <DialogContent className="max-w-md border-border bg-card">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
+                <DollarSign className="w-6 h-6" /> Registrar Pago
+              </DialogTitle>
+            </DialogHeader>
+
+            {presupuestoACobrar && (
+              <div className="space-y-4 py-4">
+                <div className="bg-secondary/30 p-3 rounded-lg border border-border flex justify-between items-center">
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Patente</p>
+                    <p className="font-mono font-bold text-lg">{presupuestoACobrar.patente}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Resta Cobrar</p>
+                    <p className="font-mono font-bold text-xl text-red-500">${presupuestoACobrar.restante.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Monto a Cobrar ($)</Label>
+                  <Input 
+                    type="number" 
+                    className="text-lg font-mono font-bold h-12"
+                    value={montoCobro}
+                    onChange={(e) => setMontoCobro(e.target.value)}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Método de Pago</Label>
+                  <Select value={metodoPago} onValueChange={setMetodoPago}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Efectivo">Efectivo</SelectItem>
+                      <SelectItem value="Transferencia">Transferencia Bancaria</SelectItem>
+                      <SelectItem value="Tarjeta">Tarjeta Débito/Crédito</SelectItem>
+                      <SelectItem value="Cheque">Cheque</SelectItem>
+                      <SelectItem value="Cuenta Corriente">Cuenta Corriente (Deuda)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* CAMPOS DINÁMICOS SEGÚN MÉTODO DE PAGO */}
+                {metodoPago === 'Transferencia' && (
+                  <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                    <Label className="text-xs font-bold uppercase text-blue-600">Banco de Destino</Label>
+                    <Input 
+                      placeholder="Ej: Banco Galicia, MercadoPago..." 
+                      value={bancoOrigen}
+                      onChange={(e) => setBancoOrigen(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {metodoPago === 'Tarjeta' && (
+                  <div className="grid grid-cols-2 gap-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-emerald-600">Tipo</Label>
+                      <Select value={tipoTarjeta} onValueChange={setTipoTarjeta}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Crédito">Crédito</SelectItem>
+                          <SelectItem value="Débito">Débito</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-emerald-600">Marca</Label>
+                      <Select value={marcaTarjeta} onValueChange={setMarcaTarjeta}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Visa">Visa</SelectItem>
+                          <SelectItem value="Mastercard">Mastercard</SelectItem>
+                          <SelectItem value="Amex">Amex</SelectItem>
+                          <SelectItem value="Otra">Otra</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Label className="text-xs font-bold uppercase text-emerald-600">Banco (Opcional)</Label>
+                      <Input 
+                        placeholder="Ej: Santander, BBVA..." 
+                        value={bancoTarjeta}
+                        onChange={(e) => setBancoTarjeta(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2">
+                  <Label>Notas Adicionales (Opcional)</Label>
+                  <Input 
+                    placeholder="Ej: Seña del 50%..." 
+                    value={notasCobro}
+                    onChange={(e) => setNotasCobro(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsCobrarModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+              <Button onClick={procesarCobro} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Confirmar Cobro
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* --- MODAL MOVIMIENTO INTERNO --- */}
+        <Dialog open={isMovimientoModalOpen} onOpenChange={setIsMovimientoModalOpen}>
+          <DialogContent className="max-w-md border-border bg-card">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center gap-2 text-blue-700 dark:text-blue-500">
+                <ArrowRightLeft className="w-6 h-6" /> Movimiento Interno
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Extraer De:</Label>
+                  <Select value={cajaOrigen} onValueChange={setCajaOrigen}>
+                    <SelectTrigger><SelectValue placeholder="Origen..."/></SelectTrigger>
+                    <SelectContent>
+                      {cajas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Depositar En:</Label>
+                  <Select value={cajaDestino} onValueChange={setCajaDestino}>
+                    <SelectTrigger><SelectValue placeholder="Destino..."/></SelectTrigger>
+                    <SelectContent>
+                      {cajas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Monto a Cobrar ($)</Label>
+                <Label>Monto a Mover ($)</Label>
                 <Input 
                   type="number" 
                   className="text-lg font-mono font-bold h-12"
-                  value={montoCobro}
-                  onChange={(e) => setMontoCobro(e.target.value)}
-                  autoFocus
+                  value={montoMovimiento}
+                  onChange={(e) => setMontoMovimiento(e.target.value)}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Método de Pago (Destino)</Label>
-                <Select value={metodoPago} onValueChange={setMetodoPago}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Efectivo">Efectivo (Va a Caja Mostrador)</SelectItem>
-                    <SelectItem value="Transferencia">Transferencia Bancaria</SelectItem>
-                    <SelectItem value="Tarjeta">Tarjeta Débito/Crédito</SelectItem>
-                    <SelectItem value="Cheque">Cheque</SelectItem>
-                    <SelectItem value="Cuenta Corriente">Cuenta Corriente (Anotar en deuda)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Notas Adicionales (Opcional)</Label>
+                <Label>Motivo / Observaciones</Label>
                 <Input 
-                  placeholder="Ej: Seña del 50% / Pagó con Banco Galicia..." 
-                  value={notasCobro}
-                  onChange={(e) => setNotasCobro(e.target.value)}
+                  placeholder="Ej: Retiro para depositar en Banco..." 
+                  value={notasMovimiento}
+                  onChange={(e) => setNotasMovimiento(e.target.value)}
                 />
               </div>
             </div>
-          )}
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsCobrarModalOpen(false)} disabled={isSaving}>Cancelar</Button>
-            <Button onClick={procesarCobro} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Confirmar Cobro
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsMovimientoModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+              <Button onClick={procesarMovimientoInterno} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Transferir Fondos
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* --- MODAL MOVIMIENTO INTERNO --- */}
-      <Dialog open={isMovimientoModalOpen} onOpenChange={setIsMovimientoModalOpen}>
-        <DialogContent className="max-w-md border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2 text-blue-700 dark:text-blue-500">
-              <ArrowRightLeft className="w-6 h-6" /> Movimiento Interno
-            </DialogTitle>
-          </DialogHeader>
+        {/* --- MODAL CIERRE DE CAJA --- */}
+        <Dialog open={isCierreModalOpen} onOpenChange={setIsCierreModalOpen}>
+          <DialogContent className="max-w-md border-border bg-card">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center gap-2 text-slate-800 dark:text-slate-100">
+                <Lock className="w-6 h-6" /> Cierre de Caja Diario
+              </DialogTitle>
+              <DialogDescription>
+                Auditoría desde el último cierre: {ultimoCierre?.fecha_cierre ? new Date(ultimoCierre.fecha_cierre).toLocaleString('es-AR') : 'Nunca'}.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-muted-foreground">Extraer De:</Label>
-                <Select value={cajaOrigen} onValueChange={setCajaOrigen}>
-                  <SelectTrigger><SelectValue placeholder="Origen..."/></SelectTrigger>
-                  <SelectContent>
-                    {cajas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-muted-foreground">Depositar En:</Label>
-                <Select value={cajaDestino} onValueChange={setCajaDestino}>
-                  <SelectTrigger><SelectValue placeholder="Destino..."/></SelectTrigger>
-                  <SelectContent>
-                    {cajas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Monto a Mover ($)</Label>
-              <Input 
-                type="number" 
-                className="text-lg font-mono font-bold h-12"
-                value={montoMovimiento}
-                onChange={(e) => setMontoMovimiento(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Motivo / Observaciones</Label>
-              <Input 
-                placeholder="Ej: Retiro para depositar en Banco..." 
-                value={notasMovimiento}
-                onChange={(e) => setNotasMovimiento(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsMovimientoModalOpen(false)} disabled={isSaving}>Cancelar</Button>
-            <Button onClick={procesarMovimientoInterno} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Transferir Fondos
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* --- MODAL CIERRE DE CAJA --- */}
-      <Dialog open={isCierreModalOpen} onOpenChange={setIsCierreModalOpen}>
-        <DialogContent className="max-w-md border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-xl flex items-center gap-2 text-slate-800 dark:text-slate-100">
-              <Lock className="w-6 h-6" /> Cierre de Caja Diario
-            </DialogTitle>
-            <DialogDescription>
-              Auditoría desde el último cierre: {ultimoCierre?.fecha_cierre ? new Date(ultimoCierre.fecha_cierre).toLocaleString('es-AR') : 'Nunca'}.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            
-            {/* Resumen Digital */}
-            <div className="bg-secondary/30 p-4 rounded-lg border border-border space-y-2">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border/50 pb-1">Reporte de Medios Digitales</p>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Transferencias procesadas:</span><span className="font-mono font-bold">${reporteCierre.transferencias.toLocaleString()}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Tarjetas procesadas:</span><span className="font-mono font-bold">${reporteCierre.tarjetas.toLocaleString()}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Cheques recibidos:</span><span className="font-mono font-bold">${reporteCierre.cheques.toLocaleString()}</span></div>
-              <p className="text-[10px] text-muted-foreground italic pt-2">* Estos montos ya ingresaron a sus respectivas cuentas.</p>
-            </div>
-
-            {/* Auditoría Físico */}
-            <div className="space-y-4 border-t border-border pt-4">
-              <div className="flex justify-between items-center">
-                <Label className="text-base text-muted-foreground">Saldo Esperado en Sistema:</Label>
-                <span className="text-xl font-mono font-bold text-foreground">${saldoMostrador.toLocaleString()}</span>
+            <div className="space-y-4 py-4">
+              
+              {/* Resumen Digital */}
+              <div className="bg-secondary/30 p-4 rounded-lg border border-border space-y-2">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border/50 pb-1">Reporte de Medios Digitales</p>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Transferencias procesadas:</span><span className="font-mono font-bold">${reporteCierre.transferencias.toLocaleString()}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Tarjetas procesadas:</span><span className="font-mono font-bold">${reporteCierre.tarjetas.toLocaleString()}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Cheques recibidos:</span><span className="font-mono font-bold">${reporteCierre.cheques.toLocaleString()}</span></div>
+                <p className="text-[10px] text-muted-foreground italic pt-2">* Estos montos ya ingresaron a sus respectivas cuentas globales.</p>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-emerald-700 dark:text-emerald-400 font-bold">Dinero Físico Real (Billetes contados):</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-3 font-mono font-bold text-muted-foreground">$</span>
+              {/* Auditoría Físico */}
+              <div className="space-y-4 border-t border-border pt-4">
+                <div className="flex justify-between items-center">
+                  <Label className="text-base text-muted-foreground">Saldo Esperado en Sistema:</Label>
+                  <span className="text-xl font-mono font-bold text-foreground">${saldoMostrador.toLocaleString()}</span>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-emerald-700 dark:text-emerald-400 font-bold">Dinero Físico Real (Billetes contados):</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 font-mono font-bold text-muted-foreground">$</span>
+                    <Input 
+                      type="number" 
+                      className="pl-7 text-2xl font-mono font-bold h-14 bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800"
+                      value={efectivoContado}
+                      onChange={(e) => setEfectivoContado(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {efectivoContado !== "" && parseFloat(efectivoContado) !== saldoMostrador && (
+                  <div className={`p-3 rounded-lg flex justify-between items-center font-bold ${parseFloat(efectivoContado) > saldoMostrador ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>
+                    <span>{parseFloat(efectivoContado) > saldoMostrador ? 'Sobrante detectado:' : 'Faltante detectado:'}</span>
+                    <span className="font-mono">${Math.abs(parseFloat(efectivoContado) - saldoMostrador).toLocaleString()}</span>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2">
+                  <Label>Observaciones del Cierre</Label>
                   <Input 
-                    type="number" 
-                    className="pl-7 text-2xl font-mono font-bold h-14 bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800"
-                    value={efectivoContado}
-                    onChange={(e) => setEfectivoContado(e.target.value)}
-                    autoFocus
+                    placeholder="Ej: Faltan $100 de un vuelto no cobrado..." 
+                    value={notasCierre}
+                    onChange={(e) => setNotasCierre(e.target.value)}
                   />
                 </div>
               </div>
 
-              {efectivoContado !== "" && parseFloat(efectivoContado) !== saldoMostrador && (
-                <div className={`p-3 rounded-lg flex justify-between items-center font-bold ${parseFloat(efectivoContado) > saldoMostrador ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'}`}>
-                  <span>{parseFloat(efectivoContado) > saldoMostrador ? 'Sobrante detectado:' : 'Faltante detectado:'}</span>
-                  <span className="font-mono">${Math.abs(parseFloat(efectivoContado) - saldoMostrador).toLocaleString()}</span>
-                </div>
-              )}
-
-              <div className="space-y-2 pt-2">
-                <Label>Observaciones del Cierre</Label>
-                <Input 
-                  placeholder="Ej: Faltan $100 de un vuelto no cobrado..." 
-                  value={notasCierre}
-                  onChange={(e) => setNotasCierre(e.target.value)}
-                />
-              </div>
             </div>
 
-          </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsCierreModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+              <Button onClick={procesarCierre} disabled={isSaving || !efectivoContado} className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200">
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Printer className="w-4 h-4 mr-2"/>} Cerrar e Imprimir
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
 
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsCierreModalOpen(false)} disabled={isSaving}>Cancelar</Button>
-            <Button onClick={procesarCierre} disabled={isSaving || !efectivoContado} className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200">
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Confirmar Cierre
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+      {/* ============================================================== */}
+      {/* ZONA DE IMPRESIÓN DEL CIERRE DE CAJA                           */}
+      {/* ============================================================== */}
+      <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
+        {printData && <CierreCajaImprimible datos={printData} />}
+      </div>
+    </>
   )
 }

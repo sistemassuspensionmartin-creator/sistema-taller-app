@@ -1,6 +1,6 @@
 import React from "react"
 import { Car, User, Palette, Gauge, Calendar, Tag } from "lucide-react"
-
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 // --- PLANTILLA 1: EL PRESUPUESTO (INTACTO Y PERFECTO) ---
 export function PresupuestoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
@@ -191,6 +191,94 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
         </div>
       )}
 
+    </div>
+  )
+}
+
+// --- PLANTILLA 3: REPORTE DE CIERRE DE CAJA ---
+export function CierreCajaImprimible({ datos }: { datos: any }) {
+  if (!datos) return null;
+
+  return (
+    <div className="bg-white text-slate-900 p-6 font-sans max-w-[210mm] mx-auto border-t-[8px] border-slate-900">
+      <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-4 mt-2">
+        <div>
+          <h1 className="text-2xl font-black tracking-tight text-slate-900">REPORTE DE CIERRE DE CAJA</h1>
+          <p className="text-sm text-slate-600 font-medium mt-1">Generado el: {new Date().toLocaleString('es-AR')}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Desde Último Cierre</p>
+          <p className="text-sm text-slate-800 font-mono mt-0.5">
+            {datos.ultimoCierre ? new Date(datos.ultimoCierre).toLocaleString('es-AR') : 'Inicio de los tiempos'}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="border border-slate-200 p-4 rounded-xl bg-slate-50">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1">Auditoría Físico (Mostrador)</p>
+          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Efectivo Esperado:</span><span className="font-mono font-bold">${Number(datos.efectivo_esperado).toLocaleString()}</span></div>
+          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Efectivo Real (Caja):</span><span className="font-mono font-bold">${Number(datos.efectivo_real).toLocaleString()}</span></div>
+          <div className={`flex justify-between mt-2 pt-2 border-t border-slate-200 font-bold ${datos.diferencia < 0 ? 'text-red-600' : datos.diferencia > 0 ? 'text-blue-600' : 'text-emerald-600'}`}>
+            <span>Diferencia:</span><span className="font-mono">${Number(datos.diferencia).toLocaleString()}</span>
+          </div>
+        </div>
+
+        <div className="border border-slate-200 p-4 rounded-xl bg-slate-50">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1">Ingresos Digitales (Globales)</p>
+          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Transferencias:</span><span className="font-mono font-bold text-slate-900">${Number(datos.transferencias).toLocaleString()}</span></div>
+          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Tarjetas:</span><span className="font-mono font-bold text-slate-900">${Number(datos.tarjetas).toLocaleString()}</span></div>
+          <div className="flex justify-between"><span className="text-sm text-slate-600">Cheques:</span><span className="font-mono font-bold text-slate-900">${Number(datos.cheques).toLocaleString()}</span></div>
+        </div>
+      </div>
+
+      {datos.notas && (
+        <div className="mb-6 p-3 bg-amber-50 border-l-4 border-amber-400 rounded-r text-sm">
+          <span className="font-bold text-amber-800 uppercase tracking-wider block mb-1 text-[10px]">Observaciones del Encargado</span>
+          <span className="italic text-slate-800">{datos.notas}</span>
+        </div>
+      )}
+
+      <div className="mb-6">
+        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b-2 border-slate-200 pb-2 mb-3">Detalle de Movimientos del Turno</h3>
+        <Table className="text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[100px]">Hora</TableHead>
+              <TableHead>Detalle y Método</TableHead>
+              <TableHead className="text-right">Monto</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {datos.movimientos?.map((mov: any, idx: number) => (
+              <TableRow key={idx}>
+                <TableCell className="font-mono text-slate-500 text-xs">{new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</TableCell>
+                <TableCell>
+                  <span className="font-medium text-slate-800 block">{mov.detalle}</span>
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">{mov.metodo_pago} {mov.notas ? `- ${mov.notas}` : ''}</span>
+                </TableCell>
+                <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                  {mov.tipo_movimiento === 'ingreso_cobro' ? '+' : ''}${Number(mov.monto).toLocaleString()}
+                </TableCell>
+              </TableRow>
+            ))}
+            {(!datos.movimientos || datos.movimientos.length === 0) && (
+              <TableRow><TableCell colSpan={3} className="text-center text-slate-500 italic py-4">No hubo movimientos registrados en este turno.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="mt-12 pt-12 border-t border-slate-200 flex justify-between px-10">
+        <div className="text-center w-48">
+          <div className="border-b border-slate-400 mb-2"></div>
+          <p className="text-xs font-bold text-slate-500 uppercase">Firma Encargado</p>
+        </div>
+        <div className="text-center w-48">
+          <div className="border-b border-slate-400 mb-2"></div>
+          <p className="text-xs font-bold text-slate-500 uppercase">Firma Gerencia</p>
+        </div>
+      </div>
     </div>
   )
 }
