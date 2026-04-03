@@ -75,8 +75,14 @@ export default function DashboardPage() {
                    setActiveSection("Presupuestos");
                  }}
                />
-      case "Caja":              
-        return <CajaView onNavigateToPresupuesto={(id) => { setVistaActual('presupuestos'); setPresupuestoAbreDetalle(id); }} />
+      case "Caja":
+        return <CajaView 
+          onNavigateToPresupuesto={(id) => {
+            setPresupuestoParaAbrir(id);
+            setVolverA("Caja");
+            setActiveSection("Presupuestos");
+          }}
+        />;
       case "Turnos":
         return <TurnosView 
                  turnoAgendarInfo={turnoAgendarInfo}
