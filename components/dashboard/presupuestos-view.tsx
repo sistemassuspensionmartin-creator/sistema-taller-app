@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -36,6 +36,22 @@ const getEstadoColor = (estado: string) => {
     case "Rechazado": return "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
     case "Facturado": return "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
     default: return "bg-secondary text-foreground border-border";
+  }
+}
+
+// NUEVO: Componente visual para los tipos de ítem en la tabla
+const TipoBadge = ({ tipo }: { tipo: string }) => {
+  switch (tipo) {
+    case 'Repuesto':
+      return <Badge className="bg-blue-100 text-blue-700 border-none hover:bg-blue-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><Package className="w-3.5 h-3.5"/> Repuesto</Badge>;
+    case 'Servicio':
+      return <Badge className="bg-orange-100 text-orange-700 border-none hover:bg-orange-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><Wrench className="w-3.5 h-3.5"/> Servicio</Badge>;
+    case 'Mano de Obra':
+      return <Badge className="bg-purple-100 text-purple-700 border-none hover:bg-purple-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><PenTool className="w-3.5 h-3.5"/> Mano de Obra</Badge>;
+    case 'Neumático':
+      return <Badge className="bg-slate-100 text-slate-700 border-none hover:bg-slate-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><CircleDashed className="w-3.5 h-3.5"/> Neumático</Badge>;
+    default:
+      return <Badge variant="outline">{tipo}</Badge>;
   }
 }
 
@@ -313,6 +329,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     try {
       let presId = editandoId;
       const descParsed = parseFloat(descuento.toString()) || 0;
+      let numAleatorio = 0; // Lo preparamos para usarlo si es nuevo
 
       if (editandoId) {
         const { error: presError } = await supabase.from('presupuestos').update({
@@ -330,7 +347,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
         await supabase.from('presupuesto_items').delete().eq('presupuesto_id', editandoId);
         
       } else {
-        const numAleatorio = Math.floor(1000 + Math.random() * 9000);
+        numAleatorio = Math.floor(1000 + Math.random() * 9000);
         const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
           numero_correlativo: numAleatorio, 
           vehiculo_patente: vehiculoSeleccionado,
@@ -367,17 +384,13 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
       alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
       
-      if (editandoId) {
-        // Si era una modificación, apagamos el modo edición pero NOS QUEDAMOS en el detalle
-        setIsEditing(false);
-        cargarDatos(); // Refresca los datos en segundo plano
-      } else {
-        // Si era un presupuesto completamente nuevo, volvemos a la lista
-        setVista("lista");
-        setIsEditing(false);
-        cargarDatos(); 
+      // MAGIA DE NAVEGACIÓN: Nos quedamos en el detalle
+      if (!editandoId && numAleatorio !== 0) {
+        setNumeroCorrelativo(numAleatorio.toString());
       }
-      // -------------------------------
+      setEditandoId(presId);
+      setIsEditing(false);
+      cargarDatos();
       
     } catch (error: any) {
       console.error("Error al guardar:", error)
@@ -432,11 +445,11 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       cliente_telefono: v_cliente.telefono,
       vehiculo_patente: v_vehiculo.patente,
       
-      // CONEXIÓN BLINDADA: Busca directo en las columnas de tu DB
+      // CONEXIÓN BLINDADA
       vehiculo_modelo: `${v_vehiculo.marca || ''} ${v_vehiculo.modelo || ''}`.trim(),
-      vehiculo_anio: v_vehiculo.anio,
-      vehiculo_color: v_vehiculo.color,
-      vehiculo_kilometros: v_vehiculo.kilometraje,
+      vehiculo_anio: v_vehiculo.año || v_vehiculo.anio || v_vehiculo.year || '',
+      vehiculo_color: v_vehiculo.color || '',
+      vehiculo_kilometros: v_vehiculo.kilometros || v_vehiculo.km || v_vehiculo.kilometraje || '',
       
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
@@ -444,10 +457,8 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       total_final: v_total,
       validez_dias: validez,
       
-      // Mapeo preciso de notas
       observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
       notas_internas: esHistorico ? datosHistoricos.notas_internas : notasInternas,
-      
       config: configuracion
     };
 
@@ -697,7 +708,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-secondary/5 hover:bg-secondary/5">
-                        <TableHead className="w-[160px] print:hidden">Tipo</TableHead>
+                        <TableHead className="w-[155px] print:hidden">Tipo</TableHead>
                         <TableHead>Descripción del Trabajo / Repuesto</TableHead>
                         <TableHead className="w-[80px] text-center">Cant.</TableHead>
                         {mostrarCostos && <TableHead className="w-[120px] text-right text-amber-600 print:hidden">Costo Unit.</TableHead>}
@@ -713,17 +724,23 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                         return (
                           <TableRow key={fila.id} className="hover:bg-transparent">
                             <TableCell className="print:hidden">
-                              <Select value={fila.tipo} onValueChange={(v: string) => actualizarFila(fila.id, 'tipo', v)} disabled={!isEditing}>
-                                <SelectTrigger className={`h-10 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium disabled:opacity-100 appearance-none' : 'bg-white dark:bg-slate-950'}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="Servicio">Servicio</SelectItem>
-                                  <SelectItem value="Mano de Obra">Mano de Obra</SelectItem>
-                                  <SelectItem value="Repuesto">Repuesto</SelectItem>
-                                  <SelectItem value="Neumático">Neumático</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              {isEditing ? (
+                                <Select value={fila.tipo} onValueChange={(v: string) => actualizarFila(fila.id, 'tipo', v)}>
+                                  <SelectTrigger className="h-10 bg-white dark:bg-slate-950 w-full px-2">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Servicio"><TipoBadge tipo="Servicio" /></SelectItem>
+                                    <SelectItem value="Mano de Obra"><TipoBadge tipo="Mano de Obra" /></SelectItem>
+                                    <SelectItem value="Repuesto"><TipoBadge tipo="Repuesto" /></SelectItem>
+                                    <SelectItem value="Neumático"><TipoBadge tipo="Neumático" /></SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <div className="pointer-events-none">
+                                  <TipoBadge tipo={fila.tipo} />
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
