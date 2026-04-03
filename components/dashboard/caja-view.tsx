@@ -38,7 +38,7 @@ import {
 
 import { CierreCajaImprimible } from "./impresion-templates"
 
-export function CajaView() {
+export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?: (id: string) => void }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   
@@ -553,7 +553,13 @@ export function CajaView() {
                   ) : (
                     filtrarLista(cuentasPendientes).map(cuenta => (
                       <TableRow key={cuenta.id} className="hover:bg-secondary/20 transition-colors">
-                        <TableCell className="font-mono font-bold text-muted-foreground">PRE-{cuenta.numero}</TableCell>
+                        <TableCell 
+                          className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                          onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(cuenta.id)}
+                          title="Ir al detalle del presupuesto"
+                        >
+                          PRE-{cuenta.numero}
+                        </TableCell>
                         <TableCell>
                           <div className="font-bold tracking-widest uppercase">{cuenta.patente}</div>
                           <div className="text-xs text-muted-foreground">{cuenta.cliente}</div>
@@ -597,7 +603,13 @@ export function CajaView() {
                   ) : (
                     filtrarLista(cuentasCobradas).map(cuenta => (
                       <TableRow key={cuenta.id} className="hover:bg-secondary/20 transition-colors bg-emerald-50/10">
-                        <TableCell className="font-mono font-bold text-muted-foreground">PRE-{cuenta.numero}</TableCell>
+                        <TableCell 
+                          className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                          onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(cuenta.id)}
+                          title="Ir al detalle del presupuesto"
+                        >
+                          PRE-{cuenta.numero}
+                        </TableCell>
                         <TableCell>
                           <div className="font-bold tracking-widest uppercase">{cuenta.patente}</div>
                           <div className="text-xs text-muted-foreground">{cuenta.cliente}</div>

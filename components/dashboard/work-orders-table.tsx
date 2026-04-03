@@ -62,9 +62,18 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
 
   const avanzarEstado = async (id: string, estadoActual: string) => {
     const currentIndex = COLUMNAS.findIndex(c => c.id === estadoActual)
-    if (currentIndex >= COLUMNAS.length - 1) return 
+    if (currentIndex >= COLUMNAS.length - 1) return
 
     const nuevoEstado = COLUMNAS[currentIndex + 1].id
+
+    if (nuevoEstado === "Entregado") {
+      const orden = ordenes.find(o => o.id === id);
+      if (orden && orden.presupuestos && orden.presupuestos.estado_pago !== 'Cobrado') {
+        alert("⛔ ALERTA DE CAJA: No se puede entregar el vehículo.\n\nEl presupuesto asociado aún tiene saldo pendiente. Diríjase a Tesorería para registrar el cobro antes de liberar la unidad.");
+        return;
+      }
+    }
+
     const fechaEntrega = nuevoEstado === "Entregado" ? hoyLocal : null;
 
     setOrdenes(ordenes.map(o => o.id === id ? { ...o, estado: nuevoEstado, fecha_entrega: fechaEntrega } : o))
@@ -75,7 +84,7 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
       await supabase.from('ordenes_trabajo').update(updatePayload).eq('id', id)
     } catch (error) {
       alert("Error al mover el vehículo.")
-      cargarDatos() 
+      cargarDatos()
     }
   }
 
