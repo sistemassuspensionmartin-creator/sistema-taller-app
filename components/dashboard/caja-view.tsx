@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
   Wallet, ArrowRightLeft, FileText, DollarSign, CreditCard, Landmark, 
-  Receipt, Search, Plus, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, Lock, Printer, Building, Banknote
+  Receipt, Search, Plus, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, Lock, Printer, Building, Banknote, TrendingDown
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,6 +43,7 @@ export function CajaView() {
   const [isSaving, setIsSaving] = useState(false)
   
   const [cajas, setCajas] = useState<any[]>([])
+  const [categoriasGasto, setCategoriasGasto] = useState<any[]>([])
   
   // NUEVA ESTRUCTURA DE LISTAS
   const [cuentasPendientes, setCuentasPendientes] = useState<any[]>([])
@@ -58,6 +59,7 @@ export function CajaView() {
 
   const [isCobrarModalOpen, setIsCobrarModalOpen] = useState(false)
   const [isMovimientoModalOpen, setIsMovimientoModalOpen] = useState(false)
+  const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false)
   const [isCierreModalOpen, setIsCierreModalOpen] = useState(false)
 
   // Estados Cobro
@@ -70,11 +72,17 @@ export function CajaView() {
   const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
   const [bancoTarjeta, setBancoTarjeta] = useState("")
 
-  // Estados Movimiento
+  // Estados Movimiento Interno
   const [cajaOrigen, setCajaOrigen] = useState("")
   const [cajaDestino, setCajaDestino] = useState("")
   const [montoMovimiento, setMontoMovimiento] = useState("")
   const [notasMovimiento, setNotasMovimiento] = useState("")
+
+  // Estados Egreso/Gasto
+  const [montoEgreso, setMontoEgreso] = useState("")
+  const [categoriaEgreso, setCategoriaEgreso] = useState("")
+  const [cajaEgreso, setCajaEgreso] = useState("")
+  const [notasEgreso, setNotasEgreso] = useState("")
 
   // Estados Cierre de Caja
   const [efectivoContado, setEfectivoContado] = useState("")
@@ -87,9 +95,13 @@ export function CajaView() {
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
-      // 1. Cajas
-      const { data: cajasData } = await supabase.from('cajas').select('*').order('nombre')
+      // 1. Cajas y Categorías
+      const [{ data: cajasData }, { data: catData }] = await Promise.all([
+        supabase.from('cajas').select('*').order('nombre'),
+        supabase.from('categorias_gasto').select('*').order('nombre')
+      ])
       setCajas(cajasData || [])
+      setCategoriasGasto(catData || [])
 
       // 2. Último Cierre (Marca el inicio del turno)
       const { data: ultimoCierreData } = await supabase
@@ -128,7 +140,6 @@ export function CajaView() {
         .select(`vehiculo_patente, cliente_nombre, presupuestos (*)`)
         .not('presupuesto_id', 'is', null)
 
-      // Acá traemos TODOS los pagos para saber el saldo real de cada presupuesto
       const { data: todosLosPagos } = await supabase
         .from('movimientos_caja')
         .select('presupuesto_id, monto')
@@ -161,12 +172,9 @@ export function CajaView() {
 
       const procesadas = Array.from(presupuestosUnicos.values());
 
-      // SEPARAR LAS AGUAS: Pendientes vs Cobrados Hoy
       const pendientes = procesadas.filter(p => p.restante > 0).sort((a:any, b:any) => b.numero - a.numero);
-      
       const cobradosHoy = procesadas.filter(p => {
         if (p.restante > 0) return false;
-        // ¿Se terminó de pagar en este turno? (Buscamos si tiene un pago en los movimientos del turno)
         const pagoEnEsteTurno = (movData || []).some((m: any) => m.presupuesto_id === p.id && m.tipo_movimiento === 'ingreso_cobro');
         return pagoEnEsteTurno;
       }).sort((a:any, b:any) => b.numero - a.numero);
@@ -183,6 +191,7 @@ export function CajaView() {
 
   useEffect(() => { cargarDatos() }, [])
 
+  // Corrección estricta: Solo mostrador
   const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
 
@@ -287,8 +296,46 @@ export function CajaView() {
     }
   }
 
+  // --- LÓGICA DE GASTOS Y EGRESOS ---
+  const procesarEgreso = async () => {
+    const monto = parseFloat(montoEgreso);
+    if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
+    if (!cajaEgreso) return alert("Seleccione de qué caja sale el dinero.");
+    if (!categoriaEgreso) return alert("Seleccione una categoría de gasto.");
+
+    const cajaObj = cajas.find(c => c.id === cajaEgreso);
+    if (Number(cajaObj.saldo || 0) < monto) return alert("No hay saldo suficiente en la caja seleccionada.");
+
+    setIsSaving(true);
+    try {
+      // 1. Restar el saldo de la caja seleccionada
+      await supabase.from('cajas').update({ saldo: Number(cajaObj.saldo || 0) - monto }).eq('id', cajaEgreso);
+
+      // 2. Anotar en el historial
+      const catNombre = categoriasGasto.find(c => c.id === categoriaEgreso)?.nombre || 'Gasto General';
+      
+      await supabase.from('movimientos_caja').insert([{
+        tipo_movimiento: 'egreso_gasto',
+        caja_origen_id: cajaEgreso,
+        monto: monto,
+        metodo_pago: 'Efectivo', // Asumimos efectivo, pero en el futuro se puede extender
+        detalle: `Gasto: ${catNombre}`,
+        notas: notasEgreso
+      }]);
+
+      alert("Egreso registrado con éxito.");
+      setIsEgresoModalOpen(false);
+      setMontoEgreso("");
+      setNotasEgreso("");
+      cargarDatos();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const abrirModalCierre = async () => {
-    // Re-calculamos justo antes de abrir para máxima precisión
     setIsSaving(true);
     try {
       const fechaInicio = ultimoCierre ? ultimoCierre.fecha_cierre : '2000-01-01T00:00:00Z';
@@ -354,7 +401,7 @@ export function CajaView() {
 
       alert("¡Caja cerrada! Preparando el comprobante PDF...");
       setIsCierreModalOpen(false);
-      cargarDatos(); // ESTO HACE LA MAGIA: Resetea visualmente el turno
+      cargarDatos(); 
 
       setTimeout(() => {
         window.print();
@@ -395,7 +442,11 @@ export function CajaView() {
             <h2 className="text-2xl font-semibold text-foreground">Tablero de Turno (Mostrador)</h2>
             <p className="text-sm text-muted-foreground">Gestión ágil de cobros y caja diaria.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {/* NUEVO BOTÓN DE GASTOS */}
+            <Button onClick={() => setIsEgresoModalOpen(true)} variant="outline" className="border-red-200 text-red-700 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
+              <TrendingDown className="mr-2 h-4 w-4" /> Registrar Gasto
+            </Button>
             <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
               <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
             </Button>
@@ -590,7 +641,8 @@ export function CajaView() {
                       <TableCell>
                         {mov.tipo_movimiento === 'ingreso_cobro' ? <Badge className="bg-emerald-100 text-emerald-800 shadow-none"><ArrowDownRight className="w-3 h-3 mr-1"/> Ingreso</Badge> :
                          mov.tipo_movimiento === 'transferencia_interna' ? <Badge className="bg-blue-100 text-blue-800 shadow-none"><ArrowRightLeft className="w-3 h-3 mr-1"/> Interno</Badge> :
-                         <Badge variant="destructive">Egreso</Badge>}
+                         mov.tipo_movimiento === 'egreso_gasto' ? <Badge className="bg-red-100 text-red-800 shadow-none"><TrendingDown className="w-3 h-3 mr-1"/> Gasto</Badge> :
+                         <Badge variant="destructive">Ajuste</Badge>}
                       </TableCell>
                       <TableCell className="font-medium text-sm">
                         {mov.detalle}
@@ -598,17 +650,18 @@ export function CajaView() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1 font-medium text-sm text-muted-foreground"><CreditCard className="w-3 h-3"/> {mov.metodo_pago}</div>
-                        {mov.caja_destino && <div className="text-[10px] text-muted-foreground mt-0.5 font-bold uppercase tracking-wider">Destino: {mov.caja_destino.nombre}</div>}
+                        {mov.caja_destino && mov.tipo_movimiento !== 'egreso_gasto' && <div className="text-[10px] text-muted-foreground mt-0.5 font-bold uppercase tracking-wider">Destino: {mov.caja_destino.nombre}</div>}
+                        {mov.caja_origen && mov.tipo_movimiento === 'egreso_gasto' && <div className="text-[10px] text-red-600/70 mt-0.5 font-bold uppercase tracking-wider">Salió de: {mov.caja_origen.nombre}</div>}
                       </TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : 'text-foreground'}`}>
-                        {mov.tipo_movimiento === 'ingreso_cobro' ? '+' : ''}${Number(mov.monto).toLocaleString()}
+                      <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : mov.tipo_movimiento === 'egreso_gasto' ? 'text-red-600' : 'text-foreground'}`}>
+                        {mov.tipo_movimiento === 'ingreso_cobro' ? '+' : mov.tipo_movimiento === 'egreso_gasto' ? '-' : ''}${Number(mov.monto).toLocaleString()}
                       </TableCell>
                     </TableRow>
                   ))}
                   {movimientos.length === 0 && !isLoading && (
                     <TableRow><TableCell colSpan={5} className="h-40 flex flex-col items-center justify-center text-center text-muted-foreground">
                       <FileText className="w-8 h-8 mb-2 opacity-20" />
-                      <p className="italic">La caja está limpia. Aún no registraste movimientos en este turno.</p>
+                      <p className="italic">La cinta auditora está limpia. Aún no registraste movimientos en este turno.</p>
                     </TableCell></TableRow>
                   )}
                 </TableBody>
@@ -616,6 +669,57 @@ export function CajaView() {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* --- MODAL DE EGRESOS / GASTOS --- */}
+        <Dialog open={isEgresoModalOpen} onOpenChange={setIsEgresoModalOpen}>
+          <DialogContent className="max-w-md border-border bg-card">
+            <DialogHeader>
+              <DialogTitle className="text-xl flex items-center gap-2 text-red-700 dark:text-red-500">
+                <TrendingDown className="w-6 h-6" /> Registrar Gasto / Egreso
+              </DialogTitle>
+              <DialogDescription>Asigná el motivo y de dónde sale el dinero físico o digital.</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Categoría del Gasto</Label>
+                <Select value={categoriaEgreso} onValueChange={setCategoriaEgreso}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Seleccionar categoría..."/></SelectTrigger>
+                  <SelectContent>
+                    {categoriasGasto.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>¿De qué caja sale el dinero?</Label>
+                <Select value={cajaEgreso} onValueChange={setCajaEgreso}>
+                  <SelectTrigger className="h-10"><SelectValue placeholder="Caja de origen..."/></SelectTrigger>
+                  <SelectContent>
+                    {cajas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} (Disp: ${Number(c.saldo).toLocaleString()})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Monto a Pagar ($)</Label>
+                <Input type="number" className="text-lg font-mono font-bold h-12 border-red-300 ring-red-500 focus-visible:ring-red-500" value={montoEgreso} onChange={(e) => setMontoEgreso(e.target.value)} />
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-border">
+                <Label>Detalle o Factura (Opcional)</Label>
+                <Input placeholder="Ej: Compra de focos Fravega Fra. 001..." value={notasEgreso} onChange={(e) => setNotasEgreso(e.target.value)} />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsEgresoModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+              <Button onClick={procesarEgreso} disabled={isSaving} className="bg-red-600 hover:bg-red-700 text-white">
+                {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Confirmar Egreso
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* --- MODAL DE COBRO --- */}
         <Dialog open={isCobrarModalOpen} onOpenChange={setIsCobrarModalOpen}>
