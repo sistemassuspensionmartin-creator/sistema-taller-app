@@ -367,9 +367,17 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
       alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
       
-      setVista("lista")
-      setIsEditing(false)
-      cargarDatos() 
+      if (editandoId) {
+        // Si era una modificación, apagamos el modo edición pero NOS QUEDAMOS en el detalle
+        setIsEditing(false);
+        cargarDatos(); // Refresca los datos en segundo plano
+      } else {
+        // Si era un presupuesto completamente nuevo, volvemos a la lista
+        setVista("lista");
+        setIsEditing(false);
+        cargarDatos(); 
+      }
+      // -------------------------------
       
     } catch (error: any) {
       console.error("Error al guardar:", error)
