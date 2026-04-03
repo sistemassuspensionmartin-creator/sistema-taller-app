@@ -30,18 +30,19 @@ export default function DashboardPage() {
     switch (activeSection) {
       case "Inicio":
         return (
-          <div className="space-y-6">
-            <MetricsCards />
-            <WorkOrdersTable 
-              readOnly={true}
-              onNavigateToPresupuesto={(id) => {
-                setPresupuestoParaAbrir(id);
-                setVolverA("Inicio");
+          <div className="space-y-8">
+            <MetricsCards 
+              onNavigateToPresupuestos={() => {
+                // Aseguramos que abra un presupuesto nuevo en blanco
+                setPresupuestoParaAbrir(null); 
                 setActiveSection("Presupuestos");
               }}
+              onNavigateToTurnos={() => setActiveSection("Turnos")}
+              onNavigateToCaja={() => setActiveSection("Caja")}
             />
+            {/* Borramos el <WorkOrdersTable /> que estaba acá abajo para limpiar la vista */}
           </div>
-        )
+        );
       case "Clientes":
         return <ClientsView 
                  clienteAbreDetalle={clienteParaAbrir}
