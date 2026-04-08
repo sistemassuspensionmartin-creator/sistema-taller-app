@@ -366,21 +366,35 @@ export function TurnosView({
 
   const cambiarEstadoTurno = async (id: string, nuevoEstado: string) => {
     try {
+      // 1. Cambiamos el estado del turno
       const { error } = await supabase.from('turnos').update({ estado: nuevoEstado }).eq('id', id);
       if (error) throw error;
       
       if (nuevoEstado === "asistio") {
         const turno = turnos.find(t => t.id === id);
         if (turno) {
+          
+          // 2. Creamos la tarjeta en el tablero del Taller
           const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
             presupuesto_id: turno.presupuesto_id || null,
             vehiculo_patente: turno.patente,
             cliente_nombre: turno.cliente,
-            estado: 'A Ingresar',
+            estado: 'A Ingresar', 
             notas_mecanico: turno.observaciones || null
           }]);
           if (tallerError) throw tallerError;
-          alert("¡Turno confirmado! El vehículo ya está en el tablero del Taller esperando al mecánico.");
+
+          // 3. APROBAMOS EL PRESUPUESTO AUTOMÁTICAMENTE (Si es que tenía uno asociado)
+          if (turno.presupuesto_id) {
+            const { error: presError } = await supabase
+              .from('presupuestos')
+              .update({ estado: 'Aprobado' })
+              .eq('id', turno.presupuesto_id);
+            
+            if (presError) throw presError;
+          }
+
+          alert("¡Ingreso confirmado! El vehículo ya está en el tablero del Taller y su presupuesto fue Aprobado.");
         }
       }
 
