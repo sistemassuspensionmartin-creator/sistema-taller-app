@@ -14,6 +14,7 @@ import { TurnosView } from "@/components/dashboard/turnos-view"
 import { PresupuestosView } from "@/components/dashboard/presupuestos-view"
 import { CatalogoView } from "@/components/dashboard/catalogo-view"
 import { AjustesView } from "@/components/dashboard/ajustes-view"
+import { CuentasCorrientesView } from "@/components/dashboard/cuentas-corrientes-view"
 
 export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState("Inicio")
@@ -114,6 +115,8 @@ export default function DashboardPage() {
         return <CatalogoView />
       case "Configuración":
         return <AjustesView />
+      case "Cuentas Corrientes":
+        return <CuentasCorrientesView />;
       default:
         return <MetricsCards />
     }
