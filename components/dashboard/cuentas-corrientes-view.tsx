@@ -38,6 +38,7 @@ import {
 export function CuentasCorrientesView() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [busquedaProveedor, setBusquedaProveedor] = useState("")
   
   // Datos
   const [proveedores, setProveedores] = useState<any[]>([])
@@ -202,6 +203,10 @@ export function CuentasCorrientesView() {
   }
 
   const getTotalDeuda = () => proveedores.reduce((acc, prov) => acc + Number(prov.saldo || 0), 0)
+  const proveedoresFiltrados = proveedores.filter(p => 
+    p.nombre.toLowerCase().includes(busquedaProveedor.toLowerCase()) || 
+    (p.cuit && p.cuit.includes(busquedaProveedor))
+  )
 
   return (
     <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300">
@@ -256,6 +261,19 @@ export function CuentasCorrientesView() {
             </Button>
           </div>
 
+            {/* --- BARRA DE BÚSQUEDA NUEVA --- */}
+          <div className="flex items-center gap-2 mb-4 shrink-0">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nombre o CUIT..."
+                className="pl-9 bg-card border-border"
+                value={busquedaProveedor}
+                onChange={(e) => setBusquedaProveedor(e.target.value)}
+              />
+            </div>
+          </div>
+
           <Card className="flex-1 border-border shadow-sm overflow-hidden flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto p-0">
               <Table>
@@ -271,10 +289,10 @@ export function CuentasCorrientesView() {
                 <TableBody>
                   {isLoading ? (
                     <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground animate-pulse">Cargando proveedores...</TableCell></TableRow>
-                  ) : proveedores.length === 0 ? (
+                  ) : proveedoresFiltrados.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">Aún no hay proveedores registrados.</TableCell></TableRow>
                   ) : (
-                    proveedores.map((prov) => (
+                    proveedoresFiltrados.map((prov) => (
                       <TableRow key={prov.id} className="hover:bg-secondary/20">
                         <TableCell>
                           <div className="font-bold text-foreground uppercase tracking-wide">{prov.nombre}</div>
