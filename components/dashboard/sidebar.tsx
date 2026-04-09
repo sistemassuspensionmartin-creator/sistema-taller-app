@@ -17,6 +17,7 @@ import {
   Sun,
   Moon,
   DollarSign,
+  BookOpen,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,6 +43,7 @@ const navItems: NavItem[] = [
   { label: "Stock/Repuestos", icon: Package, href: "#" },
   { label: "Turnos", icon: Calendar, href: "#" },
   { label: "Caja", icon: DollarSign, href: "#" },
+  { label: "Cuentas Corrientes", icon: BookOpen, href: "#" },
 ]
 
 interface DashboardSidebarProps {
