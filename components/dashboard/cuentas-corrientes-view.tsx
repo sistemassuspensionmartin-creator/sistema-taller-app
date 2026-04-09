@@ -188,12 +188,13 @@ export function CuentasCorrientesView() {
     setMovimientosLedger([]) // limpia mientras carga
     
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('movimientos_proveedores')
-        .select('*, caja:caja_origen_id(nombre)')
+        .select('*') // Le sacamos la búsqueda cruzada que daba error
         .eq('proveedor_id', prov.id)
         .order('fecha', { ascending: false })
       
+      if (error) throw error;
       setMovimientosLedger(data || [])
     } catch (error) {
       console.error("Error al cargar historial", error)
@@ -502,7 +503,11 @@ export function CuentasCorrientesView() {
                         <p className="font-medium text-sm">{mov.detalle}</p>
                         <div className="flex gap-2 items-center mt-1">
                           {mov.comprobante && <span className="text-xs text-muted-foreground">Doc: {mov.comprobante}</span>}
-                          {mov.caja && <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase">Vía {mov.caja.nombre}</Badge>}
+                          {mov.caja_origen_id && (
+                            <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase">
+                              Vía {cajas.find(c => c.id === mov.caja_origen_id)?.nombre || 'Caja Desconocida'}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className={`text-right font-mono font-bold ${mov.tipo === 'factura_compra' ? 'text-rose-600' : 'text-emerald-600'}`}>
