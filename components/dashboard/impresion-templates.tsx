@@ -12,7 +12,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
           {datos?.config?.logo_url ? (
             <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
           ) : (
-            <div className="w-24 h-24 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
+            <div className="w-42 h-42 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
               <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
             </div>
           )}
@@ -106,7 +106,7 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
         {datos?.config?.logo_url ? (
           <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
         ) : (
-          <div className="w-32 h-32 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
+          <div className="w-42 h-42 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
             <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
           </div>
         )}
