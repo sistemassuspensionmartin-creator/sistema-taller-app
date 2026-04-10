@@ -269,7 +269,7 @@ export function CuentasCorrientesView() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
             <Card className="border-border shadow-sm md:col-span-3 flex items-center justify-between p-6">
               <div>
-                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Cobrar en la Calle</p>
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Cobrar</p>
                 <h3 className="text-3xl font-black text-blue-600 font-mono">
                   ${getTotalCobrarClientes().toLocaleString()}
                 </h3>
@@ -362,7 +362,7 @@ export function CuentasCorrientesView() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
             <Card className="border-border shadow-sm md:col-span-2 flex items-center justify-between p-6">
               <div>
-                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Pagar en la Calle</p>
+                <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Pagar</p>
                 <h3 className="text-3xl font-black text-rose-600 font-mono">
                   ${getTotalDeudaProveedores().toLocaleString()}
                 </h3>

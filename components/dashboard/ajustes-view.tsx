@@ -1,261 +1,270 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Save, Loader2, Store, Phone, MapPin, FileText, Mail, FileSignature, Clock, Instagram, Users, Shield, Database, Download, Plus, Trash2, Edit, Wrench, MessageCircle, CheckCircle2, Star } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { supabase } from "@/lib/supabase"
+import { 
+  Save, UploadCloud, Store, FileText, MessageSquare, Image as ImageIcon, Loader2, CheckCircle2 
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { supabase } from "@/lib/supabase"
 
-export function AjustesView() {
+export function ConfiguracionView() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-
-  const [formData, setFormData] = useState({
-    nombre_taller: "", telefono: "", direccion: "", cuit: "",
-    email: "", horario: "", instagram: "", terminos_presupuesto: "",
-    msj_presupuesto: "", msj_listo: "",
-    msj_postventa_wpp: "", msj_postventa_email_asunto: "", msj_postventa_email_cuerpo: ""
+  
+  // --- NUEVOS ESTADOS PARA LA IMAGEN ---
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Estado con todos los campos de tu tabla SQL
+  const [config, setConfig] = useState<any>({
+    id: 1, // Asumimos que la fila principal tiene ID 1
+    nombre_taller: "",
+    telefono: "",
+    direccion: "",
+    cuit: "",
+    email: "",
+    horario: "",
+    instagram: "",
+    terminos_presupuesto: "",
+    msj_presupuesto: "",
+    msj_listo: "",
+    msj_postventa_wpp: "",
+    msj_postventa_email_asunto: "",
+    msj_postventa_email_cuerpo: "",
+    logo_url: "" // <-- El campo nuevo en tu base de datos
   })
 
-  const fetchConfig = async () => {
-    setIsLoading(true)
-    try {
-      const { data, error } = await supabase.from('configuracion').select('*').eq('id', 1).single()
-      if (error) throw error
-      if (data) {
-        setFormData({
-          nombre_taller: data.nombre_taller || "", telefono: data.telefono || "",
-          direccion: data.direccion || "", cuit: data.cuit || "",
-          email: data.email || "", horario: data.horario || "",
-          instagram: data.instagram || "", terminos_presupuesto: data.terminos_presupuesto || "",
-          msj_presupuesto: data.msj_presupuesto || "",
-          msj_listo: data.msj_listo || "",
-          msj_postventa_wpp: data.msj_postventa_wpp || "",
-          msj_postventa_email_asunto: data.msj_postventa_email_asunto || "",
-          msj_postventa_email_cuerpo: data.msj_postventa_email_cuerpo || ""
-        })
+  // 1. CARGAR DATOS
+  useEffect(() => {
+    const fetchConfig = async () => {
+      setIsLoading(true)
+      try {
+        const { data, error } = await supabase.from('configuracion').select('*').limit(1).single()
+        if (error && error.code !== 'PGRST116') throw error // Ignora si no hay filas
+        if (data) setConfig(data)
+      } catch (error) {
+        console.error("Error al cargar configuración:", error)
+      } finally {
+        setIsLoading(false)
       }
-    } catch (error) {
-      console.error("Error:", error)
+    }
+    fetchConfig()
+  }, [])
+
+  // --- 2. NUEVA FUNCIÓN: SUBIR LOGO A STORAGE ---
+  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith("image/")) {
+      return alert("Por favor, subí un archivo de imagen válido (JPG, PNG).")
+    }
+
+    setIsUploading(true)
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `logo-${Date.now()}.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(fileName, file)
+
+      if (uploadError) throw uploadError
+
+      const { data } = supabase.storage.from('logos').getPublicUrl(fileName)
+      
+      setConfig({ ...config, logo_url: data.publicUrl })
+      
+      await supabase.from('configuracion').upsert({ id: config.id || 1, logo_url: data.publicUrl })
+
+      alert("¡Logo subido y guardado correctamente!")
+    } catch (error: any) {
+      console.error("Error subiendo logo:", error)
+      alert("Hubo un error al subir la imagen: " + error.message)
     } finally {
-      setIsLoading(false)
+      setIsUploading(false)
     }
   }
 
-  useEffect(() => { fetchConfig() }, [])
-
-  const handleGuardarCambios = async () => {
-    if (!formData.nombre_taller.trim()) return alert("El nombre del taller es obligatorio.")
+  // 3. GUARDAR TODOS LOS CAMBIOS DE TEXTO
+  const handleGuardarConfiguracion = async () => {
     setIsSaving(true)
     try {
-      const { error } = await supabase.from('configuracion').update(formData).eq('id', 1)
+      const payload = { ...config, id: config.id || 1 }
+      const { error } = await supabase.from('configuracion').upsert(payload)
       if (error) throw error
-      alert("¡Configuración guardada con éxito!")
-    } catch (error) {
-      console.error("Error:", error)
-      alert("Hubo un error al guardar los cambios.")
+      alert("¡Configuración guardada correctamente!")
+    } catch (error: any) {
+      console.error("Error al guardar:", error)
+      alert("Hubo un error al guardar: " + error.message)
     } finally {
       setIsSaving(false)
     }
   }
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[60vh]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-muted-foreground">Cargando configuración...</p>
-      </div>
-    )
+    return <div className="flex h-[50vh] items-center justify-center text-muted-foreground"><Loader2 className="w-8 h-8 animate-spin" /></div>
   }
 
   return (
-    <div className="space-y-6 pb-8 max-w-5xl mx-auto animate-in fade-in duration-300">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6 pb-8 animate-in fade-in duration-300 max-w-5xl mx-auto">
+      
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-foreground">Ajustes del Sistema</h2>
-          <p className="text-sm text-muted-foreground">Administrá tu empresa, notificaciones y usuarios.</p>
+          <h2 className="text-2xl font-semibold text-foreground">Configuración del Sistema</h2>
+          <p className="text-sm text-muted-foreground">Personalizá la identidad, presupuestos y mensajes automáticos.</p>
         </div>
+        <Button onClick={handleGuardarConfiguracion} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+          {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+          Guardar Cambios
+        </Button>
       </div>
 
-      <Tabs defaultValue="empresa" className="w-full">
-        <TabsList className="mb-6 bg-secondary h-12 w-full justify-start rounded-lg px-2">
-          <TabsTrigger value="empresa" className="px-6 data-[state=active]:bg-background">Datos y Notificaciones</TabsTrigger>
-          <TabsTrigger value="usuarios" className="px-6 data-[state=active]:bg-background">Usuarios y Permisos</TabsTrigger>
-          <TabsTrigger value="sistema" className="px-6 data-[state=active]:bg-background">Sistema y Respaldos</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="empresa" className="space-y-6">
-          <Card className="border-border shadow-sm">
-            <CardHeader className="bg-secondary/10 border-b border-border pb-4 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2"><Store className="w-5 h-5 text-primary" /> Información Comercial</CardTitle>
-                <CardDescription>Esta información aparecerá en tus PDFs generados.</CardDescription>
-              </div>
-              <Button onClick={handleGuardarCambios} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-md">
-                {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                Guardar Cambios
-              </Button>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Nombre del Taller <span className="text-destructive">*</span></Label>
-                  <div className="relative"><Store className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" value={formData.nombre_taller} onChange={(e) => setFormData({...formData, nombre_taller: e.target.value})} /></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        
+        {/* --- NUEVA COLUMNA IZQUIERDA: EL LOGO --- */}
+        <Card className="border-border shadow-sm h-fit">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2"><ImageIcon className="w-5 h-5 text-primary" /> Logo del Taller</CardTitle>
+            <CardDescription>Se mostrará en la web y en los PDF de presupuestos.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-4">
+            <div className="w-40 h-40 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-secondary/30 overflow-hidden relative group">
+              {config.logo_url ? (
+                <img src={config.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
+              ) : (
+                <div className="text-center text-muted-foreground flex flex-col items-center">
+                  <Store className="w-8 h-8 mb-2 opacity-50" />
+                  <span className="text-xs">Sin logo</span>
                 </div>
-                <div className="space-y-2">
-                  <Label>CUIT del Taller</Label>
-                  <div className="relative"><FileText className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Ej: 30-12345678-9" className="pl-9 bg-slate-50 dark:bg-slate-900 border-border font-mono" value={formData.cuit} onChange={(e) => setFormData({...formData, cuit: e.target.value})} /></div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Teléfono Comercial</Label>
-                  <div className="relative"><Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Ej: +54 9 11 4444-5555" className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} /></div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Correo Electrónico</Label>
-                  <div className="relative"><Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="taller@ejemplo.com" className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} /></div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Dirección Física</Label>
-                  <div className="relative"><MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Ej: Av. Principal 1234, Ciudad" className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" value={formData.direccion} onChange={(e) => setFormData({...formData, direccion: e.target.value})} /></div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Horarios de Atención</Label>
-                  <div className="relative"><Clock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Ej: Lun a Vie: 8 a 18hs" className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" value={formData.horario} onChange={(e) => setFormData({...formData, horario: e.target.value})} /></div>
-                </div>
-              </div>
-              <div className="border-t border-border pt-4">
-                <div className="space-y-2 w-full md:w-1/2 md:pr-3">
-                  <Label>Cuenta de Instagram</Label>
-                  <div className="relative"><Instagram className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Ej: @mitaller.auto" className="pl-9 bg-slate-50 dark:bg-slate-900 border-border" value={formData.instagram} onChange={(e) => setFormData({...formData, instagram: e.target.value})} /></div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-border shadow-sm">
-            <CardHeader className="bg-[#25D366]/10 border-b border-border pb-4">
-              <CardTitle className="text-lg flex items-center gap-2 text-[#128C7E] dark:text-[#25D366]">
-                <MessageCircle className="w-5 h-5" /> Plantillas de WhatsApp Automatizadas
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
+              )}
               
-              <div className="bg-secondary/40 p-4 rounded-lg border border-dashed border-border flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                <p className="text-xs font-bold uppercase text-muted-foreground shrink-0 mt-1">Variables<br/>Disponibles:</p>
-                <div className="flex flex-wrap gap-2">
-                  {['{{cliente}}', '{{vehiculo}}', '{{patente}}', '{{total}}', '{{taller}}', '{{horario}}'].map(v => (
-                    <Badge key={v} variant="outline" className="font-mono bg-background text-primary border-primary/30 shadow-sm">{v}</Badge>
-                  ))}
-                </div>
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                <UploadCloud className="w-8 h-8 text-white" />
               </div>
+            </div>
+            
+            <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleUploadLogo} />
+            
+            <Button variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+              {isUploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <UploadCloud className="w-4 h-4 mr-2" />}
+              {config.logo_url ? "Cambiar Logo" : "Subir Logo"}
+            </Button>
+          </CardContent>
+        </Card>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="font-bold flex items-center gap-2"><FileText className="w-4 h-4 text-muted-foreground"/> Enviar Presupuesto</Label>
-                  <Textarea 
-                    className="min-h-[160px] bg-slate-50 dark:bg-slate-900 border-border resize-none" 
-                    value={formData.msj_presupuesto} 
-                    onChange={(e) => setFormData({...formData, msj_presupuesto: e.target.value})} 
-                  />
-                </div>
-                <div className="space-y-3">
-                  <Label className="font-bold flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-muted-foreground"/> Auto Terminado (Para Retirar)</Label>
-                  <Textarea 
-                    className="min-h-[160px] bg-slate-50 dark:bg-slate-900 border-border resize-none" 
-                    value={formData.msj_listo} 
-                    onChange={(e) => setFormData({...formData, msj_listo: e.target.value})} 
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        {/* COLUMNA DERECHA: LOS DATOS (PESTAÑAS) */}
+        <div className="md:col-span-2">
+          <Tabs defaultValue="general" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 bg-secondary">
+              <TabsTrigger value="general"><Store className="w-4 h-4 mr-2 hidden sm:block" /> General</TabsTrigger>
+              <TabsTrigger value="presupuestos"><FileText className="w-4 h-4 mr-2 hidden sm:block" /> Presupuestos</TabsTrigger>
+              <TabsTrigger value="mensajes"><MessageSquare className="w-4 h-4 mr-2 hidden sm:block" /> Mensajería</TabsTrigger>
+            </TabsList>
 
-          {/* NUEVA SECCIÓN: POST-VENTA */}
-          <Card className="border-border shadow-sm border-blue-200 dark:border-blue-900">
-            <CardHeader className="bg-blue-50 dark:bg-blue-900/20 border-b border-border pb-4">
-              <CardTitle className="text-lg flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                <Star className="w-5 h-5" /> Encuesta de Satisfacción (Post-Venta)
-              </CardTitle>
-              <CardDescription className="text-blue-700/70 dark:text-blue-400/70">
-                Mensajes para enviar al cliente unos días después de entregarle el vehículo, pidiendo una reseña.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Lado de WhatsApp */}
-                <div className="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-border">
-                  <Label className="font-bold flex items-center gap-2 text-green-600"><MessageCircle className="w-4 h-4"/> Opción: Enviar por WhatsApp</Label>
-                  <Textarea 
-                    className="min-h-[160px] bg-white dark:bg-slate-950 border-border resize-none" 
-                    value={formData.msj_postventa_wpp} 
-                    onChange={(e) => setFormData({...formData, msj_postventa_wpp: e.target.value})} 
-                  />
-                </div>
-
-                {/* Lado de Email */}
-                <div className="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-border">
-                  <Label className="font-bold flex items-center gap-2 text-blue-600"><Mail className="w-4 h-4"/> Opción: Enviar por Correo Electrónico</Label>
+            {/* PESTAÑA 1: GENERAL */}
+            <TabsContent value="general" className="mt-4">
+              <Card className="border-border shadow-sm">
+                <CardContent className="space-y-4 pt-6">
                   <div className="space-y-2">
-                    <Label className="text-xs">Asunto del Correo:</Label>
-                    <Input 
-                      className="bg-white dark:bg-slate-950 border-border" 
-                      value={formData.msj_postventa_email_asunto} 
-                      onChange={(e) => setFormData({...formData, msj_postventa_email_asunto: e.target.value})} 
-                    />
+                    <Label>Nombre del Taller / Razón Social</Label>
+                    <Input value={config.nombre_taller || ""} onChange={e => setConfig({...config, nombre_taller: e.target.value})} placeholder="Ej: Mecánica Integral SRL" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Teléfono Comercial</Label>
+                      <Input value={config.telefono || ""} onChange={e => setConfig({...config, telefono: e.target.value})} placeholder="Ej: +54 9 351 1234567" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>CUIT</Label>
+                      <Input value={config.cuit || ""} onChange={e => setConfig({...config, cuit: e.target.value})} placeholder="Ej: 30-12345678-9" />
+                    </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs">Cuerpo del Correo:</Label>
+                    <Label>Dirección Física</Label>
+                    <Input value={config.direccion || ""} onChange={e => setConfig({...config, direccion: e.target.value})} placeholder="Ej: Av. Principal 123, Córdoba" />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input type="email" value={config.email || ""} onChange={e => setConfig({...config, email: e.target.value})} placeholder="taller@ejemplo.com" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Instagram / Redes</Label>
+                      <Input value={config.instagram || ""} onChange={e => setConfig({...config, instagram: e.target.value})} placeholder="Ej: @mitaller.ok" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Horarios de Atención</Label>
+                    <Input value={config.horario || ""} onChange={e => setConfig({...config, horario: e.target.value})} placeholder="Ej: Lun a Vie de 8:00 a 18:00hs" />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* PESTAÑA 2: PRESUPUESTOS */}
+            <TabsContent value="presupuestos" className="mt-4">
+              <Card className="border-border shadow-sm">
+                <CardContent className="space-y-4 pt-6">
+                  <div className="bg-primary/10 text-primary p-3 rounded-md flex items-start gap-2 mb-4">
+                    <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                    <p className="text-sm">Estos términos se imprimirán automáticamente al pie de todos los presupuestos que generes en formato PDF.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Términos, Condiciones y Validez</Label>
                     <Textarea 
-                      className="min-h-[96px] bg-white dark:bg-slate-950 border-border resize-none" 
-                      value={formData.msj_postventa_email_cuerpo} 
-                      onChange={(e) => setFormData({...formData, msj_postventa_email_cuerpo: e.target.value})} 
+                      className="min-h-[200px]" 
+                      value={config.terminos_presupuesto || ""} 
+                      onChange={e => setConfig({...config, terminos_presupuesto: e.target.value})} 
+                      placeholder="Ej: Los presupuestos tienen una validez de 7 días. Los repuestos están sujetos a cotización del dólar..." 
                     />
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-              </div>
-            </CardContent>
-          </Card>
+            {/* PESTAÑA 3: MENSAJERÍA */}
+            <TabsContent value="mensajes" className="mt-4">
+              <Card className="border-border shadow-sm">
+                <CardContent className="space-y-6 pt-6">
+                  <div className="space-y-2">
+                    <Label className="text-emerald-600 font-bold flex items-center gap-1"><MessageSquare className="w-4 h-4"/> Plantilla: Envío de Presupuesto (WhatsApp)</Label>
+                    <Textarea className="min-h-[80px]" value={config.msj_presupuesto || ""} onChange={e => setConfig({...config, msj_presupuesto: e.target.value})} placeholder="Hola, te adjuntamos el presupuesto de tu vehículo..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-emerald-600 font-bold flex items-center gap-1"><MessageSquare className="w-4 h-4"/> Plantilla: Auto Listo (WhatsApp)</Label>
+                    <Textarea className="min-h-[80px]" value={config.msj_listo || ""} onChange={e => setConfig({...config, msj_listo: e.target.value})} placeholder="Hola, te avisamos que tu vehículo ya está listo para retirar..." />
+                  </div>
+                  
+                  <div className="border-t border-border pt-4 mt-2"></div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-blue-600 font-bold">Plantilla: Post-Venta Seguimiento (WhatsApp)</Label>
+                    <Textarea className="min-h-[80px]" value={config.msj_postventa_wpp || ""} onChange={e => setConfig({...config, msj_postventa_wpp: e.target.value})} placeholder="Hola, queríamos saber cómo sentiste el auto después del service..." />
+                  </div>
+                  <div className="space-y-4 bg-secondary/30 p-4 rounded-lg border border-border">
+                    <Label className="text-blue-600 font-bold block">Plantillas de Email Post-Venta</Label>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase">Asunto del Email</Label>
+                      <Input value={config.msj_postventa_email_asunto || ""} onChange={e => setConfig({...config, msj_postventa_email_asunto: e.target.value})} placeholder="Seguimiento de tu service en Nuestro Taller" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase">Cuerpo del Email</Label>
+                      <Textarea className="min-h-[100px]" value={config.msj_postventa_email_cuerpo || ""} onChange={e => setConfig({...config, msj_postventa_email_cuerpo: e.target.value})} placeholder="Escribí acá el correo predeterminado..." />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <Card className="border-border shadow-sm">
-            <CardHeader className="bg-secondary/10 border-b border-border pb-4">
-              <CardTitle className="text-lg flex items-center gap-2"><FileSignature className="w-5 h-5 text-primary" /> Preferencias de Presupuestos</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-2">
-                <Label>Términos y Condiciones (Letra chica que sale al pie del PDF)</Label>
-                <Textarea className="min-h-[100px] bg-slate-50 dark:bg-slate-900 border-border" value={formData.terminos_presupuesto} onChange={(e) => setFormData({...formData, terminos_presupuesto: e.target.value})} />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="usuarios">
-          <p>Sección de usuarios</p>
-        </TabsContent>
-
-        <TabsContent value="sistema">
-          <p>Sección de sistema</p>
-        </TabsContent>
-      </Tabs>
+          </Tabs>
+        </div>
+      </div>
     </div>
   )
 }
