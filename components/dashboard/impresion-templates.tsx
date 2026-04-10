@@ -9,9 +9,13 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
     <div className="bg-white text-slate-800 p-6 font-sans max-w-[210mm] mx-auto border-t-[8px] border-emerald-600">
       <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-4 mt-2">
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
-            <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
-          </div>
+          {datos?.config?.logo_url ? (
+            <img src={datos.config.logo_url} alt="Logo" className="w-14 h-14 object-contain" />
+          ) : (
+            <div className="w-14 h-14 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
+              <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
+            </div>
+          )}
           <div>
             <h1 className="text-xl font-black tracking-tight text-emerald-900">{datos.config?.nombre_taller || "AUTO TALLER"}</h1>
             <p className="text-xs text-slate-600 font-medium">{datos.config?.direccion || "Dirección no configurada"}</p>
@@ -99,9 +103,13 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
       
       {/* HEADER ULTRA COMPACTO */}
       <div className="flex justify-between items-center pb-3 mb-4 border-b border-slate-200">
-        <div className="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
-          <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
-        </div>
+        {datos?.config?.logo_url ? (
+          <img src={datos.config.logo_url} alt="Logo" className="w-14 h-14 object-contain" />
+        ) : (
+          <div className="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
+            <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
+          </div>
+        )}
         <div className="text-right">
           <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Orden de Trabajo</h2>
           <p className="text-slate-600 font-mono text-sm font-bold mt-0.5">#OT-{datos.numero_correlativo || 'PENDIENTE'}</p>
