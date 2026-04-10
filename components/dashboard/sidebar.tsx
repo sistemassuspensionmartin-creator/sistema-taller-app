@@ -1,5 +1,6 @@
 "use client"
 
+import { supabase } from "@/lib/supabase"
 import { useState, useEffect } from "react"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -33,6 +34,16 @@ interface NavItem {
   href: string
   active?: boolean
 }
+
+const [logoUrl, setLogoUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      const { data } = await supabase.from('configuracion').select('logo_url').single()
+      if (data?.logo_url) setLogoUrl(data.logo_url)
+    }
+    fetchLogo()
+  }, [])
 
 const navItems: NavItem[] = [
   { label: "Inicio", icon: Home, href: "#", active: true },
@@ -71,13 +82,27 @@ export function DashboardSidebar({ activeSection, onSectionChange }: DashboardSi
         {/* Logo Box */}
         <div className="flex h-20 items-center justify-center border-b border-border px-4">
           {!collapsed ? (
-            <div className="flex h-14 w-full items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-secondary/50">
-              <span className="text-sm font-medium text-muted-foreground">Logo del Taller</span>
-            </div>
+            /* --- MENÚ ABIERTO --- */
+            logoUrl ? (
+              <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
+                <img src={logoUrl} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
+              </div>
+            ) : (
+              <div className="flex h-14 w-full items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-secondary/50">
+                <span className="text-sm font-medium text-muted-foreground">Logo del Taller</span>
+              </div>
+            )
           ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50">
-              <span className="text-xs font-medium text-muted-foreground">Logo</span>
-            </div>
+            /* --- MENÚ COLAPSADO --- */
+            logoUrl ? (
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
+                <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+              </div>
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50">
+                <span className="text-xs font-medium text-muted-foreground">Logo</span>
+              </div>
+            )
           )}
         </div>
 
