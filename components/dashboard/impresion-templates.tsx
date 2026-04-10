@@ -10,9 +10,9 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
       <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-4 mt-2">
         <div className="flex items-center gap-3">
           {datos?.config?.logo_url ? (
-            <img src={datos.config.logo_url} alt="Logo" className="w-14 h-14 object-contain" />
+            <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
           ) : (
-            <div className="w-14 h-14 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
+            <div className="w-24 h-24 bg-slate-50 rounded-lg flex items-center justify-center border border-slate-200">
               <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
             </div>
           )}
@@ -104,9 +104,9 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
       {/* HEADER ULTRA COMPACTO */}
       <div className="flex justify-between items-center pb-3 mb-4 border-b border-slate-200">
         {datos?.config?.logo_url ? (
-          <img src={datos.config.logo_url} alt="Logo" className="w-14 h-14 object-contain" />
+          <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
         ) : (
-          <div className="w-14 h-14 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
+          <div className="w-24 h-24 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-200">
             <span className="text-[10px] text-slate-400 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
           </div>
         )}
