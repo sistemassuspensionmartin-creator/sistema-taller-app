@@ -27,6 +27,7 @@ export function CuentasCorrientesView() {
   const [isSaving, setIsSaving] = useState(false)
   
   // Datos Globales
+  const [busquedaLedgerProv, setBusquedaLedgerProv] = useState("")
   const [proveedores, setProveedores] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([])
   const [cajas, setCajas] = useState<any[]>([])
@@ -233,6 +234,15 @@ export function CuentasCorrientesView() {
     (c.razon_social && c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase())) || 
     (c.documento && c.documento.includes(busquedaCliente))
   )
+  const ledgerProvFiltrado = movimientosLedger.filter(mov => {
+    if (!busquedaLedgerProv) return true;
+    const b = busquedaLedgerProv.toLowerCase();
+    const fecha = new Date(mov.fecha).toLocaleDateString('es-AR');
+    const monto = mov.monto.toString();
+    const detalle = (mov.detalle || '').toLowerCase();
+    const ref = (mov.comprobante || '').toLowerCase();
+    return fecha.includes(b) || monto.includes(b) || detalle.includes(b) || ref.includes(b);
+  });
 
   return (
     <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300">
@@ -528,7 +538,7 @@ export function CuentasCorrientesView() {
       </Dialog>
 
       {/* ================= MODALES DE PROVEEDORES (YA LOS TENÍAMOS) ================= */}
-      {/* (Para no hacer el código inmenso acá en el chat, mantuve exactamente los mismos modales de proveedores que ya funcionaban perfectos) */}
+    
       
       {/* Modal: Crear Proveedor */}
       <Dialog open={isNuevoProveedorOpen} onOpenChange={setIsNuevoProveedorOpen}>
@@ -578,27 +588,88 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Historial Proveedor */}
+      {/* Modal: Historial Proveedor (Versión Ampliada y con Buscador) */}
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
-        <DialogContent className="max-w-2xl border-border bg-card">
-          <DialogHeader><DialogTitle className="text-xl">Historial: {provSeleccionado?.nombre}</DialogTitle></DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto mt-4 border rounded-md">
-            <Table>
-              <TableHeader className="bg-secondary/50 sticky top-0"><TableRow><TableHead>Fecha</TableHead><TableHead>Movimiento</TableHead><TableHead className="text-right">Monto</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {movimientosLedger.map(mov => (
-                  <TableRow key={mov.id}>
-                    <TableCell className="text-sm font-mono">{new Date(mov.fecha).toLocaleDateString('es-AR')}</TableCell>
-                    <TableCell>{mov.tipo === 'factura_compra' ? 'Compra' : 'Pago'} vía {mov.caja_origen_id ? cajas.find(c=>c.id===mov.caja_origen_id)?.nombre : 'N/A'}</TableCell>
-                    <TableCell className="text-right font-mono font-bold">${Number(mov.monto).toLocaleString()}</TableCell>
+        {/* Cambiamos max-w-2xl por max-w-4xl para que sea bien ancho */}
+        <DialogContent className="max-w-4xl border-border bg-card h-[85vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-6 border-b border-border">
+            <DialogTitle className="text-xl flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" /> 
+                Resumen de Cuenta: {provSeleccionado?.nombre}
+              </span>
+              <span className="font-mono text-xl text-rose-600">
+                Deuda Actual: ${Number(provSeleccionado?.saldo || 0).toLocaleString()}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 flex flex-col min-h-0 p-6">
+            <div className="relative mb-4 shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Buscar por fecha (ej: 10/4), monto, detalle o comprobante..." 
+                className="pl-9 bg-secondary/50 border-border"
+                value={busquedaLedgerProv}
+                onChange={(e) => setBusquedaLedgerProv(e.target.value)}
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto border rounded-md border-border">
+              <Table>
+                <TableHeader className="bg-secondary/50 sticky top-0 backdrop-blur-sm shadow-sm">
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Movimiento</TableHead>
+                    <TableHead>Detalle / Ref</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {ledgerProvFiltrado.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                      {busquedaLedgerProv ? "No se encontraron movimientos con esa búsqueda." : "No hay movimientos registrados en la cuenta de este proveedor."}
+                    </TableCell></TableRow>
+                  ) : (
+                    ledgerProvFiltrado.map(mov => (
+                      <TableRow key={mov.id} className="hover:bg-secondary/20">
+                        <TableCell className="text-muted-foreground font-mono whitespace-nowrap">
+                          <span className="font-bold text-foreground">{new Date(mov.fecha).toLocaleDateString('es-AR')}</span>
+                        </TableCell>
+                        <TableCell>
+                          {mov.tipo === 'factura_compra' ? (
+                            <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 shadow-sm">
+                              <ArrowUpRight className="w-3 h-3 mr-1"/> Compra
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 shadow-sm">
+                              <ArrowDownRight className="w-3 h-3 mr-1"/> Pago
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <p className="font-medium text-sm">{mov.detalle || 'Sin detalle especificado'}</p>
+                          <div className="flex gap-2 items-center mt-1">
+                            {mov.comprobante && <span className="text-xs text-muted-foreground">Doc: <span className="font-mono">{mov.comprobante}</span></span>}
+                            {mov.caja_origen_id && (
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase">
+                                Vía {cajas.find(c => c.id === mov.caja_origen_id)?.nombre || 'Caja Desconocida'}
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className={`text-right font-mono font-bold text-lg ${mov.tipo === 'factura_compra' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {mov.tipo === 'factura_compra' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
-
     </div>
   )
 }
