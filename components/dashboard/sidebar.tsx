@@ -35,16 +35,6 @@ interface NavItem {
   active?: boolean
 }
 
-const [logoUrl, setLogoUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchLogo = async () => {
-      const { data } = await supabase.from('configuracion').select('logo_url').single()
-      if (data?.logo_url) setLogoUrl(data.logo_url)
-    }
-    fetchLogo()
-  }, [])
-
 const navItems: NavItem[] = [
   { label: "Inicio", icon: Home, href: "#", active: true },
   { label: "Clientes", icon: Users, href: "#" },
@@ -63,6 +53,15 @@ interface DashboardSidebarProps {
 }
 
 export function DashboardSidebar({ activeSection, onSectionChange }: DashboardSidebarProps) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchLogo = async () => {
+      const { data } = await supabase.from('configuracion').select('logo_url').single()
+      if (data?.logo_url) setLogoUrl(data.logo_url)
+    }
+    fetchLogo()
+  }, [])
   const [collapsed, setCollapsed] = useState(false)
   const [mounted, setMounted] = useState(false)
   const { theme, setTheme } = useTheme()
