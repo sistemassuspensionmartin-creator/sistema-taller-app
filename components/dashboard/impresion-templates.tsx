@@ -302,120 +302,129 @@ export function FacturaImprimible({ datos }: { datos: any }) {
   const nroFormateado = `${String(datos.punto_venta || 1).padStart(5, '0')}-${String(datos.numero_factura).padStart(8, '0')}`;
 
   return (
-    /* Contenedor principal con alto A4 EXACTO (297mm) */
-    <div className="bg-white text-slate-800 p-10 font-sans w-[210mm] h-[297mm] mx-auto relative shadow-2xl border border-slate-200">
+    /* Contenedor con altura controlada para evitar cortes de página */
+    <div className="bg-white text-slate-800 p-10 font-sans w-[210mm] h-[285mm] mx-auto relative shadow-none border border-slate-100 overflow-hidden">
       
       {/* --- CABECERA --- */}
-      <div className="flex justify-between items-start mb-8">
-        <div className="flex items-center gap-5">
+      <div className="flex justify-between items-start mb-10 border-b border-slate-100 pb-8">
+        <div className="flex items-center gap-6">
           {datos.config?.logo_url ? (
-            <img src={datos.config.logo_url} alt="Logo" className="w-28 h-28 object-contain" />
+            <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
           ) : (
-            <div className="w-20 h-20 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">Logo</span>
+            <div className="w-20 h-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center">
+              <span className="text-[10px] text-slate-300 font-black uppercase">Logo</span>
             </div>
           )}
           <div className="space-y-1">
             <h1 className="text-3xl font-black text-slate-900 leading-none tracking-tighter">
               {datos.config?.nombre_taller || "SUSPENSIÓN MARTIN"}
             </h1>
-            <p className="text-sm text-slate-500 font-medium">{datos.config?.direccion || "Av. Argentina 1658"}</p>
-            <p className="text-xs text-slate-500 italic">IVA Responsable Inscripto</p>
+            <p className="text-sm text-slate-500 font-bold uppercase tracking-wide">
+              {datos.config?.direccion || "Av. Argentina 1658"}
+            </p>
+            <div className="flex gap-3 items-center mt-2">
+              <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                IVA Responsable Inscripto
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="text-right flex flex-col items-end">
-          <div className="bg-[#FF9E00] text-white w-16 h-16 rounded-2xl flex flex-col items-center justify-center shadow-lg mb-3">
-            <span className="text-4xl font-black leading-none">{datos.tipo_factura || 'B'}</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Cod. 06</span>
+        <div className="text-right">
+          <div className="bg-slate-900 text-white w-14 h-14 rounded-2xl flex flex-col items-center justify-center ml-auto mb-3 shadow-lg">
+            <span className="text-3xl font-black leading-none">{datos.tipo_factura || 'B'}</span>
+            <span className="text-[8px] font-bold uppercase tracking-tighter opacity-70">Cod. 06</span>
           </div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">FACTURA</h2>
-          <p className="text-slate-500 font-mono text-base font-bold">N° {nroFormateado}</p>
-          <p className="text-xs text-slate-400 font-medium uppercase mt-1">
-            Fecha: {new Date(datos.fecha_emision).toLocaleDateString('es-AR')}
+          <h2 className="text-xl font-black text-slate-900 tracking-widest">FACTURA</h2>
+          <p className="text-slate-500 font-mono text-sm font-bold">N° {nroFormateado}</p>
+          <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
+            Emitido: {new Date(datos.fecha_emision).toLocaleDateString('es-AR')}
           </p>
         </div>
       </div>
 
-      {/* --- BOX DE DATOS (CLIENTE / EMISOR) --- */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
-        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Receptor</span>
-          <p className="font-bold text-slate-900 text-lg leading-tight">{datos.cliente_nombre}</p>
-          <p className="text-sm text-slate-600 mt-1 font-semibold">CUIT/DNI: {datos.cliente_documento || "20-12345678-9"}</p>
-          <p className="text-xs text-slate-500">Condición: Consumidor Final</p>
+      {/* --- INFO CLIENTE / EMISOR --- */}
+      <div className="grid grid-cols-2 gap-8 mb-10">
+        <div className="space-y-1">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-2">Datos del Receptor</span>
+          <p className="font-black text-slate-900 text-xl leading-tight">{datos.cliente_nombre}</p>
+          <p className="text-sm text-slate-600 font-bold">CUIT/DNI: {datos.cliente_documento || "20-45246016-6"}</p>
+          <p className="text-xs text-slate-500 font-medium">Condición: Consumidor Final</p>
         </div>
-        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-right">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Emisor</span>
-          <p className="text-sm text-slate-700 font-bold">CUIT: {datos.config?.cuit || "20-12345678-9"}</p>
-          <p className="text-xs text-slate-600 mt-1 italic">Ingresos Brutos: {datos.config?.cuit || "20-12345678-9"}</p>
-          <p className="text-xs text-slate-600">Inicio Actividades: 01/01/2024</p>
+        <div className="text-right space-y-1">
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2 block">Datos del Emisor</span>
+          <p className="text-sm text-slate-800 font-black">CUIT: {datos.config?.cuit || "20-12345678-9"}</p>
+          <p className="text-[11px] text-slate-500 font-bold">IIBB: {datos.config?.cuit || "20-12345678-9"}</p>
+          <p className="text-[11px] text-slate-500 font-bold">Inicio Actividades: 01/01/2024</p>
         </div>
       </div>
 
-      {/* --- TABLA DE SERVICIOS (EL CENTRO) --- */}
-      <div className="mb-6">
-        <div className="grid grid-cols-12 gap-2 border-b-2 border-slate-100 pb-3 mb-4 px-2">
-          <div className="col-span-1 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Cant.</div>
-          <div className="col-span-7 text-[11px] font-black text-slate-400 uppercase tracking-widest pl-4">Descripción del Servicio / Repuesto</div>
-          <div className="col-span-2 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">Unitario</div>
-          <div className="col-span-2 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">Subtotal</div>
+      {/* --- CUERPO DE LA FACTURA (TABLA) --- */}
+      <div className="flex-1">
+        <div className="grid grid-cols-12 gap-2 border-b-2 border-slate-900 pb-3 mb-4 px-2">
+          <div className="col-span-1 text-[10px] font-black text-slate-900 uppercase tracking-widest text-center">Cant.</div>
+          <div className="col-span-7 text-[10px] font-black text-slate-900 uppercase tracking-widest pl-4">Descripción del Trabajo</div>
+          <div className="col-span-2 text-[10px] font-black text-slate-900 uppercase tracking-widest text-right">Unitario</div>
+          <div className="col-span-2 text-[10px] font-black text-slate-900 uppercase tracking-widest text-right">Subtotal</div>
         </div>
 
-        <div className="space-y-2 px-2">
+        <div className="space-y-4 px-2">
           {datos.items?.map((item: any, idx: number) => (
-            <div key={idx} className="grid grid-cols-12 gap-2 items-center py-3 border-b border-slate-50">
-              <div className="col-span-1 text-center font-bold text-slate-900 bg-slate-50 rounded-lg py-1">{item.cantidad || item.cant}</div>
-              <div className="col-span-7 font-bold text-slate-800 pl-4">{item.detalle}</div>
-              <div className="col-span-2 text-right font-mono text-slate-500">${Number(item.precio_unitario || item.precio).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
-              <div className="col-span-2 text-right font-mono font-black text-slate-900">${(Number(item.cantidad || item.cant) * Number(item.precio_unitario || item.precio)).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
+            <div key={idx} className="grid grid-cols-12 gap-2 items-center py-1">
+              <div className="col-span-1 text-center font-black text-slate-900 text-base">{item.cantidad || item.cant}</div>
+              <div className="col-span-7 font-bold text-slate-800 text-base pl-4">{item.detalle}</div>
+              <div className="col-span-2 text-right font-mono text-slate-500 text-sm">${Number(item.precio_unitario || item.precio).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
+              <div className="col-span-2 text-right font-mono font-black text-slate-900 text-base">${(Number(item.cantidad || item.cant) * Number(item.precio_unitario || item.precio)).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* --- TOTALES FLOTANTES (Se mueven con la tabla pero con tope) --- */}
-      <div className="mt-8 flex justify-end">
-        <div className="w-[320px] bg-slate-900 text-white rounded-3xl p-6 shadow-xl space-y-3">
-          <div className="flex justify-between items-center text-xs opacity-70 font-medium">
-            <span>SUBTOTAL NETO</span>
-            <span className="font-mono">${neto.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
-          </div>
-          <div className="flex justify-between items-center text-xs opacity-70 font-medium">
-            <span>IVA (21%)</span>
-            <span className="font-mono">${iva.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
-          </div>
-          <div className="border-t border-white/10 pt-3 flex justify-between items-center">
-            <span className="font-black text-[10px] tracking-[0.2em]">TOTAL FACTURA</span>
-            <span className="font-mono font-black text-2xl text-[#FF9E00]">${total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
+      {/* --- BLOQUE FIJO INFERIOR (TOTALES + AFIP) --- */}
+      <div className="absolute bottom-12 left-10 right-10 space-y-8">
+        
+        {/* Cuadro de Totales Fijo */}
+        <div className="flex justify-end">
+          <div className="w-[350px] bg-slate-50 border border-slate-200 rounded-3xl p-6 shadow-sm space-y-3">
+            <div className="flex justify-between items-center text-xs text-slate-400 font-black tracking-tighter">
+              <span>SUBTOTAL NETO</span>
+              <span className="font-mono">${neto.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
+            </div>
+            <div className="flex justify-between items-center text-xs text-slate-400 font-black tracking-tighter">
+              <span>IVA (21%)</span>
+              <span className="font-mono">${iva.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
+            </div>
+            <div className="border-t border-slate-200 pt-4 flex justify-between items-center">
+              <span className="font-black text-xs text-slate-900 tracking-widest uppercase">Total Factura</span>
+              <span className="font-mono font-black text-3xl text-[#FF9E00]">
+                ${total.toLocaleString('es-AR', {minimumFractionDigits: 2})}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* --- PIE DE PÁGINA FIJO (AFIP) --- */}
-      {/* Usamos absolute bottom para que nunca se mueva de ahí */}
-      <div className="absolute bottom-12 left-10 right-10">
-        <div className="flex justify-between items-end border-t border-slate-100 pt-8">
+        {/* Pie de AFIP Fijo */}
+        <div className="flex justify-between items-end border-t border-slate-100 pt-6">
           <div className="flex items-center gap-6">
-            <div className="w-24 h-24 border-2 border-slate-50 bg-slate-50/50 rounded-2xl flex items-center justify-center p-2 shadow-inner">
-               <div className="text-[8px] text-center opacity-30 font-black uppercase text-slate-400">QR AFIP<br/>Oficial</div>
+            <div className="w-20 h-20 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100">
+               <div className="text-[7px] text-center opacity-20 font-black uppercase text-slate-400">QR AFIP<br/>Oficial</div>
             </div>
-            <div className="space-y-2">
-              <img src="https://www.afip.gob.ar/images/logo_afip.png" alt="AFIP" className="h-7 opacity-40 grayscale" />
-              <p className="text-[10px] text-slate-400 italic font-bold">Comprobante Autorizado Electrónicamente</p>
+            <div className="space-y-1">
+              <img src="https://www.afip.gob.ar/images/logo_afip.png" alt="AFIP" className="h-5 opacity-30 grayscale" />
+              <p className="text-[9px] text-slate-400 italic font-bold">Comprobante Autorizado Electrónicamente</p>
             </div>
           </div>
-          <div className="text-right space-y-1">
-            <p className="text-xs text-slate-700 font-bold">CAE N°: <span className="font-mono font-black">{datos.cae || '74105632625460'}</span></p>
-            <p className="text-xs text-slate-700 font-bold">VENCE: <span className="font-mono font-black">{new Date(datos.cae_vencimiento || '2026-04-20').toLocaleDateString('es-AR')}</span></p>
+          <div className="text-right">
+            <p className="text-[10px] text-slate-700 font-black uppercase tracking-tighter">CAE N°: {datos.cae || '74405626254604'}</p>
+            <p className="text-[10px] text-slate-700 font-black uppercase tracking-tighter">Vencimiento: {new Date(datos.cae_vencimiento || '2026-04-20').toLocaleDateString('es-AR')}</p>
           </div>
         </div>
       </div>
 
       {/* --- MARCA DE AGUA --- */}
       {datos.es_simulacion && (
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
-          <span className="text-[120px] font-black text-slate-100/50 -rotate-45 uppercase select-none whitespace-nowrap">
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0 opacity-[0.03]">
+          <span className="text-[150px] font-black text-slate-900 -rotate-45 uppercase select-none whitespace-nowrap">
             TEST MODE
           </span>
         </div>
