@@ -3,162 +3,176 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
-  Eye, EyeOff, TrendingUp, TrendingDown, DollarSign, 
-  BarChart3, Wallet, Landmark 
+  Eye, EyeOff, TrendingUp, TrendingDown, 
+  BarChart3, Wallet, Landmark, Calendar,
+  ArrowUpRight, ArrowDownRight, Activity
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
+  ResponsiveContainer, BarChart, Bar
 } from 'recharts'
 
 export function AdminDashboardView() {
   const [showMoney, setShowMoney] = useState(true)
-  const [isLoading, setIsLoading] = useState(true)
-  
-  // ESTADOS REALES
-  const [cajasReales, setCajasReales] = useState<any[]>([])
-  const [stats, setStats] = useState({ ingresos: 0, egresos: 0, neto: 0 })
+  const [stats, setStats] = useState({ 
+    ingresos: 0, ingresosPrev: 0,
+    egresos: 0, egresosPrev: 0,
+    neto: 0, netoPrev: 0 
+  })
   const [dataGrafico, setDataGrafico] = useState<any[]>([])
+  const [cajasReales, setCajasReales] = useState<any[]>([])
 
-  const cargarDatosReales = async () => {
-    setIsLoading(true)
+  const cargarMetricasBI = async () => {
     try {
-      // 1. TRAER SALDOS ACTUALES DE TUS CAJAS
-      const { data: cajasData } = await supabase
-        .from('cajas')
-        .select('*')
-        .order('nombre')
-      
-      if (cajasData) setCajasReales(cajasData)
+      // 1. Traer Cajas
+      const { data: cData } = await supabase.from('cajas').select('*').order('nombre');
+      if (cData) setCajasReales(cData);
 
-      // 2. TRAER MOVIMIENTOS DE LOS ÚLTIMOS 30 DÍAS PARA MÉTRICAS
-      const hace30Dias = new Date()
-      hace30Dias.setDate(hace30Dias.getDate() - 30)
+      // 2. Traer Movimientos (Últimos 60 días para comparar)
+      const hoy = new Date();
+      const hace60 = new Date(); hace60.setDate(hoy.getDate() - 60);
+      const hace30 = new Date(); hace30.setDate(hoy.getDate() - 30);
 
-      const { data: movimientos } = await supabase
+      const { data: movs } = await supabase
         .from('movimientos_caja')
         .select('*')
-        .gte('fecha', hace30Dias.toISOString())
-        .order('fecha', { ascending: true })
+        .gte('fecha', hace60.toISOString())
+        .order('fecha', { ascending: true });
 
-      if (movimientos) {
-        let ing = 0
-        let egr = 0
-        const ventasAgrupadas: { [key: string]: number } = {}
+      if (movs) {
+        let ingActual = 0, ingPrev = 0;
+        let egrActual = 0, egrPrev = 0;
+        const agrupado: any = {};
 
-        movimientos.forEach(m => {
-          const monto = Number(m.monto)
-          const fecha = new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+        movs.forEach(m => {
+          const monto = Number(m.monto);
+          const fechaM = new Date(m.fecha);
+          const esMesActual = fechaM >= hace30;
 
           if (m.tipo_movimiento === 'ingreso_cobro') {
-            ing += monto
-            ventasAgrupadas[fecha] = (ventasAgrupadas[fecha] || 0) + monto
+            if (esMesActual) {
+              ingActual += monto;
+              const label = fechaM.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+              agrupado[label] = (agrupado[label] || 0) + monto;
+            } else {
+              ingPrev += monto;
+            }
           } else if (m.tipo_movimiento === 'egreso_gasto') {
-            egr += monto
+            if (esMesActual) egrActual += monto;
+            else egrPrev += monto;
           }
-        })
+        });
 
-        setStats({ ingresos: ing, egresos: egr, neto: ing - egr })
-        
-        // Formatear para el gráfico
-        const chartData = Object.keys(ventasAgrupadas).map(day => ({
-          name: day,
-          ventas: ventasAgrupadas[day]
-        }))
-        setDataGrafico(chartData)
+        setStats({
+          ingresos: ingActual, ingresosPrev: ingPrev,
+          egresos: egrActual, egresosPrev: egrPrev,
+          neto: ingActual - egrActual, netoPrev: ingPrev - egrPrev
+        });
+
+        setDataGrafico(Object.keys(agrupado).map(k => ({ date: k, valor: agrupado[k] })));
       }
-
-    } catch (error) {
-      console.error("Error al cargar dashboard:", error)
-    } finally {
-      setIsLoading(false)
-    }
+    } catch (e) { console.error(e) }
   }
 
-  useEffect(() => { cargarDatosReales() }, [])
+  useEffect(() => { cargarMetricasBI() }, [])
 
-  const hide = (monto: number) => showMoney ? `$${monto.toLocaleString('es-AR')}` : "••••••";
+  const calcularDelta = (actual: number, prev: number) => {
+    if (prev === 0) return 0;
+    return ((actual - prev) / prev) * 100;
+  };
+
+  const formatCifra = (v: number) => showMoney ? `$${v.toLocaleString('es-AR')}` : "••••••";
+
+  const renderDelta = (actual: number, prev: number) => {
+    const delta = calcularDelta(actual, prev);
+    const isPos = delta >= 0;
+    return (
+      <div className={`flex items-center gap-1 text-[11px] font-bold ${isPos ? 'text-emerald-500' : 'text-rose-500'}`}>
+        {isPos ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+        {Math.abs(delta).toFixed(1)}% vs mes anterior
+      </div>
+    );
+  };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
-      {/* HEADER DE PRIVACIDAD */}
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 pb-10 font-sans tracking-tight">
+      <div className="flex justify-between items-end border-b border-slate-100 pb-4">
         <div>
-          <h2 className="text-2xl font-black tracking-tight text-foreground">Panel Administrativo</h2>
-          <p className="text-sm text-muted-foreground">Datos consolidados de tus cajas y ventas.</p>
+          <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 uppercase tracking-tighter">
+            <Activity className="w-5 h-5 text-indigo-600" /> Inteligencia de Negocio
+          </h2>
+          <p className="text-xs text-slate-500 font-medium">Reporte consolidado: {new Date().toLocaleDateString()}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setShowMoney(!showMoney)} className="shadow-sm">
-          {showMoney ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
-          {showMoney ? "Modo Privado" : "Ver Montos"}
+        <Button variant="ghost" size="sm" onClick={() => setShowMoney(!showMoney)} className="text-slate-400 hover:text-indigo-600">
+          {showMoney ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+          {showMoney ? "Modo Auditor" : "Mostrar Valores"}
         </Button>
       </div>
 
-      {/* MÉTRICAS DE ESTE MES */}
+      {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-emerald-500/5 border-emerald-500/20 shadow-none">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Ventas (30d)</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-emerald-700 font-mono">{hide(stats.ingresos)}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-red-500/5 border-red-500/20 shadow-none">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-bold text-red-600 uppercase tracking-widest">Gastos (30d)</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-red-700 font-mono">{hide(stats.egresos)}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-blue-600 text-white shadow-lg border-none">
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-bold uppercase tracking-widest opacity-80">Resultado Neto</CardTitle></CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black font-mono">{hide(stats.neto)}</div>
-          </CardContent>
-        </Card>
+        {[
+          { label: "Ventas Netas", val: stats.ingresos, prev: stats.ingresosPrev, color: "indigo" },
+          { label: "Egresos Operativos", val: stats.egresos, prev: stats.egresosPrev, color: "rose" },
+          { label: "Margen de Caja", val: stats.neto, prev: stats.netoPrev, color: "slate" },
+        ].map((kpi, i) => (
+          <Card key={i} className="shadow-none border-slate-100 bg-white">
+            <CardContent className="p-5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</p>
+              <div className="text-2xl font-mono font-black text-slate-900 mb-2">{formatCifra(kpi.val)}</div>
+              {renderDelta(kpi.val, kpi.prev)}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* GRÁFICO REAL DE VENTAS */}
-        <Card className="lg:col-span-2 p-6 shadow-sm">
-          <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-700 uppercase text-xs tracking-wider">
-            <BarChart3 className="w-4 h-4 text-blue-500" /> Flujo de Ingresos Diarios
-          </h3>
-          <div className="h-[280px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dataGrafico}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10}} />
-                <YAxis hide />
-                <Tooltip 
-                  cursor={{fill: 'rgba(0,0,0,0.02)'}}
-                  formatter={(v: any) => showMoney ? `$${v}` : '***'}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Bar dataKey="ventas" fill="#2563eb" radius={[4, 4, 0, 0]} barSize={35} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* GRÁFICO TÉCNICO */}
+        <Card className="lg:col-span-3 shadow-none border-slate-100">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+              <TrendingUp className="w-3 h-3" /> Curva de Ingresos (30d)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dataGrafico}>
+                  <defs>
+                    <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                  <YAxis hide />
+                  <Tooltip 
+                    contentStyle={{borderRadius: '8px', border: '1px solid #f1f5f9', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'}}
+                    formatter={(v: any) => [formatCifra(v), "Ingreso"]}
+                  />
+                  <Area type="monotone" dataKey="valor" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
         </Card>
 
-        {/* LISTADO DE TUS CAJAS REALES */}
-        <Card className="p-6 shadow-sm border-slate-100">
-          <h3 className="font-bold mb-6 flex items-center gap-2 text-slate-700 uppercase text-xs tracking-wider">
-            <Wallet className="w-4 h-4 text-purple-500" /> Saldos Disponibles
-          </h3>
-          <div className="space-y-3">
-            {cajasReales.map((caja) => (
-              <div key={caja.id} className="flex justify-between items-center p-3 rounded-xl border border-slate-50 bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                   <Landmark className="w-3 h-3 text-slate-400" />
-                   <span className="text-xs font-bold text-slate-600 uppercase tracking-tight">{caja.nombre}</span>
-                </div>
-                <span className="font-mono font-black text-slate-900">
-                  {hide(caja.saldo)}
-                </span>
+        {/* ESTRUCTURA DE ACTIVOS */}
+        <Card className="shadow-none border-slate-100 bg-slate-50/50">
+          <CardHeader>
+            <CardTitle className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Distribución de Activos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {cajasReales.map(c => (
+              <div key={c.id} className="border-b border-white pb-2">
+                <p className="text-[9px] font-bold text-slate-400 uppercase">{c.nombre}</p>
+                <p className="text-sm font-mono font-black text-slate-800">{formatCifra(c.saldo)}</p>
               </div>
             ))}
-            {cajasReales.length === 0 && <p className="text-xs text-center text-slate-400 italic py-4">No se encontraron cajas configuradas.</p>}
-          </div>
+          </CardContent>
         </Card>
       </div>
     </div>
