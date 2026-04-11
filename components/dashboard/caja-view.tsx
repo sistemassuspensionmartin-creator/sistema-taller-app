@@ -1,5 +1,6 @@
 "use client"
 
+import { CierreCajaImprimible, FacturaImprimible } from "./impresion-templates"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
@@ -36,11 +37,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import { CierreCajaImprimible } from "./impresion-templates"
-
 export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?: (id: string) => void }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+
+  const [printType, setPrintType] = useState<'cierre' | 'factura' | null>(null)
   
   const [cajas, setCajas] = useState<any[]>([])
   const [categoriasGasto, setCategoriasGasto] = useState<any[]>([])
@@ -416,13 +417,68 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
   }
 
   const marcarComoFacturado = async (id: string, numero: string) => {
-    if(!confirm(`¿Confirmás que el presupuesto PRE-${numero} fue facturado?\n\nEsta acción es solo a nivel registro y no se puede deshacer.`)) return;
+    if(!confirm(`¿Desea emitir la factura electrónica para el presupuesto PRE-${numero}?`)) return;
 
+    setIsSaving(true);
     try {
+      // 1. Buscamos los datos completos del presupuesto para la factura
+      const { data: presFull } = await supabase
+        .from('presupuestos')
+        .select('*, vehiculos(*, clientes(*)), presupuesto_items(*)')
+        .eq('id', id)
+        .single();
+
+      // 2. Llamamos a nuestra API Simuladora de AFIP
+      const response = await fetch('/api/afip/facturar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cuit: '20123456789', monto: presFull.total_final })
+      });
+      const afipData = await response.json();
+
+      if (!afipData.success) throw new Error("AFIP rechazó el comprobante");
+
+      // 3. Guardamos la factura en nuestra base de datos (Tabla que creamos antes)
+      const { data: facturaGuardada } = await supabase.from('facturas').insert([{
+        presupuesto_id: id,
+        tipo_factura: 'B', // Por defecto para pruebas
+        punto_venta: afipData.punto_venta,
+        numero_factura: afipData.numero_factura,
+        cae: afipData.cae,
+        cae_vencimiento: afipData.cae_vencimiento,
+        total_final: presFull.total_final,
+        es_simulacion: true
+      }]).select().single();
+
+      // 4. Cambiamos el estado en el presupuesto
       await supabase.from('presupuestos').update({ estado_facturacion: 'Facturado' }).eq('id', id);
-      setCuentasCobradas(cuentasCobradas.map(c => c.id === id ? { ...c, estado_facturacion: 'Facturado' } : c));
-    } catch (err) {
-      alert("Error al actualizar estado.");
+      
+      // 5. PREPARAMOS EL PDF (Usamos la plantilla legal que creamos)
+      const datosParaFactura = {
+        ...facturaGuardada,
+        config: cajas[0]?.id ? { nombre_taller: 'Suspensión Martin', cuit: '20-12345678-9', direccion: 'Av. Argentina 1658' } : {}, // Aquí iría tu config real
+        cliente_nombre: presFull.vehiculos?.clientes?.nombre + ' ' + presFull.vehiculos?.clientes?.apellido,
+        cliente_documento: presFull.vehiculos?.clientes?.documento,
+        items: presFull.presupuesto_items,
+        fecha_emision: new Date().toISOString()
+      };
+
+      setPrintData(datosParaFactura);
+      setPrintType('factura'); // Necesitamos este nuevo estado
+
+      alert("¡Factura autorizada por AFIP!");
+      cargarDatos();
+
+      setTimeout(() => {
+        window.print();
+        setPrintData(null);
+        setPrintType(null);
+      }, 500);
+
+    } catch (err: any) {
+      alert("Error en facturación: " + err.message);
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -939,9 +995,10 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
         </Dialog>
       </div>
 
-      {/* ZONA DE IMPRESIÓN DEL CIERRE */}
+      {/* ZONA DE IMPRESIÓN */}
       <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
-        {printData && <CierreCajaImprimible datos={printData} />}
+        {printType === 'cierre' && <CierreCajaImprimible datos={printData} />}
+        {printType === 'factura' && <FacturaImprimible datos={printData} />}
       </div>
     </>
   )
