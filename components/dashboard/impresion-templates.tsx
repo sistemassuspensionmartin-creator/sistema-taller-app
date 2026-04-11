@@ -294,116 +294,120 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
 export function FacturaImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
-  // Formatear el número de factura: 00001-00000001
+  // CÁLCULOS DE IVA (Para Responsable Inscripto)
+  const total = Number(datos.total_final || 0);
+  const neto = total / 1.21;
+  const iva = total - neto;
+
   const nroFormateado = `${String(datos.punto_venta || 1).padStart(5, '0')}-${String(datos.numero_factura).padStart(8, '0')}`;
 
   return (
-    <div className="bg-white text-slate-900 p-10 font-sans max-w-[210mm] min-h-[297mm] mx-auto border border-slate-300 shadow-lg relative">
+    /* Reduje el padding de p-10 a p-8 para que no se corte abajo */
+    <div className="bg-white text-slate-900 p-8 font-sans max-w-[210mm] min-h-[290mm] mx-auto border border-slate-300 shadow-lg relative flex flex-col">
       
-      {/* CABECERA PRINCIPAL */}
-      <div className="border-2 border-slate-900 p-0 mb-6 relative">
-        {/* LA LETRA (CENTRAL) */}
+      {/* CABECERA (Se mantiene igual, solo ajusté espaciado) */}
+      <div className="border-2 border-slate-900 p-0 mb-4 relative shrink-0">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-white border-2 border-t-0 border-slate-900 w-12 h-12 flex flex-col items-center justify-center z-10">
-          <span className="text-3xl font-black leading-none">{datos.tipo_factura || 'C'}</span>
+          <span className="text-3xl font-black leading-none">{datos.tipo_factura || 'B'}</span>
           <span className="text-[8px] font-bold uppercase">Cod. {datos.tipo_factura === 'A' ? '01' : '06'}</span>
         </div>
-
         <div className="grid grid-cols-2">
-          {/* LADO IZQUIERDO: TUS DATOS */}
           <div className="p-4 border-r border-slate-900">
-            <h1 className="text-xl font-black uppercase mb-2">{datos.config?.nombre_taller}</h1>
-            <p className="text-sm font-bold">{datos.config?.direccion}</p>
-            <p className="text-xs">Teléfono: {datos.config?.telefono}</p>
-            <p className="text-xs">Email: {datos.config?.email}</p>
-            <p className="text-xs mt-2 font-bold italic">IVA Responsable Inscripto</p>
+            <h1 className="text-xl font-black uppercase mb-1">{datos.config?.nombre_taller || "SUSPENSIÓN MARTIN"}</h1>
+            <p className="text-xs font-bold">{datos.config?.direccion || "Av. Argentina 1658"}</p>
+            <p className="text-[10px]">Email: {datos.config?.email || "taller@martin.com"}</p>
+            <p className="text-[10px] mt-1 font-bold italic">IVA Responsable Inscripto</p>
           </div>
-
-          {/* LADO DERECHO: DATOS FACTURA */}
           <div className="p-4 text-right">
             <h2 className="text-2xl font-black mb-1">FACTURA</h2>
             <p className="text-lg font-bold">N° {nroFormateado}</p>
-            <p className="text-sm mt-1">Fecha de Emisión: <b>{new Date(datos.fecha_emision).toLocaleDateString('es-AR')}</b></p>
-            <div className="text-xs mt-4">
-              <p>CUIT: <b>{datos.config?.cuit}</b></p>
-              <p>Ingresos Brutos: <b>{datos.config?.cuit}</b></p>
-              <p>Inicio de Actividades: <b>01/01/2024</b></p>
+            <p className="text-xs mt-1">Fecha: <b>{new Date(datos.fecha_emision).toLocaleDateString('es-AR')}</b></p>
+            <div className="text-[10px] mt-2">
+              <p>CUIT: <b>{datos.config?.cuit || "20-12345678-9"}</b></p>
+              <p>IIBB: <b>{datos.config?.cuit || "20-12345678-9"}</b></p>
+              <p>Inicio Act.: <b>01/01/2024</b></p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* DATOS DEL RECEPTOR */}
-      <div className="border-2 border-slate-900 p-4 mb-6 grid grid-cols-2 gap-4 text-sm">
+      {/* DATOS RECEPTOR */}
+      <div className="border-2 border-slate-900 p-3 mb-4 grid grid-cols-2 gap-4 text-xs shrink-0">
         <div>
-          <p>Apellido y Nombre / Razón Social: <b>{datos.cliente_nombre}</b></p>
-          <p>Condición frente al IVA: <b>Consumidor Final</b></p>
+          <p>Cliente: <b>{datos.cliente_nombre}</b></p>
+          <p>IVA: <b>Consumidor Final</b></p>
         </div>
         <div className="text-right">
-          <p>CUIT / DNI: <b>{datos.cliente_documento || '00-00000000-0'}</b></p>
-          <p>Condición de Venta: <b>Contado</b></p>
+          <p>CUIT/DNI: <b>{datos.cliente_documento || "20-45246016-6"}</b></p>
+          <p>Cond. Venta: <b>Contado</b></p>
         </div>
       </div>
 
-      {/* TABLA DE ITEMS */}
-      <div className="border-2 border-slate-900 min-h-[400px]">
-        <table className="w-full text-sm">
+      {/* TABLA DE ITEMS (Agregué flex-1 para que empuje el total hacia abajo) */}
+      <div className="border-2 border-slate-900 flex-1 overflow-hidden">
+        <table className="w-full text-xs">
           <thead>
             <tr className="bg-slate-100 border-b-2 border-slate-900">
-              <th className="p-2 text-left border-r border-slate-900">Código</th>
+              <th className="p-2 text-left border-r border-slate-900 w-16">Cód.</th>
               <th className="p-2 text-left border-r border-slate-900">Producto / Servicio</th>
-              <th className="p-2 text-center border-r border-slate-900">Cant.</th>
-              <th className="p-2 text-right border-r border-slate-900">Precio Unit.</th>
-              <th className="p-2 text-right">Subtotal</th>
+              <th className="p-2 text-center border-r border-slate-900 w-16">Cant.</th>
+              <th className="p-2 text-right border-r border-slate-900 w-24">Precio U.</th>
+              <th className="p-2 text-right w-24">Subtotal</th>
             </tr>
           </thead>
           <tbody>
             {datos.items?.map((item: any, idx: number) => (
-              <tr key={idx} className="border-b border-slate-200">
-                <td className="p-2 border-r border-slate-900">{idx + 1}</td>
-                <td className="p-2 border-r border-slate-900">{item.detalle}</td>
+              <tr key={idx} className="border-b border-slate-100">
+                <td className="p-2 border-r border-slate-900 text-center">{idx + 1}</td>
+                <td className="p-2 border-r border-slate-900 font-medium">{item.detalle}</td>
                 <td className="p-2 text-center border-r border-slate-900">{item.cantidad || item.cant}</td>
-                <td className="p-2 text-right border-r border-slate-900">${Number(item.precio_unitario || item.precio).toLocaleString()}</td>
-                <td className="p-2 text-right">${(Number(item.cantidad || item.cant) * Number(item.precio_unitario || item.precio)).toLocaleString()}</td>
+                <td className="p-2 text-right border-r border-slate-900">${Number(item.precio_unitario || item.precio).toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
+                <td className="p-2 text-right">${(Number(item.cantidad || item.cant) * Number(item.precio_unitario || item.precio)).toLocaleString('es-AR', {minimumFractionDigits: 2})}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* TOTALES */}
-      <div className="mt-4 flex justify-end">
-        <div className="w-1/3 border-2 border-slate-900 p-4 space-y-2">
-          <div className="flex justify-between text-sm"><span>Subtotal:</span><span>${Number(datos.total_final).toLocaleString()}</span></div>
-          <div className="flex justify-between text-sm"><span>IVA 21%:</span><span>$0.00</span></div>
-          <div className="flex justify-between text-xl font-black border-t border-slate-900 pt-2">
-            <span>TOTAL:</span><span>${Number(datos.total_final).toLocaleString()}</span>
+      {/* TOTALES (Cálculo real de IVA) */}
+      <div className="mt-4 flex justify-end shrink-0">
+        <div className="w-1/3 border-2 border-slate-900 p-3 space-y-1">
+          <div className="flex justify-between text-xs text-slate-500">
+            <span>Subtotal Neto:</span>
+            <span>${neto.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
+          </div>
+          <div className="flex justify-between text-xs text-slate-500">
+            <span>IVA 21%:</span>
+            <span>${iva.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
+          </div>
+          <div className="flex justify-between text-lg font-black border-t border-slate-900 pt-1">
+            <span>TOTAL:</span>
+            <span>${total.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
           </div>
         </div>
       </div>
 
-      {/* PIE DE FACTURA AFIP (CAE Y QR) */}
-      <div className="absolute bottom-10 left-10 right-10 flex justify-between items-end border-t-2 border-slate-900 pt-6">
+      {/* PIE DE PÁGINA (Ajusté bottom para que no se corte) */}
+      <div className="mt-8 pt-4 flex justify-between items-end border-t-2 border-slate-900 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="w-24 h-24 border border-slate-300 bg-slate-50 flex items-center justify-center p-2">
-             {/* Acá iría el componente de QR real. Por ahora simulamos el espacio */}
-             <div className="text-[8px] text-center opacity-50">QR AFIP<br/>SIMULADO</div>
+          <div className="w-20 h-20 border border-slate-200 bg-slate-50 flex items-center justify-center p-1">
+             <div className="text-[7px] text-center opacity-40 font-bold uppercase">QR AFIP<br/>Simulado</div>
           </div>
           <div>
-            <img src="https://www.afip.gob.ar/images/logo_afip.png" alt="AFIP" className="h-6 mb-2 opacity-50 grayscale" />
-            <p className="text-[10px] italic">Comprobante Autorizado</p>
+            <img src="https://www.afip.gob.ar/images/logo_afip.png" alt="AFIP" className="h-5 mb-1 opacity-40 grayscale" />
+            <p className="text-[9px] italic font-bold">Comprobante Autorizado por AFIP (Homologación)</p>
           </div>
         </div>
-
-        <div className="text-right space-y-1">
-          <p className="text-sm"><b>CAE N°:</b> {datos.cae || '12345678901234'}</p>
-          <p className="text-sm"><b>Fecha de Vto. CAE:</b> {datos.cae_vencimiento || '10/04/2026'}</p>
+        <div className="text-right text-[11px]">
+          <p><b>CAE N°:</b> {datos.cae || '74105632625460'}</p>
+          <p><b>Vto. CAE:</b> {new Date(datos.cae_vencimiento || '2026-04-20').toLocaleDateString('es-AR')}</p>
         </div>
       </div>
 
-      {/* MARCA DE AGUA PARA SIMULACIÓN */}
+      {/* MARCA DE AGUA */}
       {datos.es_simulacion && (
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden">
-          <span className="text-8xl font-black text-slate-200/30 -rotate-45 uppercase border-8 border-slate-200/30 p-10 select-none">
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
+          <span className="text-7xl font-black text-slate-200/40 -rotate-45 uppercase border-8 border-slate-200/40 p-8 select-none">
             Simulación de Prueba
           </span>
         </div>
