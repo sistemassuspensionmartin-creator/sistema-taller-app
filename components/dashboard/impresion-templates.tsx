@@ -294,104 +294,110 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
 export function FacturaImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
+  // CÁLCULOS DE IVA
   const total = Number(datos.total_final || 0);
   const neto = total / 1.21;
   const iva = total - neto;
   const nroFormateado = `${String(datos.punto_venta || 1).padStart(5, '0')}-${String(datos.numero_factura).padStart(8, '0')}`;
 
   return (
-    <div className="bg-white text-slate-800 p-8 pt-6 font-sans w-[210mm] h-[285mm] mx-auto relative flex flex-col shadow-none border border-slate-50">
+    /* Contenedor con altura A4 controlada */
+    <div className="bg-white text-slate-800 p-10 pt-8 font-sans w-[210mm] h-[285mm] mx-auto relative flex flex-col shadow-none border border-slate-50">
       
-      {/* --- CABECERA COMPACTA --- */}
-      <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-4">
-        <div className="flex items-center gap-4">
+      {/* --- CABECERA: LOGO PROTAGONISTA --- */}
+      <div className="flex justify-between items-start mb-6 border-b border-slate-50 pb-6">
+        <div className="flex flex-col items-start gap-3">
+          {/* Logo Agrandado */}
           {datos.config?.logo_url ? (
-            <img src={datos.config.logo_url} alt="Logo" className="w-20 h-20 object-contain" />
+            <img 
+              src={datos.config.logo_url} 
+              alt="Logo" 
+              className="w-48 h-auto max-h-24 object-contain object-left" 
+            />
           ) : (
-            <div className="w-16 h-16 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center font-black text-slate-200 text-[8px]">LOGO</div>
+            <div className="w-32 h-20 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center font-black text-slate-200 uppercase">Logo</div>
           )}
           
+          {/* Dirección y Condición IVA debajo del Logo */}
           <div className="space-y-0.5">
-            <h1 className="text-xl font-black text-slate-900 leading-none tracking-tighter uppercase">
-              {datos.config?.nombre_taller || "SUSPENSIÓN MARTIN"}
-            </h1>
-            <p className="text-[11px] text-slate-500 font-bold uppercase tracking-tight">
-              {datos.config?.direccion || "Av. Argentina 1658"}
+            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-tight">
+              {datos.config?.direccion || "Av. Argentina 1658, Villa Allende"}
             </p>
-            <span className="text-[9px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 inline-block uppercase tracking-tighter mt-1">
+            <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 inline-block uppercase tracking-tighter mt-1">
               IVA Responsable Inscripto
             </span>
           </div>
         </div>
 
         <div className="text-right">
-          <div className="bg-slate-900 text-white w-12 h-12 rounded-xl flex flex-col items-center justify-center ml-auto mb-1 shadow-md">
-            <span className="text-2xl font-black leading-none">{datos.tipo_factura || 'B'}</span>
-            <span className="text-[7px] font-bold uppercase tracking-widest opacity-60">Cod. 06</span>
+          {/* Cuadro de Letra */}
+          <div className="bg-slate-900 text-white w-14 h-14 rounded-2xl flex flex-col items-center justify-center ml-auto mb-2 shadow-lg">
+            <span className="text-3xl font-black leading-none">{datos.tipo_factura || 'B'}</span>
+            <span className="text-[8px] font-bold uppercase tracking-widest opacity-60">Cod. 06</span>
           </div>
-          <h2 className="text-base font-black text-slate-900 tracking-[0.2em]">FACTURA</h2>
-          <p className="text-slate-400 font-mono text-xs font-bold">N° {nroFormateado}</p>
-          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
+          <h2 className="text-lg font-black text-slate-900 tracking-[0.2em] uppercase">Factura</h2>
+          <p className="text-slate-400 font-mono text-sm font-bold">N° {nroFormateado}</p>
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5">
             {new Date(datos.fecha_emision).toLocaleDateString('es-AR')}
           </p>
         </div>
       </div>
 
-      {/* --- INFO CLIENTE / EMISOR COMPACTA --- */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
-        <div className="bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+      {/* --- INFO CLIENTE / EMISOR --- */}
+      <div className="grid grid-cols-2 gap-8 mb-6">
+        <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
           <span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] block mb-1">Receptor</span>
-          <p className="font-black text-slate-900 text-base leading-tight uppercase">{datos.cliente_nombre}</p>
-          <p className="text-[11px] text-slate-600 font-bold">CUIT/DNI: {datos.cliente_documento || "20-45246016-6"}</p>
-          <p className="text-[10px] text-slate-400">Condición: Consumidor Final</p>
+          <p className="font-black text-slate-900 text-lg leading-tight uppercase">{datos.cliente_nombre}</p>
+          <p className="text-[12px] text-slate-600 font-bold tracking-tight">CUIT/DNI: {datos.cliente_documento || "20-45246016-6"}</p>
+          <p className="text-[10px] text-slate-400 font-medium">Condición: Consumidor Final</p>
         </div>
         
-        <div className="text-right p-3">
-          <span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-1 block">Emisor (Datos Fiscales)</span>
-          <p className="text-[11px] text-slate-900 font-black uppercase">{datos.config?.nombre_fiscal || "JUAN PABLO MARTIN"}</p>
-          <p className="text-[11px] text-slate-700 font-bold">CUIT: {datos.config?.cuit || "20-12345678-9"}</p>
-          <p className="text-[10px] text-slate-400">IIBB: {datos.config?.cuit || "20-12345678-9"} | Inicio: 01/01/2024</p>
+        <div className="text-right p-2">
+          <span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-1 block">Datos Fiscales Emisor</span>
+          <p className="text-[12px] text-slate-900 font-black uppercase">{datos.config?.nombre_fiscal || "JUAN PABLO MARTIN"}</p>
+          <p className="text-[12px] text-slate-700 font-bold">CUIT: {datos.config?.cuit || "20-12345678-9"}</p>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">IIBB: {datos.config?.cuit || "20-12345678-9"} | Inicio: 01/01/2024</p>
         </div>
       </div>
 
       {/* --- LISTADO DE SERVICIOS (EL CENTRO) --- */}
-      <div className="flex-1 overflow-hidden mt-2">
-        <div className="grid grid-cols-12 gap-2 border-b border-slate-200 pb-2 mb-3 px-2">
-          <div className="col-span-1 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">Cant</div>
-          <div className="col-span-7 text-[9px] font-black text-slate-400 uppercase tracking-widest pl-2">Descripción del Trabajo</div>
-          <div className="col-span-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Unitario</div>
-          <div className="col-span-2 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">Subtotal</div>
+      <div className="flex-1 mt-2">
+        <div className="grid grid-cols-12 gap-2 border-b border-slate-200 pb-2 mb-4 px-2">
+          <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Cant</div>
+          <div className="col-span-7 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Descripción del Trabajo / Repuesto</div>
+          <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Unitario</div>
+          <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Subtotal</div>
         </div>
 
-        <div className="space-y-3 px-2">
+        <div className="space-y-4 px-2">
           {datos.items?.map((item: any, idx: number) => (
             <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-              <div className="col-span-1 text-center font-black text-slate-900 text-sm">{item.cantidad || item.cant}</div>
-              <div className="col-span-7 font-bold text-slate-700 text-sm pl-2 tracking-tight uppercase">{item.detalle}</div>
-              <div className="col-span-2 text-right font-mono text-slate-400 text-[11px]">${Number(item.precio_unitario || item.precio).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
-              <div className="col-span-2 text-right font-mono font-black text-slate-900 text-sm">${(Number(item.cantidad || item.cant) * Number(item.precio_unitario || item.precio)).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
+              <div className="col-span-1 text-center font-black text-slate-900 text-base">{item.cantidad || item.cant}</div>
+              <div className="col-span-7 font-bold text-slate-700 text-base pl-4 tracking-tight uppercase leading-tight">{item.detalle}</div>
+              <div className="col-span-2 text-right font-mono text-slate-400 text-xs font-bold">${Number(item.precio_unitario || item.precio).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
+              <div className="col-span-2 text-right font-mono font-black text-slate-900 text-base">${(Number(item.cantidad || item.cant) * Number(item.precio_unitario || item.precio)).toLocaleString('es-AR', {minimumFractionDigits: 2})}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* --- BLOQUE FIJO TOTALES Y AFIP --- */}
-      <div className="absolute bottom-10 left-8 right-8">
+      {/* --- BLOQUE FIJO TOTALES Y AFIP (ANCLADO AL FONDO) --- */}
+      <div className="absolute bottom-10 left-10 right-10">
         
-        {/* Cuadro de Totales más pequeño */}
-        <div className="flex justify-end mb-6">
-          <div className="w-[280px] bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-2">
-            <div className="flex justify-between items-center text-[9px] text-slate-400 font-black uppercase tracking-widest">
+        {/* Cuadro de Totales */}
+        <div className="flex justify-end mb-8">
+          <div className="w-[320px] bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-[2rem] p-6 shadow-sm space-y-2">
+            <div className="flex justify-between items-center text-[10px] text-slate-400 font-black uppercase tracking-widest">
               <span>Subtotal Neto</span>
               <span className="font-mono text-slate-600">${neto.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
             </div>
-            <div className="flex justify-between items-center text-[9px] text-slate-400 font-black uppercase tracking-widest">
+            <div className="flex justify-between items-center text-[10px] text-slate-400 font-black uppercase tracking-widest">
               <span>IVA (21%)</span>
               <span className="font-mono text-slate-600">${iva.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
             </div>
-            <div className="border-t border-slate-100 pt-2 flex justify-between items-center">
-              <span className="font-black text-[10px] text-slate-900 tracking-widest uppercase">Total</span>
-              <span className="font-mono font-black text-xl text-[#FF9E00]">
+            <div className="border-t border-slate-200 pt-3 flex justify-between items-center mt-1">
+              <span className="font-black text-xs text-slate-900 tracking-widest uppercase">Total</span>
+              <span className="font-mono font-black text-3xl text-[#FF9E00]">
                 ${total.toLocaleString('es-AR', {minimumFractionDigits: 2})}
               </span>
             </div>
@@ -399,19 +405,19 @@ export function FacturaImprimible({ datos }: { datos: any }) {
         </div>
 
         {/* Pie de AFIP */}
-        <div className="flex justify-between items-end border-t border-slate-100 pt-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-100">
-               <div className="text-[6px] text-center opacity-20 font-black uppercase text-slate-400 leading-tight text-center">QR AFIP<br/>Oficial</div>
+        <div className="flex justify-between items-end border-t border-slate-100 pt-6">
+          <div className="flex items-center gap-6">
+            <div className="w-20 h-20 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 shadow-inner">
+               <div className="text-[7px] text-center opacity-20 font-black uppercase text-slate-400 leading-tight">QR AFIP<br/>Oficial</div>
             </div>
             <div className="space-y-1">
-              <img src="https://www.afip.gob.ar/images/logo_afip.png" alt="AFIP" className="h-4 opacity-30 grayscale" />
-              <p className="text-[8px] text-slate-400 italic font-bold">Comprobante Autorizado Electrónicamente</p>
+              <img src="https://www.afip.gob.ar/images/logo_afip.png" alt="AFIP" className="h-5 opacity-40 grayscale" />
+              <p className="text-[9px] text-slate-400 italic font-bold tracking-tight">Comprobante Autorizado Electrónicamente</p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-[9px] text-slate-800 font-black uppercase">CAE: {datos.cae || '74405626254604'}</p>
-            <p className="text-[9px] text-slate-400 font-bold uppercase">Vto: {new Date(datos.cae_vencimiento || '2026-04-20').toLocaleDateString('es-AR')}</p>
+          <div className="text-right space-y-0.5">
+            <p className="text-[10px] text-slate-800 font-black uppercase tracking-tighter">CAE: {datos.cae || '74405626254604'}</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Vto: {new Date(datos.cae_vencimiento || '2026-04-20').toLocaleDateString('es-AR')}</p>
           </div>
         </div>
       </div>
