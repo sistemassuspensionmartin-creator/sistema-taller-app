@@ -15,6 +15,7 @@ import { PresupuestosView } from "@/components/dashboard/presupuestos-view"
 import { CatalogoView } from "@/components/dashboard/catalogo-view"
 import { AjustesView } from "@/components/dashboard/ajustes-view"
 import { CuentasCorrientesView } from "@/components/dashboard/cuentas-corrientes-view"
+import { AdminDashboardView } from "@/components/dashboard/admin-dashboard-view"
 
 export default function DashboardPage() {
   const [activeSection, setActiveSection] = useState("Inicio")
@@ -33,6 +34,7 @@ export default function DashboardPage() {
         return (
           <div className="space-y-8">
             <MetricsCards 
+              onNavigateToAdmin={() => setActiveSection("Estadísticas")}
               onNavigateToPresupuestos={() => {
                 // Aseguramos que abra un presupuesto nuevo en blanco
                 setPresupuestoParaAbrir(null); 
@@ -117,6 +119,10 @@ export default function DashboardPage() {
         return <AjustesView />
       case "Cuentas Corrientes":
         return <CuentasCorrientesView />;
+      case "Estadísticas":
+        return <AdminDashboardView />;
+      case "Configuración":
+        return <AjustesView />
       default:
         return <MetricsCards />
     }

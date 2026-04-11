@@ -19,6 +19,7 @@ import {
   Moon,
   DollarSign,
   BookOpen,
+  BarChart3,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { label: "Turnos", icon: Calendar, href: "#" },
   { label: "Caja", icon: DollarSign, href: "#" },
   { label: "Cuentas Corrientes", icon: BookOpen, href: "#" },
+  { label: "Estadísticas", icon: BarChart3, href: "#" },
 ]
 
 interface DashboardSidebarProps {
