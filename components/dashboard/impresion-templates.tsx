@@ -301,26 +301,26 @@ export function FacturaImprimible({ datos }: { datos: any }) {
   const nroFormateado = `${String(datos.punto_venta || 1).padStart(5, '0')}-${String(datos.numero_factura).padStart(8, '0')}`;
 
   return (
-    /* Contenedor con altura A4 controlada */
+    /* Contenedor A4 Blindado */
     <div className="bg-white text-slate-800 p-10 pt-8 font-sans w-[210mm] h-[285mm] mx-auto relative flex flex-col shadow-none border border-slate-50">
       
-      {/* --- CABECERA: LOGO PROTAGONISTA --- */}
+      {/* --- CABECERA: LOGO + INFO DEBAJO --- */}
       <div className="flex justify-between items-start mb-6 border-b border-slate-50 pb-6">
-        <div className="flex flex-col items-start gap-3">
-          {/* Logo Agrandado */}
+        <div className="flex flex-col items-start gap-4">
+          {/* Logo Agrandado y Pro */}
           {datos.config?.logo_url ? (
             <img 
               src={datos.config.logo_url} 
               alt="Logo" 
-              className="w-48 h-auto max-h-24 object-contain object-left" 
+              className="w-56 h-auto max-h-28 object-contain object-left" 
             />
           ) : (
             <div className="w-32 h-20 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center font-black text-slate-200 uppercase">Logo</div>
           )}
           
-          {/* Dirección y Condición IVA debajo del Logo */}
-          <div className="space-y-0.5">
-            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-tight">
+          {/* Dirección y Condición IVA (Ahora acá abajo) */}
+          <div className="space-y-0.5 ml-1">
+            <p className="text-[13px] text-slate-500 font-bold uppercase tracking-tight">
               {datos.config?.direccion || "Av. Argentina 1658, Villa Allende"}
             </p>
             <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 inline-block uppercase tracking-tighter mt-1">
@@ -330,7 +330,6 @@ export function FacturaImprimible({ datos }: { datos: any }) {
         </div>
 
         <div className="text-right">
-          {/* Cuadro de Letra */}
           <div className="bg-slate-900 text-white w-14 h-14 rounded-2xl flex flex-col items-center justify-center ml-auto mb-2 shadow-lg">
             <span className="text-3xl font-black leading-none">{datos.tipo_factura || 'B'}</span>
             <span className="text-[8px] font-bold uppercase tracking-widest opacity-60">Cod. 06</span>
@@ -343,7 +342,7 @@ export function FacturaImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* --- INFO CLIENTE / EMISOR --- */}
+      {/* --- DATOS RECEPTOR / EMISOR --- */}
       <div className="grid grid-cols-2 gap-8 mb-6">
         <div className="bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
           <span className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] block mb-1">Receptor</span>
@@ -360,11 +359,11 @@ export function FacturaImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* --- LISTADO DE SERVICIOS (EL CENTRO) --- */}
+      {/* --- TABLA DE ITEMS --- */}
       <div className="flex-1 mt-2">
         <div className="grid grid-cols-12 gap-2 border-b border-slate-200 pb-2 mb-4 px-2">
           <div className="col-span-1 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Cant</div>
-          <div className="col-span-7 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Descripción del Trabajo / Repuesto</div>
+          <div className="col-span-7 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Descripción</div>
           <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Unitario</div>
           <div className="col-span-2 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Subtotal</div>
         </div>
@@ -381,23 +380,23 @@ export function FacturaImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* --- BLOQUE FIJO TOTALES Y AFIP (ANCLADO AL FONDO) --- */}
-      <div className="absolute bottom-10 left-10 right-10">
+      {/* --- BLOQUE FIJO INFERIOR (TOTALES + AFIP) --- */}
+      <div className="absolute bottom-12 left-10 right-10">
         
-        {/* Cuadro de Totales */}
+        {/* Cuadro de Totales (Compacto como pediste) */}
         <div className="flex justify-end mb-8">
-          <div className="w-[320px] bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-[2rem] p-6 shadow-sm space-y-2">
-            <div className="flex justify-between items-center text-[10px] text-slate-400 font-black uppercase tracking-widest">
+          <div className="w-[280px] bg-slate-50 border border-slate-200 rounded-[2rem] p-5 space-y-2 shadow-sm">
+            <div className="flex justify-between items-center text-[9px] text-slate-400 font-black uppercase tracking-widest">
               <span>Subtotal Neto</span>
               <span className="font-mono text-slate-600">${neto.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
             </div>
-            <div className="flex justify-between items-center text-[10px] text-slate-400 font-black uppercase tracking-widest">
+            <div className="flex justify-between items-center text-[9px] text-slate-400 font-black uppercase tracking-widest">
               <span>IVA (21%)</span>
               <span className="font-mono text-slate-600">${iva.toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
             </div>
             <div className="border-t border-slate-200 pt-3 flex justify-between items-center mt-1">
-              <span className="font-black text-xs text-slate-900 tracking-widest uppercase">Total</span>
-              <span className="font-mono font-black text-3xl text-[#FF9E00]">
+              <span className="font-black text-[10px] text-slate-900 tracking-widest uppercase">Total</span>
+              <span className="font-mono font-black text-2xl text-[#FF9E00]">
                 ${total.toLocaleString('es-AR', {minimumFractionDigits: 2})}
               </span>
             </div>
@@ -407,7 +406,7 @@ export function FacturaImprimible({ datos }: { datos: any }) {
         {/* Pie de AFIP */}
         <div className="flex justify-between items-end border-t border-slate-100 pt-6">
           <div className="flex items-center gap-6">
-            <div className="w-20 h-20 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 shadow-inner">
+            <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100">
                <div className="text-[7px] text-center opacity-20 font-black uppercase text-slate-400 leading-tight">QR AFIP<br/>Oficial</div>
             </div>
             <div className="space-y-1">
