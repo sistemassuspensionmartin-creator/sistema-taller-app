@@ -26,7 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
-import { PresupuestoImprimible, OrdenTrabajoImprimible } from "./impresion-templates"
+import { PresupuestoImprimible, OrdenTrabajoImprimible, FacturaImprimible } from "./impresion-templates"
 
 const getEstadoColor = (estado: string) => {
   switch (estado) {
@@ -92,7 +92,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
   const [isAprobarModalOpen, setIsAprobarModalOpen] = useState(false)
 
   // Estados para imprimir
-  const [printType, setPrintType] = useState<'presupuesto' | 'orden' | null>(null)
+  const [printType, setPrintType] = useState<'presupuesto' | 'orden' | 'factura' | null>(null)
   const [printData, setPrintData] = useState<any>(null)
 
   const cargarDatos = async () => {
@@ -427,6 +427,48 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
   }
 
+  const handleVerFactura = async (presupuestoId: string) => {
+    try {
+      // 1. Buscamos los datos de la factura y del presupuesto completo
+      const { data: factura, error: errFactura } = await supabase
+        .from('facturas')
+        .select('*')
+        .eq('presupuesto_id', presupuestoId)
+        .single();
+
+      if (errFactura || !factura) return alert("No se encontró la factura para este presupuesto.");
+
+      const { data: presFull } = await supabase
+        .from('presupuestos')
+        .select('*, vehiculos(*, clientes(*)), presupuesto_items(*)')
+        .eq('id', presupuestoId)
+        .single();
+
+      // 2. Armamos el objeto para la plantilla (Igual que cuando facturamos)
+      const datosParaFactura = {
+        ...factura,
+        config: configuracion, // Usamos la config que ya tenés cargada en el view
+        cliente_nombre: presFull.vehiculos?.clientes?.nombre + ' ' + (presFull.vehiculos?.clientes?.apellido || ''),
+        cliente_documento: presFull.vehiculos?.clientes?.documento,
+        items: presFull.presupuesto_items,
+        fecha_emision: factura.created_at
+      };
+
+      setPrintData(datosParaFactura);
+      setPrintType('factura');
+
+      // 3. Mandamos a imprimir
+      setTimeout(() => {
+        window.print();
+        setPrintData(null);
+        setPrintType(null);
+      }, 500);
+
+    } catch (error) {
+      alert("Error al recuperar la factura.");
+    }
+  }
+
   // --- LA MAGIA DE LA IMPRESIÓN CON PLANTILLAS REACT ---
   const generarDocumento = async (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     if (tipo === 'presupuesto') await actualizarAEnEsperaSiEsBorrador();
@@ -577,6 +619,17 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                 <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
                   <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
                 </Button>
+
+                {estado === "Facturado" && editandoId && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleVerFactura(editandoId)} 
+                    className="bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm"
+                  >
+                    <FileText className="w-4 h-4 mr-2"/> Ver Factura AFE
+                  </Button>
+                )}
+
               </div>
             </div>
 
@@ -1003,11 +1056,10 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
       {/* ============================================================== */}
       {/* ZONA DE IMPRESIÓN (Solo visible al tocar Ctrl+P o Imprimir)  */}
-      {/* fixed inset-0 z-[9999] fuerza a tapar todo, incluso la sidebar  */}
-      {/* ============================================================== */}
       <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
         {printType === 'presupuesto' && <PresupuestoImprimible datos={printData} />}
         {printType === 'orden' && <OrdenTrabajoImprimible datos={printData} />}
+        {printType === 'factura' && <FacturaImprimible datos={printData} />} {/* <--- AGREGAR ESTA LÍNEA */}
       </div>
     </>
   )
