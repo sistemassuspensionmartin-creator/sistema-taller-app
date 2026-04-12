@@ -1,7 +1,11 @@
 //@ts-nocheck
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { supabase } from "@/lib/supabase"
+import { Loader2 } from "lucide-react"
+
+// --- TUS COMPONENTES ---
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
 import { DashboardHeader } from "@/components/dashboard/header"
 import { ClientsView } from "@/components/dashboard/clients-view"
@@ -17,7 +21,13 @@ import { AjustesView } from "@/components/dashboard/ajustes-view"
 import { CuentasCorrientesView } from "@/components/dashboard/cuentas-corrientes-view"
 import { AdminDashboardView } from "@/components/dashboard/admin-dashboard-view"
 
+// --- EL NUEVO LOGIN ---
+import { LoginView } from "@/components/dashboard/login-view"
+
 export default function DashboardPage() {
+  // --- ESTADO DE AUTENTICACIÓN (EL CANDADO) ---
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+
   const [activeSection, setActiveSection] = useState("Inicio")
   
   // ESTADOS PARA LA MEMORIA DEL PUENTE
@@ -28,6 +38,21 @@ export default function DashboardPage() {
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
 
+  // --- EFECTO PARA VERIFICAR SI EL USUARIO ESTÁ LOGUEADO ---
+  useEffect(() => {
+    // 1. Revisar si ya hay una sesión activa al cargar
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAuthenticated(!!session)
+    })
+
+    // 2. Quedarse "escuchando" por si el usuario entra o sale
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
   const renderContent = () => {
     switch (activeSection) {
       case "Inicio":
@@ -36,14 +61,12 @@ export default function DashboardPage() {
             <MetricsCards 
               onNavigateToAdmin={() => setActiveSection("Estadísticas")}
               onNavigateToPresupuestos={() => {
-                // Aseguramos que abra un presupuesto nuevo en blanco
                 setPresupuestoParaAbrir(null); 
                 setActiveSection("Presupuestos");
               }}
               onNavigateToTurnos={() => setActiveSection("Turnos")}
               onNavigateToCaja={() => setActiveSection("Caja")}
             />
-            {/* Borramos el <WorkOrdersTable /> que estaba acá abajo para limpiar la vista */}
           </div>
         );
       case "Clientes":
@@ -63,10 +86,9 @@ export default function DashboardPage() {
                    setClienteParaAbrir(cliente);
                    setActiveSection("Clientes");
                  }}
-                 // MAGIA: Antes de ir al presupuesto, guardamos el auto actual en memoria
                  onNavigateToPresupuesto={(id, vehiculoInfo) => {
                    setPresupuestoParaAbrir(id);
-                   setVehiculoParaAbrir(vehiculoInfo); // Guardamos el auto
+                   setVehiculoParaAbrir(vehiculoInfo); 
                    setVolverA("Vehículos");
                    setActiveSection("Presupuestos");
                  }}
@@ -121,13 +143,28 @@ export default function DashboardPage() {
         return <CuentasCorrientesView />;
       case "Estadísticas":
         return <AdminDashboardView />;
-      case "Configuración":
-        return <AjustesView />
       default:
         return <MetricsCards />
     }
   }
 
+  // --- LAS BARRERAS DE SEGURIDAD ---
+
+  // 1. Si todavía está pensando (cargando la página), mostramos un loader
+  if (isAuthenticated === null) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
+        <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+      </div>
+    )
+  }
+
+  // 2. Si NO está logueado, lo frenamos en el Login
+  if (isAuthenticated === false) {
+    return <LoginView onLoginSuccess={() => setIsAuthenticated(true)} />
+  }
+
+  // 3. Si PASÓ las barreras, le mostramos el sistema
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <div className="flex h-screen bg-background">
