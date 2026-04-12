@@ -10,22 +10,10 @@ export const metadata: Metadata = {
   title: 'AutoTaller - Sistema de Gestión',
   description: 'Panel de control para la administración de taller mecánico automotriz',
   generator: 'v0.app',
+  // ASÍ TIENE QUE QUEDAR:
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/icon.png',
+    apple: '/icon.png', // Usamos el mismo para Apple
   },
 }
 
