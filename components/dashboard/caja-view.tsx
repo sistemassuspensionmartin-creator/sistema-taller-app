@@ -400,6 +400,8 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
         movimientos: movimientosTurnoCierre
       });
 
+      setPrintType('cierre');
+
       alert("¡Caja cerrada! Preparando el comprobante PDF...");
       setIsCierreModalOpen(false);
       cargarDatos(); 
