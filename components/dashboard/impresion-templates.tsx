@@ -203,92 +203,130 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
   )
 }
 
-// --- PLANTILLA 3: REPORTE DE CIERRE DE CAJA ---
+// --- PLANTILLA 3: REPORTE DE CIERRE DE CAJA (CORREGIDA Y BLINDADA) ---
 export function CierreCajaImprimible({ datos }: { datos: any }) {
-  if (!datos) return null;
+  // Si no hay datos, mostramos un aviso en lugar de dejar la hoja en blanco
+  if (!datos) {
+    return (
+      <div className="p-20 text-center font-sans text-slate-400">
+        <p>Cargando datos para la impresión...</p>
+      </div>
+    );
+  }
+
+  // Aseguramos que los números sean números para que .toLocaleString() no falle
+  const efectivoEsperado = Number(datos.efectivo_esperado || 0);
+  const efectivoReal = Number(datos.efectivo_real || 0);
+  const diferencia = Number(datos.diferencia || 0);
+  const transfe = Number(datos.transferencias || 0);
+  const tarjetas = Number(datos.tarjetas || 0);
+  const cheques = Number(datos.cheques || 0);
 
   return (
-    <div className="bg-white text-slate-900 p-6 font-sans max-w-[210mm] mx-auto border-t-[8px] border-slate-900">
-      <div className="flex justify-between items-start border-b border-slate-200 pb-4 mb-4 mt-2">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">REPORTE DE CIERRE DE CAJA</h1>
-          <p className="text-sm text-slate-600 font-medium mt-1">Generado el: {new Date().toLocaleString('es-AR')}</p>
+    <div className="bg-white text-slate-900 p-8 font-sans w-[210mm] min-h-[297mm] mx-auto border-t-[12px] border-slate-900">
+      
+      {/* CABECERA CON LOGO */}
+      <div className="flex justify-between items-start border-b-2 border-slate-100 pb-6 mb-6">
+        <div className="flex items-center gap-4">
+          <img src="/icon.png" alt="Logo" className="w-20 h-20 object-contain" />
+          <div>
+            <h1 className="text-2xl font-black tracking-tighter text-slate-900 uppercase">Cierre de Caja</h1>
+            <p className="text-sm text-slate-500 font-bold uppercase tracking-widest">Suspensión MARTIN</p>
+          </div>
         </div>
         <div className="text-right">
-          <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Desde Último Cierre</p>
-          <p className="text-sm text-slate-800 font-mono mt-0.5">
-            {datos.ultimoCierre ? new Date(datos.ultimoCierre).toLocaleString('es-AR') : 'Inicio de los tiempos'}
+          <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Fecha de Reporte</p>
+          <p className="text-sm font-bold text-slate-900">{new Date().toLocaleString('es-AR')}</p>
+        </div>
+      </div>
+
+      {/* RESUMEN DE TURNOS */}
+      <div className="bg-slate-50 rounded-2xl p-4 mb-6 border border-slate-100 flex justify-between items-center">
+        <div>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Periodo Auditado</span>
+          <p className="text-sm font-bold text-slate-700 italic">
+            Desde: {datos.ultimoCierre ? new Date(datos.ultimoCierre).toLocaleString('es-AR') : 'Inicio de jornada'}
+          </p>
+        </div>
+        <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Estado de Caja</span>
+          <p className={`text-sm font-black ${diferencia < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {diferencia === 0 ? '✓ BALANCEADA' : diferencia < 0 ? '⚠ FALTANTE' : '↑ SOBRANTE'}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="border border-slate-200 p-4 rounded-xl bg-slate-50">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1">Auditoría Físico (Mostrador)</p>
-          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Efectivo Esperado:</span><span className="font-mono font-bold">${Number(datos.efectivo_esperado).toLocaleString()}</span></div>
-          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Efectivo Real (Caja):</span><span className="font-mono font-bold">${Number(datos.efectivo_real).toLocaleString()}</span></div>
-          <div className={`flex justify-between mt-2 pt-2 border-t border-slate-200 font-bold ${datos.diferencia < 0 ? 'text-red-600' : datos.diferencia > 0 ? 'text-blue-600' : 'text-emerald-600'}`}>
-            <span>Diferencia:</span><span className="font-mono">${Number(datos.diferencia).toLocaleString()}</span>
+      {/* GRILLA DE VALORES */}
+      <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="space-y-4">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-1">Control de Efectivo</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm"><span>Esperado en Sistema:</span><span className="font-mono font-bold">${efectivoEsperado.toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between text-sm"><span>Contado en Caja:</span><span className="font-mono font-bold">${efectivoReal.toLocaleString('es-AR')}</span></div>
+            <div className={`flex justify-between pt-2 border-t font-black ${diferencia < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+              <span>Diferencia:</span><span>${diferencia.toLocaleString('es-AR')}</span>
+            </div>
           </div>
         </div>
 
-        <div className="border border-slate-200 p-4 rounded-xl bg-slate-50">
-          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 border-b border-slate-200 pb-1">Ingresos Digitales (Globales)</p>
-          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Transferencias:</span><span className="font-mono font-bold text-slate-900">${Number(datos.transferencias).toLocaleString()}</span></div>
-          <div className="flex justify-between mb-1"><span className="text-sm text-slate-600">Tarjetas:</span><span className="font-mono font-bold text-slate-900">${Number(datos.tarjetas).toLocaleString()}</span></div>
-          <div className="flex justify-between"><span className="text-sm text-slate-600">Cheques:</span><span className="font-mono font-bold text-slate-900">${Number(datos.cheques).toLocaleString()}</span></div>
+        <div className="space-y-4">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b pb-1">Otros Medios (Digitales)</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm"><span>Transferencias:</span><span className="font-mono font-bold">${transfe.toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between text-sm"><span>Tarjetas:</span><span className="font-mono font-bold">${tarjetas.toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between text-sm"><span>Cheques:</span><span className="font-mono font-bold">${cheques.toLocaleString('es-AR')}</span></div>
+          </div>
         </div>
       </div>
 
-      {datos.notas && (
-        <div className="mb-6 p-3 bg-amber-50 border-l-4 border-amber-400 rounded-r text-sm">
-          <span className="font-bold text-amber-800 uppercase tracking-wider block mb-1 text-[10px]">Observaciones del Encargado</span>
-          <span className="italic text-slate-800">{datos.notas}</span>
-        </div>
-      )}
-
-      <div className="mb-6">
-        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest border-b-2 border-slate-200 pb-2 mb-3">Detalle de Movimientos del Turno</h3>
-        <Table className="text-sm">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[100px]">Hora</TableHead>
-              <TableHead>Detalle y Método</TableHead>
-              <TableHead className="text-right">Monto</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {datos.movimientos?.map((mov: any, idx: number) => (
-              <TableRow key={idx}>
-                <TableCell className="font-mono text-slate-500 text-xs">{new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</TableCell>
-                <TableCell>
-                  <span className="font-medium text-slate-800 block">{mov.detalle}</span>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">{mov.metodo_pago} {mov.notas ? `- ${mov.notas}` : ''}</span>
-                </TableCell>
-                <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                  {mov.tipo_movimiento === 'ingreso_cobro' ? '+' : ''}${Number(mov.monto).toLocaleString()}
-                </TableCell>
+      {/* TABLA DE MOVIMIENTOS */}
+      <div className="mb-8">
+        <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+          <div className="w-2 h-2 bg-slate-900 rounded-full"></div> 
+          Detalle de Movimientos del Turno
+        </h3>
+        <div className="border border-slate-100 rounded-xl overflow-hidden">
+          <Table>
+            <TableHeader className="bg-slate-50">
+              <TableRow>
+                <TableHead className="text-[10px] font-black uppercase">Hora</TableHead>
+                <TableHead className="text-[10px] font-black uppercase">Concepto / Medio</TableHead>
+                <TableHead className="text-right text-[10px] font-black uppercase">Monto</TableHead>
               </TableRow>
-            ))}
-            {(!datos.movimientos || datos.movimientos.length === 0) && (
-              <TableRow><TableCell colSpan={3} className="text-center text-slate-500 italic py-4">No hubo movimientos registrados en este turno.</TableCell></TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {datos.movimientos?.map((mov: any, idx: number) => (
+                <TableRow key={idx} className="border-b border-slate-50">
+                  <TableCell className="font-mono text-[11px] text-slate-400">
+                    {new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}
+                  </TableCell>
+                  <TableCell>
+                    <p className="font-bold text-slate-800 text-sm">{mov.detalle}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{mov.metodo_pago}</p>
+                  </TableCell>
+                  <TableCell className={`text-right font-mono font-black ${mov.tipo_movimiento === 'egreso_gasto' ? 'text-red-500' : 'text-slate-900'}`}>
+                    {mov.tipo_movimiento === 'egreso_gasto' ? '-' : ''}${Number(mov.monto).toLocaleString('es-AR')}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
-      <div className="mt-12 pt-12 border-t border-slate-200 flex justify-between px-10">
+      {/* FIRMAS PIE DE PÁGINA */}
+      <div className="mt-auto pt-20 flex justify-between px-10">
         <div className="text-center w-48">
-          <div className="border-b border-slate-400 mb-2"></div>
-          <p className="text-xs font-bold text-slate-500 uppercase">Firma Encargado</p>
+          <div className="border-b-2 border-slate-200 mb-2"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Firma Encargado</p>
         </div>
         <div className="text-center w-48">
-          <div className="border-b border-slate-400 mb-2"></div>
-          <p className="text-xs font-bold text-slate-500 uppercase">Firma Gerencia</p>
+          <div className="border-b-2 border-slate-200 mb-2"></div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Validación Gerencia</p>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function FacturaImprimible({ datos }: { datos: any }) {
