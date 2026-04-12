@@ -397,7 +397,8 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
         tarjetas: totalesTurno.tarjetas,
         cheques: totalesTurno.cheques,
         notas: notasCierre,
-        movimientos: movimientosTurnoCierre
+        movimientos: movimientosTurnoCierre,
+        usuario: "Martin",
       });
 
       setPrintType('cierre');

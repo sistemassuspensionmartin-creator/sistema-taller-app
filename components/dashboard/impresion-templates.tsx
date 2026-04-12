@@ -203,30 +203,17 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
   )
 }
 
-// --- PLANTILLA 3: REPORTE DE CIERRE DE CAJA (VERSIÓN BLINDADA SIN ERRORES) ---
 export function CierreCajaImprimible({ datos }: { datos: any }) {
-  // Si no hay datos, mostramos un mensaje de error en la hoja para saber qué pasa
-  if (!datos) {
-    return (
-      <div className="p-20 text-center border-2 border-dashed border-slate-200">
-        <h1 className="text-xl font-bold text-slate-400">ERROR: NO SE RECIBIERON DATOS</h1>
-        <p className="text-sm text-slate-300">Verifique que la caja tenga movimientos antes de cerrar.</p>
-      </div>
-    );
-  }
+  if (!datos) return null;
 
-  // Aseguramos que los valores sean números antes de formatear
   const efectivoEsperado = Number(datos.efectivo_esperado || 0);
   const efectivoReal = Number(datos.efectivo_real || 0);
   const diferencia = Number(datos.diferencia || 0);
-  const transfe = Number(datos.transferencias || 0);
-  const tarjetas = Number(datos.tarjetas || 0);
-  const cheques = Number(datos.cheques || 0);
 
   return (
-    <div className="bg-white text-slate-900 p-8 font-sans w-[210mm] min-h-[297mm] mx-auto border-t-[12px] border-slate-900">
+    // 1. QUITAMOS EL BORDER-T NEGRO DE ACÁ
+    <div className="bg-white text-slate-900 p-8 font-sans w-[210mm] min-h-[297mm] mx-auto">
       
-      {/* CABECERA CON TU NUEVO LOGO */}
       <div className="flex justify-between items-start border-b-2 border-slate-100 pb-6 mb-6">
         <div className="flex items-center gap-4">
           <img src="/icon.png" alt="Logo" className="w-16 h-16 object-contain" />
@@ -236,12 +223,15 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
           </div>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-black text-slate-300 uppercase">Emisión de Reporte</p>
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Emisión de Reporte</p>
           <p className="text-sm font-bold">{new Date().toLocaleString('es-AR')}</p>
+          {/* 2. AGREGAMOS EL USUARIO AQUÍ */}
+          <p className="text-[10px] font-black text-emerald-600 uppercase mt-1">
+            Operador: {datos.usuario || 'Administrador'}
+          </p>
         </div>
       </div>
 
-      {/* RESUMEN TÉCNICO */}
       <div className="grid grid-cols-2 gap-4 mb-8">
         <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Auditoría de Efectivo</h3>
@@ -257,14 +247,13 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
         <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Otros Valores</h3>
           <div className="space-y-1.5">
-            <div className="flex justify-between text-sm"><span>Transferencias:</span><span className="font-mono font-bold">${transfe.toLocaleString('es-AR')}</span></div>
-            <div className="flex justify-between text-sm"><span>Tarjetas:</span><span className="font-mono font-bold">${tarjetas.toLocaleString('es-AR')}</span></div>
-            <div className="flex justify-between text-sm"><span>Cheques:</span><span className="font-mono font-bold">${cheques.toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between text-sm"><span>Transferencias:</span><span className="font-mono font-bold">${Number(datos.transferencias).toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between text-sm"><span>Tarjetas:</span><span className="font-mono font-bold">${Number(datos.tarjetas).toLocaleString('es-AR')}</span></div>
+            <div className="flex justify-between text-sm"><span>Cheques:</span><span className="font-mono font-bold">${Number(datos.cheques).toLocaleString('es-AR')}</span></div>
           </div>
         </div>
       </div>
 
-      {/* TABLA DE MOVIMIENTOS (HTML PURO PARA EVITAR ERRORES) */}
       <div className="mb-10">
         <h3 className="text-xs font-black uppercase tracking-widest mb-4 border-b pb-2">Detalle de Movimientos</h3>
         <table className="w-full text-left border-collapse">
@@ -276,40 +265,29 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
             </tr>
           </thead>
           <tbody>
-            {datos.movimientos && datos.movimientos.length > 0 ? (
-              datos.movimientos.map((mov: any, idx: number) => (
-                <tr key={idx} className="border-b border-slate-50">
-                  <td className="py-3 font-mono text-[11px] text-slate-400">
-                    {new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}
-                  </td>
-                  <td className="py-3">
-                    <p className="font-bold text-slate-800 text-sm">{mov.detalle}</p>
-                    <p className="text-[9px] font-black text-slate-400 uppercase">{mov.metodo_pago}</p>
-                  </td>
-                  <td className={`py-3 text-right font-mono font-black ${mov.tipo_movimiento === 'egreso_gasto' ? 'text-red-500' : 'text-slate-900'}`}>
-                    {mov.tipo_movimiento === 'egreso_gasto' ? '-' : ''}${Number(mov.monto).toLocaleString('es-AR')}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={3} className="py-10 text-center text-slate-400 italic text-sm">No hay movimientos registrados en este cierre.</td>
+            {datos.movimientos?.map((mov: any, idx: number) => (
+              <tr key={idx} className="border-b border-slate-50">
+                <td className="py-3 font-mono text-[11px] text-slate-400">
+                  {new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}
+                </td>
+                <td className="py-3">
+                  <p className="font-bold text-slate-800 text-sm">{mov.detalle}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase">{mov.metodo_pago}</p>
+                </td>
+                <td className={`py-3 text-right font-mono font-black ${mov.tipo_movimiento === 'egreso_gasto' ? 'text-red-500' : 'text-slate-900'}`}>
+                  {mov.tipo_movimiento === 'egreso_gasto' ? '-' : ''}${Number(mov.monto).toLocaleString('es-AR')}
+                </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>
 
-      {/* FIRMAS AL PIE */}
-      <div className="mt-auto pt-20 flex justify-between px-10">
-        <div className="text-center w-48">
-          <div className="border-b-2 border-slate-200 mb-2"></div>
-          <p className="text-[10px] font-black text-slate-400 uppercase">Firma Responsable</p>
-        </div>
-        <div className="text-center w-48">
-          <div className="border-b-2 border-slate-200 mb-2"></div>
-          <p className="text-[10px] font-black text-slate-400 uppercase">Firma Auditoría</p>
-        </div>
+      {/* 3. ELIMINAMOS TODA LA SECCIÓN DE FIRMAS QUE ESTABA ACÁ */}
+      <div className="mt-20 border-t border-slate-100 pt-4">
+        <p className="text-[9px] text-slate-300 italic text-center">
+          Este documento es un reporte interno de sistema. No posee validez legal.
+        </p>
       </div>
     </div>
   );
