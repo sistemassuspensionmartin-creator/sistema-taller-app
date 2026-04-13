@@ -29,10 +29,11 @@ export function AjustesView() {
   const [usuarios, setUsuarios] = useState<any[]>([])
   const [isUserModalOpen, setIsUserModalOpen] = useState(false)
   const [usuarioEditando, setUsuarioEditando] = useState<string | null>(null)
-  const [nuevoUsuario, setNuevoUsuario] = useState({
+  const [nuevoUsuario, setNuevoUsuario] = useState<any>({
     nombre: "",
     apellido: "",
     email: "",
+    password: "",
     rol: "mecanico"
   })
 
@@ -83,13 +84,13 @@ export function AjustesView() {
   // --- LÓGICA DE USUARIOS ---
   const abrirModalCreacion = () => {
     setUsuarioEditando(null)
-    setNuevoUsuario({ nombre: "", apellido: "", email: "", rol: "mecanico" })
+    setNuevoUsuario({ nombre: "", apellido: "", email: "", password: "", rol: "mecanico" })
     setIsUserModalOpen(true)
   }
 
   const abrirModalEdicion = (u: any) => {
     setUsuarioEditando(u.id)
-    setNuevoUsuario({ nombre: u.nombre, apellido: u.apellido || "", email: u.email, rol: u.rol })
+    setNuevoUsuario({ nombre: u.nombre, apellido: u.apellido || "", email: u.email, password: "", rol: u.rol })
     setIsUserModalOpen(true)
   }
 
@@ -110,17 +111,21 @@ export function AjustesView() {
         if (error) throw error
         alert("¡Usuario actualizado correctamente!")
       } else {
-        // CREAR USUARIO NUEVO
-        const tempId = crypto.randomUUID() 
-        const { error } = await supabase.from('perfiles').insert([{
-          id: tempId,
-          nombre: nuevoUsuario.nombre,
-          apellido: nuevoUsuario.apellido,
-          email: nuevoUsuario.email,
-          rol: nuevoUsuario.rol
-        }])
-        if (error) throw error
-        alert("¡Usuario creado correctamente!")
+        // CREAR USUARIO NUEVO (Llamando a nuestra API)
+        if (!nuevoUsuario.password || nuevoUsuario.password.length < 6) {
+          return alert("La contraseña debe tener al menos 6 caracteres.");
+        }
+
+        const res = await fetch('/api/usuarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(nuevoUsuario)
+        })
+        
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        
+        alert("¡Usuario creado y listo para usar el sistema!")
       }
       
       setIsUserModalOpen(false)
@@ -522,6 +527,17 @@ export function AjustesView() {
               <Input type="email" placeholder="mecanico@taller.com" value={nuevoUsuario.email} onChange={e => setNuevoUsuario({...nuevoUsuario, email: e.target.value})} disabled={!!usuarioEditando} />
               {usuarioEditando && <p className="text-[10px] text-muted-foreground">El email no se puede cambiar por seguridad.</p>}
             </div>
+            {!usuarioEditando && (
+              <div className="space-y-2">
+                <Label>Contraseña Provisoria</Label>
+                <Input 
+                  type="text" 
+                  placeholder="min. 6 caracteres" 
+                  value={nuevoUsuario.password} 
+                  onChange={e => setNuevoUsuario({...nuevoUsuario, password: e.target.value})} 
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Rol / Permisos</Label>
               <Select value={nuevoUsuario.rol} onValueChange={(v: string) => setNuevoUsuario({...nuevoUsuario, rol: v})}>
