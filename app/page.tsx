@@ -27,7 +27,7 @@ import { LoginView } from "@/components/dashboard/login-view"
 export default function DashboardPage() {
   // --- ESTADO DE AUTENTICACIÓN (EL CANDADO) ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
-
+  const [userRole, setUserRole] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState("Inicio")
   
   // ESTADOS PARA LA MEMORIA DEL PUENTE
