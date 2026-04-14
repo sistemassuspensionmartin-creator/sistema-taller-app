@@ -38,16 +38,30 @@ export default function DashboardPage() {
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
 
-  // --- EFECTO PARA VERIFICAR SESIÓN Y AUTO-CIERRE POR INACTIVIDAD ---
+  // --- EFECTO PARA VERIFICAR SESIÓN, ROL Y AUTO-CIERRE POR INACTIVIDAD ---
   useEffect(() => {
-    // 1. Revisar sesión al cargar
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session)
-    })
+    // 1. Revisar sesión al cargar y buscar el ROL
+    const inicializarSesion = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        setIsAuthenticated(true)
+        // Buscamos el rol en la tabla de perfiles usando el ID del usuario
+        const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', session.user.id).single()
+        if (perfil) {
+          setUserRole(perfil.rol)
+        }
+      } else {
+        setIsAuthenticated(false)
+        setUserRole(null)
+      }
+    }
+    
+    inicializarSesion()
 
     // 2. Escuchar cambios de sesión
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session)
+      if (!session) setUserRole(null) // Limpiamos el rol si cierra sesión
     })
 
     // 3. DETECTOR DE INACTIVIDAD (30 Minutos)
@@ -59,6 +73,7 @@ export default function DashboardPage() {
       timeoutId = setTimeout(async () => {
         await supabase.auth.signOut();
         setIsAuthenticated(false);
+        setUserRole(null);
         alert("Por seguridad, tu sesión se ha cerrado tras 30 minutos de inactividad.");
         window.location.reload();
       }, 30 * 60 * 1000); 
@@ -73,9 +88,9 @@ export default function DashboardPage() {
     // Arrancamos el reloj
     resetTimer();
 
+    // 4. Limpieza cuando nos vamos
     return () => {
       subscription.unsubscribe();
-      // Limpiamos los detectores cuando nos vamos
       window.removeEventListener('mousemove', resetTimer);
       window.removeEventListener('keydown', resetTimer);
       window.removeEventListener('click', resetTimer);
@@ -199,7 +214,7 @@ export default function DashboardPage() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <div className="flex h-screen bg-background">
-        <DashboardSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+        <DashboardSidebar activeSection={activeSection} setActiveSection={setActiveSection} userRole={userRole} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <DashboardHeader activeSection={activeSection} onSectionChange={setActiveSection} />
           <main className="flex-1 overflow-y-auto p-6">

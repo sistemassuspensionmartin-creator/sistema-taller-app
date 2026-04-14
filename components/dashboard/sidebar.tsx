@@ -1,240 +1,64 @@
 "use client"
 
-import { supabase } from "@/lib/supabase"
-import { useState, useEffect } from "react"
-import { useTheme } from "next-themes"
-import { cn } from "@/lib/utils"
-import {
-  Home,
-  Users,
-  Car,
-  Wrench,
-  FileText,
-  Package,
-  Calendar,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Sun,
-  Moon,
-  DollarSign,
-  BookOpen,
-  BarChart3,
-} from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
+import { Home, Users, Car, CalendarDays, Settings, Banknote, Wrench, FileText } from "lucide-react"
 
-interface NavItem {
-  label: string
-  icon: React.ElementType
-  href: string
-  active?: boolean
-}
+// AGREGAMOS userRole A LAS PROPIEDADES QUE RECIBE EL COMPONENTE
+export function DashboardSidebar({ 
+  activeSection, 
+  setActiveSection, 
+  userRole 
+}: { 
+  activeSection: string, 
+  setActiveSection: (section: string) => void,
+  userRole: string | null 
+}) {
+  
+  // Lista de todos los botones con sus permisos
+  const menuItems = [
+    { name: "Inicio", icon: Home, roles: ["admin", "cajero", "mecanico"] }, // Todos lo ven
+    { name: "Turnos", icon: CalendarDays, roles: ["admin", "cajero", "mecanico"] }, // Todos
+    { name: "Vehículos", icon: Car, roles: ["admin", "cajero", "mecanico"] }, // Todos
+    { name: "Clientes", icon: Users, roles: ["admin", "cajero"] }, // Mecánico no necesita ver la base de clientes entera
+    { name: "Presupuestos", icon: FileText, roles: ["admin", "cajero"] }, // Solo ventas/caja
+    { name: "Caja", icon: Banknote, roles: ["admin", "cajero"] }, // Solo ventas/caja
+    { name: "Configuración", icon: Settings, roles: ["admin"] }, // SOLO EL JEFE
+  ]
 
-const navItems: NavItem[] = [
-  { label: "Inicio", icon: Home, href: "#", active: true },
-  { label: "Clientes", icon: Users, href: "#" },
-  { label: "Vehículos", icon: Car, href: "#" },
-  { label: "Taller", icon: Wrench, href: "#" },
-  { label: "Presupuestos", icon: FileText, href: "#" },
-  { label: "Stock/Repuestos", icon: Package, href: "#" },
-  { label: "Turnos", icon: Calendar, href: "#" },
-  { label: "Caja", icon: DollarSign, href: "#" },
-  { label: "Cuentas Corrientes", icon: BookOpen, href: "#" },
-  { label: "Estadísticas", icon: BarChart3, href: "#" },
-]
-
-interface DashboardSidebarProps {
-  activeSection: string
-  onSectionChange: (section: string) => void
-}
-
-export function DashboardSidebar({ activeSection, onSectionChange }: DashboardSidebarProps) {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchLogo = async () => {
-      const { data } = await supabase.from('configuracion').select('logo_url').single()
-      if (data?.logo_url) setLogoUrl(data.logo_url)
-    }
-    fetchLogo()
-  }, [])
-  const [collapsed, setCollapsed] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const { theme, setTheme } = useTheme()
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  // Magia: Filtramos la lista para que solo queden los botones donde el rol del usuario está incluido
+  const itemsPermitidos = menuItems.filter(item => userRole ? item.roles.includes(userRole) : false)
 
   return (
-    <TooltipProvider delayDuration={0}>
-      <aside
-        className={cn(
-          "flex h-screen flex-col border-r border-border bg-sidebar transition-all duration-300",
-          collapsed ? "w-16" : "w-64"
-        )}
-      >
-        {/* Logo Box */}
-        <div className="flex h-20 items-center justify-center border-b border-border px-4">
-          {!collapsed ? (
-            /* --- MENÚ ABIERTO --- */
-            logoUrl ? (
-              <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
-                <img src={logoUrl} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
-              </div>
-            ) : (
-              <div className="flex h-14 w-full items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-secondary/50">
-                <span className="text-sm font-medium text-muted-foreground">Logo del Taller</span>
-              </div>
-            )
-          ) : (
-            /* --- MENÚ COLAPSADO --- */
-            logoUrl ? (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
-                <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
-              </div>
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50">
-                <span className="text-xs font-medium text-muted-foreground">Logo</span>
-              </div>
-            )
-          )}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-3">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const isActive = activeSection === item.label
-
-            if (collapsed) {
-              return (
-                <Tooltip key={item.label}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => onSectionChange(item.label)}
-                      className={cn(
-                        "flex w-full items-center justify-center rounded-lg p-2.5 transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="border-border bg-popover">
-                    {item.label}
-                  </TooltipContent>
-                </Tooltip>
-              )
-            }
-
-            return (
-              <button
-                key={item.label}
-                onClick={() => onSectionChange(item.label)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <Icon className="h-5 w-5 shrink-0" />
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="border-t border-border p-3 space-y-2">
-          {/* Theme Toggle */}
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  className="flex w-full items-center justify-center rounded-lg p-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                >
-                  {mounted && theme === "dark" ? (
-                    <Sun className="h-5 w-5" />
-                  ) : (
-                    <Moon className="h-5 w-5" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="border-border bg-popover">
-                {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+    <aside className="w-64 border-r border-border bg-background hidden md:flex flex-col h-full">
+      <div className="h-16 flex items-center justify-center border-b border-border">
+        {/* Tu logo va acá */}
+        <span className="font-bold text-emerald-600 text-xl tracking-tight uppercase border-2 border-emerald-600 px-3 py-1 rounded-sm">
+          Suspensión<span className="text-amber-500 ml-1">MARTIN</span>
+        </span>
+      </div>
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        {/* Recorremos solo los items permitidos */}
+        {itemsPermitidos.map((item) => {
+          const Icon = item.icon
+          const isActive = activeSection === item.name
+          
+          return (
+            <Button
+              key={item.name}
+              variant={isActive ? "secondary" : "ghost"}
+              className={`w-full justify-start font-medium transition-colors ${
+                isActive 
+                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400" 
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              onClick={() => setActiveSection(item.name)}
             >
-              {mounted && theme === "dark" ? (
-                <Sun className="h-5 w-5 shrink-0" />
-              ) : (
-                <Moon className="h-5 w-5 shrink-0" />
-              )}
-              <span>{mounted && theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>
-            </button>
-          )}
-
-          {/* Settings */}
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button 
-                  onClick={() => onSectionChange("Configuración")}
-                  className="flex w-full items-center justify-center rounded-lg p-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                >
-                  <Settings className="h-5 w-5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="border-border bg-popover">
-                Configuración
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button 
-              onClick={() => onSectionChange("Configuración")}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              <Settings className="h-5 w-5 shrink-0" />
-              <span>Configuración</span>
-            </button>
-          )}
-
-          {/* Collapse button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn(
-              "mt-2 w-full justify-center text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              collapsed && "px-0"
-            )}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                <span>Colapsar</span>
-              </>
-            )}
-          </Button>
-        </div>
-      </aside>
-    </TooltipProvider>
+              <Icon className={`mr-3 h-5 w-5 ${isActive ? "text-emerald-600 dark:text-emerald-500" : ""}`} />
+              {item.name}
+            </Button>
+          )
+        })}
+      </nav>
+    </aside>
   )
 }
