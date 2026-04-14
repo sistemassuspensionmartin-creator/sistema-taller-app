@@ -38,19 +38,50 @@ export default function DashboardPage() {
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
 
-  // --- EFECTO PARA VERIFICAR SI EL USUARIO ESTÁ LOGUEADO ---
+  // --- EFECTO PARA VERIFICAR SESIÓN Y AUTO-CIERRE POR INACTIVIDAD ---
   useEffect(() => {
-    // 1. Revisar si ya hay una sesión activa al cargar
+    // 1. Revisar sesión al cargar
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAuthenticated(!!session)
     })
 
-    // 2. Quedarse "escuchando" por si el usuario entra o sale
+    // 2. Escuchar cambios de sesión
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session)
     })
 
-    return () => subscription.unsubscribe()
+    // 3. DETECTOR DE INACTIVIDAD (30 Minutos)
+    let timeoutId: NodeJS.Timeout;
+    
+    const resetTimer = () => {
+      clearTimeout(timeoutId);
+      // 30 minutos = 30 * 60 * 1000 milisegundos
+      timeoutId = setTimeout(async () => {
+        await supabase.auth.signOut();
+        setIsAuthenticated(false);
+        alert("Por seguridad, tu sesión se ha cerrado tras 30 minutos de inactividad.");
+        window.location.reload();
+      }, 30 * 60 * 1000); 
+    };
+
+    // Escuchamos si el usuario mueve el mouse, hace clic o toca el teclado
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keydown', resetTimer);
+    window.addEventListener('click', resetTimer);
+    window.addEventListener('scroll', resetTimer);
+    
+    // Arrancamos el reloj
+    resetTimer();
+
+    return () => {
+      subscription.unsubscribe();
+      // Limpiamos los detectores cuando nos vamos
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keydown', resetTimer);
+      window.removeEventListener('click', resetTimer);
+      window.removeEventListener('scroll', resetTimer);
+      clearTimeout(timeoutId);
+    }
   }, [])
 
   const renderContent = () => {
@@ -170,7 +201,7 @@ export default function DashboardPage() {
       <div className="flex h-screen bg-background">
         <DashboardSidebar activeSection={activeSection} onSectionChange={setActiveSection} />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <DashboardHeader activeSection={activeSection} />
+          <DashboardHeader activeSection={activeSection} onSectionChange={setActiveSection} />
           <main className="flex-1 overflow-y-auto p-6">
             <div className="mx-auto max-w-7xl">
               {renderContent()}
