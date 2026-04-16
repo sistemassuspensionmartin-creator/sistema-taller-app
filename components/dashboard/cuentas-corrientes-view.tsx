@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
   Building2, Users, Plus, FileText, ArrowDownRight, ArrowUpRight, 
-  Wallet, Search, Receipt, Loader2, User, HandCoins, Trash2
+  Wallet, Search, Receipt, Loader2, User, HandCoins, Trash2, AlertCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from "@/components/ui/dialog"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -55,6 +55,11 @@ export function CuentasCorrientesView() {
   const [datosCobroCliente, setDatosCobroCliente] = useState({ monto: "", caja_destino_id: "", comprobante: "", detalle: "" })
   const [isLedgerClienteOpen, setIsLedgerClienteOpen] = useState(false)
 
+  // ESTADO: MODAL CONFIRMAR BORRADO (REEMPLAZA AL WINDOW.CONFIRM)
+  const [confirmDelete, setConfirmDelete] = useState<{isOpen: boolean, mov: any, entidad: 'cliente'|'proveedor'|null}>({
+    isOpen: false, mov: null, entidad: null
+  });
+
   const cargarDatosBase = async () => {
     setIsLoading(true)
     try {
@@ -79,8 +84,9 @@ export function CuentasCorrientesView() {
   // =========================================================================
   // LÓGICA DE ELIMINAR MOVIMIENTOS
   // =========================================================================
-  const handleEliminarMovimiento = async (mov: any, entidad: 'cliente' | 'proveedor') => {
-    if (!window.confirm("¿Estás seguro de que querés eliminar este registro? El saldo de la cuenta se ajustará automáticamente.")) return;
+  const ejecutarBorrado = async () => {
+    const { mov, entidad } = confirmDelete;
+    if (!mov || !entidad) return;
 
     setIsSaving(true);
     try {
@@ -88,7 +94,6 @@ export function CuentasCorrientesView() {
         const cli = clientes.find(c => c.id === mov.cliente_id);
         let nuevoSaldo = Number(cli.saldo || 0);
         
-        // Si borramos una deuda, restamos. Si borramos un pago, volvemos a sumar la deuda.
         if (mov.tipo === 'cargo_deuda') nuevoSaldo -= Number(mov.monto);
         if (mov.tipo === 'pago_ingreso') nuevoSaldo += Number(mov.monto);
 
@@ -96,11 +101,14 @@ export function CuentasCorrientesView() {
         await supabase.from('movimientos_clientes').delete().eq('id', mov.id);
 
         setMovimientosLedger(prev => prev.filter(m => m.id !== mov.id));
+        
+        // MAGIA 2: Actualizamos la "foto" en tiempo real
+        setClienteSeleccionado((prev: any) => ({...prev, saldo: nuevoSaldo}));
+        
       } else {
         const prov = proveedores.find(p => p.id === mov.proveedor_id);
         let nuevoSaldo = Number(prov.saldo || 0);
         
-        // Si borramos una compra, restamos la deuda. Si borramos un pago, sumamos la deuda.
         if (mov.tipo === 'factura_compra') nuevoSaldo -= Number(mov.monto);
         if (mov.tipo === 'pago_proveedor') nuevoSaldo += Number(mov.monto);
 
@@ -108,18 +116,20 @@ export function CuentasCorrientesView() {
         await supabase.from('movimientos_proveedores').delete().eq('id', mov.id);
 
         setMovimientosLedger(prev => prev.filter(m => m.id !== mov.id));
+
+        // MAGIA 2: Actualizamos la "foto" en tiempo real
+        setProvSeleccionado((prev: any) => ({...prev, saldo: nuevoSaldo}));
       }
+      
+      setConfirmDelete({ isOpen: false, mov: null, entidad: null });
       cargarDatosBase();
     } catch (error: any) {
       alert("Error al eliminar: " + error.message);
     } finally {
       setIsSaving(false);
     }
-  };
+  }
 
-  // =========================================================================
-  // LÓGICA DE PROVEEDORES
-  // =========================================================================
   const handleCrearProveedor = async () => {
     if (!nuevoProveedor.nombre) return alert("El nombre es obligatorio")
     setIsSaving(true)
@@ -205,9 +215,6 @@ export function CuentasCorrientesView() {
     } catch (error) { console.error("Error", error) }
   }
 
-  // =========================================================================
-  // LÓGICA DE CLIENTES
-  // =========================================================================
   const getNombreCliente = (c: any) => c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido || ''}`.trim()
 
   const handleSumarDeudaCliente = async () => {
@@ -280,9 +287,6 @@ export function CuentasCorrientesView() {
     } catch (error) { console.error("Error", error) }
   }
 
-  // =========================================================================
-  // RENDERIZADO
-  // =========================================================================
   const getTotalDeudaProveedores = () => proveedores.reduce((acc, prov) => acc + Number(prov.saldo || 0), 0)
   const getTotalCobrarClientes = () => clientes.reduce((acc, cli) => acc + (Number(cli.saldo) > 0 ? Number(cli.saldo) : 0), 0)
 
@@ -326,7 +330,6 @@ export function CuentasCorrientesView() {
           </TabsTrigger>
         </TabsList>
 
-        {/* --- PESTAÑA A: CLIENTES --- */}
         <TabsContent value="clientes" className="flex-1 flex flex-col min-h-0 m-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
             <Card className="border-border shadow-sm md:col-span-3 flex items-center justify-between p-6">
@@ -419,7 +422,6 @@ export function CuentasCorrientesView() {
           </Card>
         </TabsContent>
 
-        {/* --- PESTAÑA B: PROVEEDORES --- */}
         <TabsContent value="proveedores" className="flex-1 flex flex-col min-h-0 m-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
             <Card className="border-border shadow-sm md:col-span-2 flex items-center justify-between p-6">
@@ -583,7 +585,6 @@ export function CuentasCorrientesView() {
       <Dialog open={isLedgerClienteOpen} onOpenChange={setIsLedgerClienteOpen}>
         <DialogContent className="!max-w-[90vw] w-full border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
-            {/* Agregado padding a la derecha (pr-10) para evitar que la X pise el texto */}
             <DialogTitle className="text-xl flex items-center justify-between pr-10">
               <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Ficha de Cuenta: {clienteSeleccionado && getNombreCliente(clienteSeleccionado)}</span>
             </DialogTitle>
@@ -621,7 +622,7 @@ export function CuentasCorrientesView() {
                           {mov.tipo === 'cargo_deuda' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => handleEliminarMovimiento(mov, 'cliente')}>
+                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => setConfirmDelete({isOpen: true, mov, entidad: 'cliente'})}>
                              <Trash2 className="h-4 w-4" />
                            </Button>
                         </TableCell>
@@ -698,7 +699,6 @@ export function CuentasCorrientesView() {
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
         <DialogContent className="!max-w-[90vw] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
-            {/* Agregado padding a la derecha (pr-10) para evitar que la X pise el texto */}
             <DialogTitle className="text-xl flex items-center justify-between pr-10">
               <span className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> 
@@ -770,7 +770,7 @@ export function CuentasCorrientesView() {
                           {mov.tipo === 'factura_compra' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => handleEliminarMovimiento(mov, 'proveedor')}>
+                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => setConfirmDelete({isOpen: true, mov, entidad: 'proveedor'})}>
                              <Trash2 className="h-4 w-4" />
                            </Button>
                         </TableCell>
@@ -779,6 +779,31 @@ export function CuentasCorrientesView() {
                   )}
                 </TableBody>
               </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- NUEVO MODAL DE CONFIRMACIÓN DE BORRADO --- */}
+      <Dialog open={confirmDelete.isOpen} onOpenChange={(open) => setConfirmDelete({isOpen: open, mov: null, entidad: null})}>
+        <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl top-[35%] translate-y-[-50%] outline-none">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+              ¿Eliminar Registro?
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
+              ¿Estás seguro de que querés eliminar este movimiento? El saldo de la cuenta se ajustará automáticamente, pero los saldos de caja NO se verán afectados.
+            </DialogDescription>
+            <div className="flex gap-3 w-full mt-4">
+              <Button onClick={() => setConfirmDelete({isOpen: false, mov: null, entidad: null})} variant="outline" className="flex-1 h-12 rounded-xl text-base font-bold">
+                Cancelar
+              </Button>
+              <Button onClick={ejecutarBorrado} disabled={isSaving} className="flex-1 h-12 rounded-xl text-base font-bold bg-red-600 hover:bg-red-700 text-white shadow-md">
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : "Eliminar"}
+              </Button>
             </div>
           </div>
         </DialogContent>
