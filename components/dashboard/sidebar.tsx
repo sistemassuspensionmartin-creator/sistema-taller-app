@@ -29,7 +29,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 
-// 1. AGREGAMOS EL ARRAY DE ROLES A LA INTERFAZ
 interface NavItem {
   label: string
   icon: React.ElementType
@@ -38,7 +37,6 @@ interface NavItem {
   roles: string[] 
 }
 
-// 2. DEFINIMOS QUÉ ROLES VEN QUÉ COSA
 const navItems: NavItem[] = [
   { label: "Inicio", icon: Home, href: "#", active: true, roles: ["admin", "cajero", "mecanico"] },
   { label: "Turnos", icon: Calendar, href: "#", roles: ["admin", "cajero", "mecanico"] },
@@ -52,7 +50,6 @@ const navItems: NavItem[] = [
   { label: "Estadísticas", icon: BarChart3, href: "#", roles: ["admin"] },
 ]
 
-// 3. AGREGAMOS EL userRole A LAS PROPS DEL COMPONENTE
 interface DashboardSidebarProps {
   activeSection: string
   onSectionChange: (section: string) => void
@@ -78,7 +75,6 @@ export function DashboardSidebar({ activeSection, onSectionChange, userRole }: D
     setMounted(true)
   }, [])
 
-  // 4. MAGIA: FILTRAMOS LOS BOTONES SEGÚN EL ROL
   const allowedNavItems = navItems.filter(item => userRole ? item.roles.includes(userRole) : false)
 
   return (
@@ -92,7 +88,6 @@ export function DashboardSidebar({ activeSection, onSectionChange, userRole }: D
         {/* Logo Box */}
         <div className="flex h-20 items-center justify-center border-b border-border px-4">
           {!collapsed ? (
-            /* --- MENÚ ABIERTO --- */
             logoUrl ? (
               <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
                 <img src={logoUrl} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
@@ -103,7 +98,6 @@ export function DashboardSidebar({ activeSection, onSectionChange, userRole }: D
               </div>
             )
           ) : (
-            /* --- MENÚ COLAPSADO --- */
             logoUrl ? (
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
                 <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
@@ -116,9 +110,8 @@ export function DashboardSidebar({ activeSection, onSectionChange, userRole }: D
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-3">
-          {/* 5. USAMOS allowedNavItems EN LUGAR DE navItems */}
+        {/* Navigation - AQUÍ APLICAMOS EL SPACE-Y-3 PARA DARLE AIRE */}
+        <nav className="flex-1 space-y-3 p-4 overflow-y-auto">
           {allowedNavItems.map((item) => {
             const Icon = item.icon
             const isActive = activeSection === item.label
