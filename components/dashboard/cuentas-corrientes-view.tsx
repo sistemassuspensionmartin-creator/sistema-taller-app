@@ -381,7 +381,6 @@ export function CuentasCorrientesView() {
         {/* --- PESTAÑA B: PROVEEDORES --- */}
         <TabsContent value="proveedores" className="flex-1 flex flex-col min-h-0 m-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
-            {/* TARJETA QUE CAMBIA A VERDE SI EL SALDO ES A FAVOR */}
             <Card className="border-border shadow-sm md:col-span-2 flex items-center justify-between p-6">
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Pagar</p>
@@ -541,7 +540,7 @@ export function CuentasCorrientesView() {
 
       {/* --- MODAL ANCHO: HISTORIAL CLIENTE --- */}
       <Dialog open={isLedgerClienteOpen} onOpenChange={setIsLedgerClienteOpen}>
-        <DialogContent className="max-w-[90vw] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
+        <DialogContent className="!max-w-[90vw] w-full border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-xl flex items-center justify-between">
               <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Ficha de Cuenta: {clienteSeleccionado && getNombreCliente(clienteSeleccionado)}</span>
@@ -649,7 +648,8 @@ export function CuentasCorrientesView() {
 
       {/* --- MODAL ANCHO: HISTORIAL PROVEEDOR --- */}
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
-        <DialogContent className="max-w-[90vw] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
+        {/* Aquí agregamos el !max-w-[90vw] para forzar a la librería a estirarse */}
+        <DialogContent className="!max-w-[90vw] w-full border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-xl flex items-center justify-between">
               <span className="flex items-center gap-2">
