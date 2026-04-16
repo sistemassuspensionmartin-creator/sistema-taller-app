@@ -1,6 +1,6 @@
 "use client"
 
-import { supabase } from "@/lib/supabase" // <-- AGREGAMOS SUPABASE
+import { supabase } from "@/lib/supabase"
 import { Bell, Search, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,36 +14,37 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-// <-- AGREGAMOS LAS PROPIEDADES PARA EL TÍTULO Y EL CAMBIO DE SECCIÓN
 export function DashboardHeader({ 
   activeSection, 
-  onSectionChange 
+  onSectionChange,
+  userRole // <-- RECIBIMOS EL ROL
 }: { 
   activeSection?: string, 
-  onSectionChange?: (section: string) => void 
+  onSectionChange?: (section: string) => void,
+  userRole?: string | null // <-- LO DEFINIMOS ACÁ
 }) {
   
-  // <-- LÓGICA DE CIERRE DE SESIÓN
   const handleCerrarSesion = async () => {
     await supabase.auth.signOut()
     window.location.reload()
   }
 
-  // <-- LÓGICA PARA IR A CONFIGURACIÓN
-  const handleIrAPerfil = () => {
-    if (onSectionChange) {
-      onSectionChange("Configuración")
-    }
-  }
+  // --- LÓGICA PARA NOMBRES E INICIALES SEGÚN ROL ---
+  const nombreMostrado = userRole === 'admin' ? 'Administrador' : 
+                         userRole === 'mecanico' ? 'Mecánico' : 
+                         userRole === 'cajero' ? 'Ventas / Caja' : 'Usuario';
+                         
+  const iniciales = userRole === 'admin' ? 'AD' : 
+                    userRole === 'mecanico' ? 'ME' : 
+                    userRole === 'cajero' ? 'CA' : 'US';
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6">
       {/* Left section - Page title */}
       <div>
-        {/* Usamos activeSection para que el título cambie, pero mantenemos tu diseño */}
         <h1 className="text-xl font-semibold text-foreground">{activeSection || "Panel de Control"}</h1>
         <p className="text-sm text-muted-foreground">
-          Bienvenido de vuelta, administrador
+          Bienvenido de vuelta, {nombreMostrado.toLowerCase()}
         </p>
       </div>
 
@@ -59,31 +60,23 @@ export function DashboardHeader({
         </div>
 
         {/* Notifications */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative text-muted-foreground hover:bg-secondary hover:text-foreground"
-        >
+        <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:bg-secondary hover:text-foreground">
           <Bell className="h-5 w-5" />
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
-          <span className="sr-only">Notificaciones</span>
         </Button>
 
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="flex items-center gap-2 px-2 hover:bg-secondary"
-            >
+            <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-secondary">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                  AD
+                <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
+                  {iniciales} {/* <-- INICIALES DINÁMICAS */}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden text-left md:block">
-                <p className="text-sm font-medium text-foreground">Admin</p>
-                <p className="text-xs text-muted-foreground">Administrador</p>
+                <p className="text-sm font-medium text-foreground">{nombreMostrado}</p> {/* <-- NOMBRE DINÁMICO */}
+                <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
               </div>
             </Button>
           </DropdownMenuTrigger>
@@ -96,12 +89,14 @@ export function DashboardHeader({
               Perfil
             </DropdownMenuItem>
             
-            <DropdownMenuItem className="cursor-pointer" onClick={() => onSectionChange && onSectionChange("Configuración")}>
-              Configuración
-            </DropdownMenuItem>
+            {/* Escondemos el botón de Configuración en el menú desplegable si no es admin */}
+            {userRole === 'admin' && (
+              <DropdownMenuItem className="cursor-pointer" onClick={() => onSectionChange && onSectionChange("Configuración")}>
+                Configuración
+              </DropdownMenuItem>
+            )}
             
             <DropdownMenuSeparator className="bg-border" />
-            
             <DropdownMenuItem className="text-destructive cursor-pointer" onClick={handleCerrarSesion}>
               Cerrar sesión
             </DropdownMenuItem>

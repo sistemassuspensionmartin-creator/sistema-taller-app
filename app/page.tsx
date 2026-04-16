@@ -112,6 +112,7 @@ export default function DashboardPage() {
               }}
               onNavigateToTurnos={() => setActiveSection("Turnos")}
               onNavigateToCaja={() => setActiveSection("Caja")}
+              userRole={userRole} // <--- ¡ESTA ES LA MAGIA!
             />
           </div>
         );
@@ -220,7 +221,11 @@ export default function DashboardPage() {
           userRole={userRole} 
         />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <DashboardHeader activeSection={activeSection} onSectionChange={setActiveSection} />
+          <DashboardHeader 
+            activeSection={activeSection} 
+            onSectionChange={setActiveSection} 
+            userRole={userRole}
+          />
           <main className="flex-1 overflow-y-auto p-6">
             <div className="mx-auto max-w-7xl">
               {renderContent()}

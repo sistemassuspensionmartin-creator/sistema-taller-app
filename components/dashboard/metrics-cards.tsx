@@ -13,11 +13,13 @@ import { Badge } from "@/components/ui/badge"
 export function MetricsCards({  
   onNavigateToPresupuestos, 
   onNavigateToTurnos, 
-  onNavigateToCaja 
+  onNavigateToCaja,
+  userRole // <-- RECIBIMOS EL ROL ACÁ
 }: { 
   onNavigateToPresupuestos?: () => void,
   onNavigateToTurnos?: () => void,
-  onNavigateToCaja?: () => void
+  onNavigateToCaja?: () => void,
+  userRole?: string | null // <-- LO DEFINIMOS ACÁ
 }) {
   const [isLoading, setIsLoading] = useState(true)
   
@@ -40,7 +42,7 @@ export function MetricsCards({
         const hoyString = hoy.toLocaleDateString('en-CA') 
         const inicioDeHoyISO = new Date(hoy.setHours(0,0,0,0)).toISOString()
 
-        // 1. Métricas del Taller (En proceso vs Entregados hoy)
+        // 1. Métricas del Taller
         const { data: ordenes } = await supabase.from('ordenes_trabajo').select('estado, fecha_entrega')
         
         let enProcesoCount = 0
@@ -57,7 +59,7 @@ export function MetricsCards({
         setEnTaller(enProcesoCount)
         setEntregadosHoy(entregadosHoyCount)
 
-        // 2. Agenda de Hoy (ADAPTADO A TU TABLA EXACTA)
+        // 2. Agenda de Hoy
         const { data: turnos } = await supabase
           .from('turnos')
           .select('*')
@@ -67,25 +69,27 @@ export function MetricsCards({
         setAgendaHoy(turnos || [])
         setTurnosHoy(turnos?.length || 0)
 
-        // 3. Sistema de Alerta de Caja
-        const { data: ultimoCierre } = await supabase
-          .from('cierres_caja')
-          .select('fecha_cierre')
-          .order('fecha_cierre', { ascending: false })
-          .limit(1)
-          .single()
+        // 3. Sistema de Alerta de Caja (Solo buscamos si no es mecánico)
+        if (userRole !== 'mecanico') {
+          const { data: ultimoCierre } = await supabase
+            .from('cierres_caja')
+            .select('fecha_cierre')
+            .order('fecha_cierre', { ascending: false })
+            .limit(1)
+            .single()
 
-        const fechaUltimoCierre = ultimoCierre ? ultimoCierre.fecha_cierre : '2000-01-01T00:00:00Z'
+          const fechaUltimoCierre = ultimoCierre ? ultimoCierre.fecha_cierre : '2000-01-01T00:00:00Z'
 
-        const { data: movimientosOlvidados } = await supabase
-          .from('movimientos_caja')
-          .select('id')
-          .gt('fecha', fechaUltimoCierre)
-          .lt('fecha', inicioDeHoyISO)
-          .limit(1)
+          const { data: movimientosOlvidados } = await supabase
+            .from('movimientos_caja')
+            .select('id')
+            .gt('fecha', fechaUltimoCierre)
+            .lt('fecha', inicioDeHoyISO)
+            .limit(1)
 
-        if (movimientosOlvidados && movimientosOlvidados.length > 0) {
-          setAlertaCaja(true)
+          if (movimientosOlvidados && movimientosOlvidados.length > 0) {
+            setAlertaCaja(true)
+          }
         }
 
       } catch (error) {
@@ -96,7 +100,7 @@ export function MetricsCards({
     }
 
     cargarTablero()
-  }, [])
+  }, [userRole]) // Agregamos userRole a las dependencias
 
   return (
     <div className="space-y-6 pb-8 animate-in fade-in duration-300">
@@ -112,8 +116,8 @@ export function MetricsCards({
         </div>
       </div>
 
-      {/* ALERTA DE CAJA */}
-      {alertaCaja && (
+      {/* ALERTA DE CAJA: Solo visible si NO es mecánico */}
+      {alertaCaja && userRole !== 'mecanico' && (
         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm flex items-start gap-4">
           <AlertTriangle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
           <div className="flex-1">
@@ -128,7 +132,7 @@ export function MetricsCards({
         </div>
       )}
 
-      {/* MÉTRICAS RÁPIDAS */}
+      {/* MÉTRICAS RÁPIDAS (Esto lo ven todos) */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-border shadow-sm bg-white dark:bg-slate-950">
           <CardContent className="p-6 flex items-center gap-4">
@@ -172,19 +176,30 @@ export function MetricsCards({
         <div className="md:col-span-4 space-y-4">
           <h3 className="text-lg font-bold text-foreground">Acciones Rápidas</h3>
           <div className="grid grid-cols-1 gap-3">
-            <Button onClick={onNavigateToPresupuestos} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
-              <Plus className="mr-3 h-5 w-5 text-blue-600" /> Nuevo Presupuesto
-            </Button>
+            
+            {/* BOTÓN PRESUPUESTO: Solo si NO es mecánico */}
+            {userRole !== 'mecanico' && (
+              <Button onClick={onNavigateToPresupuestos} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
+                <Plus className="mr-3 h-5 w-5 text-blue-600" /> Nuevo Presupuesto
+              </Button>
+            )}
+
+            {/* BOTÓN AGENDA: Lo ven todos */}
             <Button onClick={onNavigateToTurnos} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
               <CalendarPlus className="mr-3 h-5 w-5 text-purple-600" /> Agendar Ingreso
             </Button>
-            <Button onClick={onNavigateToCaja} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
-              <DollarSign className="mr-3 h-5 w-5 text-emerald-600" /> Registrar Cobro
-            </Button>
+            
+            {/* BOTÓN COBRO: Solo si NO es mecánico */}
+            {userRole !== 'mecanico' && (
+              <Button onClick={onNavigateToCaja} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
+                <DollarSign className="mr-3 h-5 w-5 text-emerald-600" /> Registrar Cobro
+              </Button>
+            )}
+
           </div>
         </div>
 
-        {/* AGENDA DEL DÍA (8 Columnas) */}
+        {/* AGENDA DEL DÍA (8 Columnas) (Lo ven todos) */}
         <div className="md:col-span-8 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-foreground">Agenda de Recepción</h3>
@@ -208,7 +223,6 @@ export function MetricsCards({
                     <div className="flex items-center gap-4">
                       <div className="bg-secondary p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
                         <Clock className="w-4 h-4 text-muted-foreground mb-1" />
-                        {/* Se ajusta porque tu campo "hora" es de tipo texto */}
                         <span className="font-mono font-bold text-sm">{turno.hora ? turno.hora.substring(0,5) : '--:--'}</span>
                       </div>
                       <div>
