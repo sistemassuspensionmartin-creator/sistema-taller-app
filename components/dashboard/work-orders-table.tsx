@@ -87,8 +87,6 @@ export function WorkOrdersTable({
           
           // CASO B: Mostrador ingresó un auto nuevo (INSERT)
           else if (payload.eventType === 'INSERT') {
-            // Como el INSERT trae datos básicos, hacemos un refresco rápido 
-            // pero "silencioso" para traer los datos del cliente y presupuesto
             const { data: nuevaOrdenConDatos } = await supabase
               .from('ordenes_trabajo')
               .select('*, presupuestos(numero_correlativo, total_final)')
@@ -96,7 +94,15 @@ export function WorkOrdersTable({
               .single();
 
             if (nuevaOrdenConDatos) {
-              setOrdenes(actuales => [nuevaOrdenConDatos, ...actuales]);
+              setOrdenes(actuales => {
+                // FILTRO ANTI-CLONES: Revisamos si ya tenemos esta tarjeta en la pantalla
+                const yaExiste = actuales.some(o => o.id === nuevaOrdenConDatos.id);
+                if (yaExiste) {
+                  return actuales; // Si ya existe, no hacemos nada
+                }
+                // Si no existe, la agregamos al principio de la lista
+                return [nuevaOrdenConDatos, ...actuales];
+              });
             }
           }
           
