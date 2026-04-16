@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
   Building2, Users, Plus, FileText, ArrowDownRight, ArrowUpRight, 
-  Wallet, Search, Receipt, Loader2, User, HandCoins
+  Wallet, Search, Receipt, Loader2, User, HandCoins, Trash2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -75,6 +75,47 @@ export function CuentasCorrientesView() {
   }
 
   useEffect(() => { cargarDatosBase() }, [])
+
+  // =========================================================================
+  // LÓGICA DE ELIMINAR MOVIMIENTOS
+  // =========================================================================
+  const handleEliminarMovimiento = async (mov: any, entidad: 'cliente' | 'proveedor') => {
+    if (!window.confirm("¿Estás seguro de que querés eliminar este registro? El saldo de la cuenta se ajustará automáticamente.")) return;
+
+    setIsSaving(true);
+    try {
+      if (entidad === 'cliente') {
+        const cli = clientes.find(c => c.id === mov.cliente_id);
+        let nuevoSaldo = Number(cli.saldo || 0);
+        
+        // Si borramos una deuda, restamos. Si borramos un pago, volvemos a sumar la deuda.
+        if (mov.tipo === 'cargo_deuda') nuevoSaldo -= Number(mov.monto);
+        if (mov.tipo === 'pago_ingreso') nuevoSaldo += Number(mov.monto);
+
+        await supabase.from('clientes').update({ saldo: nuevoSaldo }).eq('id', mov.cliente_id);
+        await supabase.from('movimientos_clientes').delete().eq('id', mov.id);
+
+        setMovimientosLedger(prev => prev.filter(m => m.id !== mov.id));
+      } else {
+        const prov = proveedores.find(p => p.id === mov.proveedor_id);
+        let nuevoSaldo = Number(prov.saldo || 0);
+        
+        // Si borramos una compra, restamos la deuda. Si borramos un pago, sumamos la deuda.
+        if (mov.tipo === 'factura_compra') nuevoSaldo -= Number(mov.monto);
+        if (mov.tipo === 'pago_proveedor') nuevoSaldo += Number(mov.monto);
+
+        await supabase.from('proveedores').update({ saldo: nuevoSaldo }).eq('id', mov.proveedor_id);
+        await supabase.from('movimientos_proveedores').delete().eq('id', mov.id);
+
+        setMovimientosLedger(prev => prev.filter(m => m.id !== mov.id));
+      }
+      cargarDatosBase();
+    } catch (error: any) {
+      alert("Error al eliminar: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // =========================================================================
   // LÓGICA DE PROVEEDORES
@@ -542,7 +583,8 @@ export function CuentasCorrientesView() {
       <Dialog open={isLedgerClienteOpen} onOpenChange={setIsLedgerClienteOpen}>
         <DialogContent className="!max-w-[90vw] w-full border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
-            <DialogTitle className="text-xl flex items-center justify-between">
+            {/* Agregado padding a la derecha (pr-10) para evitar que la X pise el texto */}
+            <DialogTitle className="text-xl flex items-center justify-between pr-10">
               <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Ficha de Cuenta: {clienteSeleccionado && getNombreCliente(clienteSeleccionado)}</span>
             </DialogTitle>
           </DialogHeader>
@@ -555,11 +597,12 @@ export function CuentasCorrientesView() {
                     <TableHead>Movimiento</TableHead>
                     <TableHead>Detalle / Ref</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {movimientosLedger.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground">Sin movimientos.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">Sin movimientos.</TableCell></TableRow>
                   ) : (
                     movimientosLedger.map(mov => (
                       <TableRow key={mov.id} className="hover:bg-secondary/20">
@@ -576,6 +619,11 @@ export function CuentasCorrientesView() {
                         </TableCell>
                         <TableCell className={`text-right font-mono font-bold ${mov.tipo === 'cargo_deuda' ? 'text-rose-600' : 'text-blue-600'}`}>
                           {mov.tipo === 'cargo_deuda' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => handleEliminarMovimiento(mov, 'cliente')}>
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
                         </TableCell>
                       </TableRow>
                     ))
@@ -648,10 +696,10 @@ export function CuentasCorrientesView() {
 
       {/* --- MODAL ANCHO: HISTORIAL PROVEEDOR --- */}
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
-        {/* Aquí agregamos el !max-w-[90vw] para forzar a la librería a estirarse */}
-        <DialogContent className="!max-w-[90vw] w-full border-border bg-card h-[85vh] flex flex-col p-0">
+        <DialogContent className="!max-w-[90vw] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
-            <DialogTitle className="text-xl flex items-center justify-between">
+            {/* Agregado padding a la derecha (pr-10) para evitar que la X pise el texto */}
+            <DialogTitle className="text-xl flex items-center justify-between pr-10">
               <span className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> 
                 Resumen de Cuenta: {provSeleccionado?.nombre}
@@ -682,11 +730,12 @@ export function CuentasCorrientesView() {
                     <TableHead>Movimiento</TableHead>
                     <TableHead>Detalle / Ref</TableHead>
                     <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {ledgerProvFiltrado.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground">
+                    <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
                       {busquedaLedgerProv ? "No se encontraron movimientos con esa búsqueda." : "No hay movimientos registrados en la cuenta de este proveedor."}
                     </TableCell></TableRow>
                   ) : (
@@ -719,6 +768,11 @@ export function CuentasCorrientesView() {
                         </TableCell>
                         <TableCell className={`text-right font-mono font-bold text-lg ${mov.tipo === 'factura_compra' ? 'text-rose-600' : 'text-emerald-600'}`}>
                           {mov.tipo === 'factura_compra' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => handleEliminarMovimiento(mov, 'proveedor')}>
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
                         </TableCell>
                       </TableRow>
                     ))
