@@ -39,7 +39,6 @@ const getEstadoColor = (estado: string) => {
   }
 }
 
-// NUEVO: Componente visual para los tipos de ítem en la tabla
 const TipoBadge = ({ tipo }: { tipo: string }) => {
   switch (tipo) {
     case 'Repuesto':
@@ -55,7 +54,21 @@ const TipoBadge = ({ tipo }: { tipo: string }) => {
   }
 }
 
-export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presupuestoAbreDetalle, onClearPresupuestoDetalle, onVolver }: { onNavigateToTurnos?: (vehiculoInfo: any) => void, onNavigateToTaller?: () => void, presupuestoAbreDetalle?: string | null, onClearPresupuestoDetalle?: () => void, onVolver?: () => void }) {
+export function PresupuestosView({ 
+  onNavigateToTurnos, 
+  onNavigateToTaller, 
+  presupuestoAbreDetalle, 
+  onClearPresupuestoDetalle, 
+  onVolver,
+  userRole // <-- RECIBIMOS EL ROL
+}: { 
+  onNavigateToTurnos?: (vehiculoInfo: any) => void, 
+  onNavigateToTaller?: () => void, 
+  presupuestoAbreDetalle?: string | null, 
+  onClearPresupuestoDetalle?: () => void, 
+  onVolver?: () => void,
+  userRole?: string | null 
+}) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   const [isEditing, setIsEditing] = useState(false)
   const [mostrarCostos, setMostrarCostos] = useState(false)
@@ -91,7 +104,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
   const [presupuestoAFusionar, setPresupuestoAFusionar] = useState<string>("")
   const [isAprobarModalOpen, setIsAprobarModalOpen] = useState(false)
 
-  // Estados para imprimir
   const [printType, setPrintType] = useState<'presupuesto' | 'orden' | 'factura' | null>(null)
   const [printData, setPrintData] = useState<any>(null)
 
@@ -329,7 +341,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     try {
       let presId = editandoId;
       const descParsed = parseFloat(descuento.toString()) || 0;
-      let numAleatorio = 0; // Lo preparamos para usarlo si es nuevo
+      let numAleatorio = 0; 
 
       if (editandoId) {
         const { error: presError } = await supabase.from('presupuestos').update({
@@ -384,7 +396,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
       alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
       
-      // MAGIA DE NAVEGACIÓN: Nos quedamos en el detalle
       if (!editandoId && numAleatorio !== 0) {
         setNumeroCorrelativo(numAleatorio.toString());
       }
@@ -429,7 +440,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
 
   const handleVerFactura = async (presupuestoId: string) => {
     try {
-      // 1. Buscamos los datos de la factura y del presupuesto completo
       const { data: factura, error: errFactura } = await supabase
         .from('facturas')
         .select('*')
@@ -444,10 +454,9 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
         .eq('id', presupuestoId)
         .single();
 
-      // 2. Armamos el objeto para la plantilla (Igual que cuando facturamos)
       const datosParaFactura = {
         ...factura,
-        config: configuracion, // Usamos la config que ya tenés cargada en el view
+        config: configuracion, 
         cliente_nombre: presFull.vehiculos?.clientes?.nombre + ' ' + (presFull.vehiculos?.clientes?.apellido || ''),
         cliente_documento: presFull.vehiculos?.clientes?.documento,
         items: presFull.presupuesto_items,
@@ -457,7 +466,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       setPrintData(datosParaFactura);
       setPrintType('factura');
 
-      // 3. Mandamos a imprimir
       setTimeout(() => {
         window.print();
         setPrintData(null);
@@ -469,7 +477,6 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
     }
   }
 
-  // --- LA MAGIA DE LA IMPRESIÓN CON PLANTILLAS REACT ---
   const generarDocumento = async (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
     if (tipo === 'presupuesto') await actualizarAEnEsperaSiEsBorrador();
 
@@ -486,19 +493,15 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       cliente_nombre: v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`,
       cliente_telefono: v_cliente.telefono,
       vehiculo_patente: v_vehiculo.patente,
-      
-      // CONEXIÓN BLINDADA
       vehiculo_modelo: `${v_vehiculo.marca || ''} ${v_vehiculo.modelo || ''}`.trim(),
       vehiculo_anio: v_vehiculo.año || v_vehiculo.anio || v_vehiculo.year || '',
       vehiculo_color: v_vehiculo.color || '',
       vehiculo_kilometros: v_vehiculo.kilometros || v_vehiculo.km || v_vehiculo.kilometraje || '',
-      
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
       items: v_filas,
       total_final: v_total,
       validez_dias: validez,
-      
       observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
       notas_internas: esHistorico ? datosHistoricos.notas_internas : notasInternas,
       config: configuracion
@@ -578,25 +581,27 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
               <div className="flex flex-wrap items-center gap-2">
                 {!isEditing && editandoId && (
                   <>
-                    {estado !== "Aprobado" && estado !== "Facturado" && (
-                      <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
-                        <CheckCircle className="w-4 h-4 mr-2"/> Aprobar Presupuesto
-                      </Button>
+                    {/* Botones de administrador: Aprobar, Asociar, Editar */}
+                    {userRole !== 'mecanico' && (
+                      <>
+                        {estado !== "Aprobado" && estado !== "Facturado" && (
+                          <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
+                            <CheckCircle className="w-4 h-4 mr-2"/> Aprobar Presupuesto
+                          </Button>
+                        )}
+                        <Button variant="outline" onClick={() => setIsAsociarModalOpen(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
+                          <Link2 className="w-4 h-4 mr-2"/> Asociar
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
+                          <Pencil className="w-4 h-4 mr-2"/> Activar Edición
+                        </Button>
+                        <div className="h-6 w-px bg-border mx-2"></div>
+                      </>
                     )}
-
-                    <Button variant="outline" onClick={() => setIsAsociarModalOpen(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
-                      <Link2 className="w-4 h-4 mr-2"/> Asociar
-                    </Button>
-                    
-                    <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
-                      <Pencil className="w-4 h-4 mr-2"/> Activar Edición
-                    </Button>
-
-                    <div className="h-6 w-px bg-border mx-2"></div>
                   </>
                 )}
 
-                {isEditing && (
+                {isEditing && userRole !== 'mecanico' && (
                   <>
                     <Button variant="ghost" onClick={() => { if(editandoId) { setIsEditing(false); handleAbrirPresupuesto(presupuestos.find(p=>p.id === editandoId)); } else { setVista("lista"); } }} className="text-muted-foreground hover:text-destructive">
                       <X className="w-4 h-4 mr-2"/> Cancelar Edición
@@ -608,26 +613,25 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                   </>
                 )}
 
+                {/* Lo único que puede hacer el mecánico: Orden Papel */}
                 <Button variant="outline" onClick={() => generarDocumento('orden')} className="bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800">
                   <ClipboardList className="w-4 h-4 mr-2"/> Orden Papel
                 </Button>
                 
-                <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
-                  <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
-                </Button>
-                
-                <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
-                  <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
-                </Button>
-
-                {estado === "Facturado" && editandoId && (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => handleVerFactura(editandoId)} 
-                    className="bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm"
-                  >
-                    <FileText className="w-4 h-4 mr-2"/> Ver Factura AFE
-                  </Button>
+                {userRole !== 'mecanico' && (
+                  <>
+                    <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
+                      <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
+                    </Button>
+                    <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
+                      <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
+                    </Button>
+                    {estado === "Facturado" && editandoId && (
+                      <Button variant="outline" onClick={() => handleVerFactura(editandoId)} className="bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm">
+                        <FileText className="w-4 h-4 mr-2"/> Ver Factura AFE
+                      </Button>
+                    )}
+                  </>
                 )}
 
               </div>
@@ -752,9 +756,11 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
             <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
               <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg">Detalle de Repuestos y Trabajos</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}`}>
-                  {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>} {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
-                </Button>
+                {userRole !== 'mecanico' && (
+                  <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}`}>
+                    {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>} {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
@@ -764,9 +770,9 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                         <TableHead className="w-[155px] print:hidden">Tipo</TableHead>
                         <TableHead>Descripción del Trabajo / Repuesto</TableHead>
                         <TableHead className="w-[80px] text-center">Cant.</TableHead>
-                        {mostrarCostos && <TableHead className="w-[120px] text-right text-amber-600 print:hidden">Costo Unit.</TableHead>}
-                        <TableHead className="w-[140px] text-right text-emerald-600">Precio Venta</TableHead>
-                        <TableHead className="w-[140px] text-right">Subtotal</TableHead>
+                        {mostrarCostos && userRole !== 'mecanico' && <TableHead className="w-[120px] text-right text-amber-600 print:hidden">Costo Unit.</TableHead>}
+                        {userRole !== 'mecanico' && <TableHead className="w-[140px] text-right text-emerald-600">Precio Venta</TableHead>}
+                        {userRole !== 'mecanico' && <TableHead className="w-[140px] text-right">Subtotal</TableHead>}
                         {isEditing && <TableHead className="w-[50px] print:hidden"></TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -815,11 +821,18 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                               </div>
                             </TableCell>
                             <TableCell><Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} readOnly={!isEditing} className={`h-10 text-center font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
-                            {mostrarCostos && (
+                            
+                            {/* Columnas ocultas al mecánico */}
+                            {mostrarCostos && userRole !== 'mecanico' && (
                               <TableCell className="print:hidden"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 text-amber-700' : 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400'}`} /></TableCell>
                             )}
-                            <TableCell><Input value={fila.precio} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
-                            <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)).toLocaleString()}</TableCell>
+                            {userRole !== 'mecanico' && (
+                              <>
+                                <TableCell><Input value={fila.precio} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
+                                <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)).toLocaleString()}</TableCell>
+                              </>
+                            )}
+
                             {isEditing && (
                               <TableCell className="print:hidden"><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
                             )}
@@ -852,30 +865,34 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                   </CardContent>
                 </Card>
               </div>
-              <div className="flex flex-col justify-between">
-                <Card className="border-border shadow-md mb-6">
-                  <CardContent className="p-6 space-y-4">
-                    <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
-                    <div className="flex justify-between items-center text-muted-foreground">
-                      <span>Descuento / Atención:</span>
-                      <div className="relative w-32">
-                        <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span>
-                        <Input value={descuento} onChange={(e: any) => setDescuento(e.target.value)} readOnly={!isEditing} className={`h-10 pl-7 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-slate-50 dark:bg-slate-900'}`} />
+              
+              {/* Ocultamos los totales para el mecánico */}
+              {userRole !== 'mecanico' && (
+                <div className="flex flex-col justify-between">
+                  <Card className="border-border shadow-md mb-6">
+                    <CardContent className="p-6 space-y-4">
+                      <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
+                      <div className="flex justify-between items-center text-muted-foreground">
+                        <span>Descuento / Atención:</span>
+                        <div className="relative w-32">
+                          <span className="absolute left-3 top-2.5 text-muted-foreground text-sm">-$</span>
+                          <Input value={descuento} onChange={(e: any) => setDescuento(e.target.value)} readOnly={!isEditing} className={`h-10 pl-7 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-slate-50 dark:bg-slate-900'}`} />
+                        </div>
                       </div>
-                    </div>
-                    <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
-                    {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
-                  </CardContent>
-                </Card>
+                      <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
+                      {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
+                    </CardContent>
+                  </Card>
 
-                {!isEditing && editandoId && (
-                  <div className="flex justify-end print:hidden">
-                    <Button variant="outline" onClick={() => handleEliminarPresupuesto(editandoId)} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-900/20">
-                      <Trash2 className="w-4 h-4 mr-2" /> Eliminar Presupuesto Permanentemente
-                    </Button>
-                  </div>
-                )}
-              </div>
+                  {!isEditing && editandoId && (
+                    <div className="flex justify-end print:hidden">
+                      <Button variant="outline" onClick={() => handleEliminarPresupuesto(editandoId)} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-900/20">
+                        <Trash2 className="w-4 h-4 mr-2" /> Eliminar Presupuesto Permanentemente
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* MODALES OCULTOS EN IMPRESION */}
@@ -965,7 +982,11 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
           <div className="space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div><h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2><p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p></div>
-              <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto</Button>
+              
+              {/* Oculto el botón Nuevo al mecánico */}
+              {userRole !== 'mecanico' && (
+                <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto</Button>
+              )}
             </div>
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border bg-secondary/10 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -981,7 +1002,19 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
               </CardHeader>
               <CardContent className="p-0">
                 <Table>
-                  <TableHeader><TableRow className="bg-secondary/20"><TableHead>Nro</TableHead><TableHead>Fecha</TableHead><TableHead>Cliente y Vehículo</TableHead><TableHead className="text-right">Total</TableHead><TableHead className="text-center">Estado</TableHead><TableHead className="text-right">Acciones Rápidas</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow className="bg-secondary/20">
+                      <TableHead>Nro</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Cliente y Vehículo</TableHead>
+                      
+                      {/* Ocultamos el Total al mecánico en la lista */}
+                      {userRole !== 'mecanico' && <TableHead className="text-right">Total</TableHead>}
+                      
+                      <TableHead className="text-center">Estado</TableHead>
+                      <TableHead className="text-right">Acciones Rápidas</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                         {isLoading ? (
                           Array.from({ length: 5 }).map((_, i) => (
@@ -994,18 +1027,18 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                                   <div className="h-4 w-32 bg-secondary/40 rounded animate-pulse"></div>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right"><div className="h-6 w-28 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                              {userRole !== 'mecanico' && <TableCell className="text-right"><div className="h-6 w-28 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>}
                               <TableCell className="text-center"><div className="h-8 w-32 bg-secondary/60 rounded animate-pulse mx-auto"></div></TableCell>
                               <TableCell className="text-right">
                                 <div className="flex justify-end gap-2">
                                   <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
-                                  <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                                  {userRole !== 'mecanico' && <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>}
                                 </div>
                               </TableCell>
                             </TableRow>
                           ))
                         ) : presupuestosFiltrados.length === 0 ? (
-                      <TableRow><TableCell colSpan={6} className="h-32 text-center text-muted-foreground">No se encontraron presupuestos.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={userRole !== 'mecanico' ? 6 : 5} className="h-32 text-center text-muted-foreground">No se encontraron presupuestos.</TableCell></TableRow>
                     ) : (
                       presupuestosFiltrados.map((p) => (
                         <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group transition-colors" onClick={() => handleAbrirPresupuesto(p)}>
@@ -1019,27 +1052,38 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
                             </div>
                             <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
                           </TableCell>
-                          <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
+                          
+                          {/* Ocultamos el precio en la fila al mecánico */}
+                          {userRole !== 'mecanico' && (
+                            <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
+                          )}
                           
                           <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                            <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
-                              <SelectTrigger className={`h-8 text-xs w-[130px] mx-auto border ${getEstadoColor(p.estado)}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Borrador">Borrador</SelectItem>
-                                <SelectItem value="En Espera">En Espera</SelectItem>
-                                <SelectItem value="Aprobado">Aprobado</SelectItem>
-                                <SelectItem value="Rechazado">Rechazado</SelectItem>
-                                <SelectItem value="Facturado">Facturado</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            {/* El mecánico ve una etiqueta estática. Los demás ven el selector. */}
+                            {userRole === 'mecanico' ? (
+                              <Badge className={`${getEstadoColor(p.estado)}`}>{p.estado}</Badge>
+                            ) : (
+                              <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
+                                <SelectTrigger className={`h-8 text-xs w-[130px] mx-auto border ${getEstadoColor(p.estado)}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Borrador">Borrador</SelectItem>
+                                  <SelectItem value="En Espera">En Espera</SelectItem>
+                                  <SelectItem value="Aprobado">Aprobado</SelectItem>
+                                  <SelectItem value="Rechazado">Rechazado</SelectItem>
+                                  <SelectItem value="Facturado">Facturado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                           </TableCell>
 
                           <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex justify-end gap-1">
                               <Button variant="ghost" size="icon" onClick={() => generarDocumento('orden', p)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Orden de Trabajo"><ClipboardList className="h-4 w-4" /></Button>
-                              <Button variant="ghost" size="icon" onClick={() => generarDocumento('presupuesto', p)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
+                              {userRole !== 'mecanico' && (
+                                <Button variant="ghost" size="icon" onClick={() => generarDocumento('presupuesto', p)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1059,7 +1103,7 @@ export function PresupuestosView({ onNavigateToTurnos, onNavigateToTaller, presu
       <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
         {printType === 'presupuesto' && <PresupuestoImprimible datos={printData} />}
         {printType === 'orden' && <OrdenTrabajoImprimible datos={printData} />}
-        {printType === 'factura' && <FacturaImprimible datos={printData} />} {/* <--- AGREGAR ESTA LÍNEA */}
+        {printType === 'factura' && <FacturaImprimible datos={printData} />} 
       </div>
     </>
   )
