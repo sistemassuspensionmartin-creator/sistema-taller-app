@@ -1,9 +1,11 @@
 //@ts-nocheck
 "use client"
 
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { AlertCircle, CheckCircle2, Info, Loader2, User } from "lucide-react"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
-import { Loader2, User } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 // --- TUS COMPONENTES ---
 import { DashboardSidebar } from "@/components/dashboard/sidebar"
@@ -29,6 +31,9 @@ export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState("Inicio")
+
+  // Estado para la Alerta Personalizada Global
+  const [customAlert, setCustomAlert] = useState({ isOpen: false, message: "", type: "info" });
   
   // ESTADOS PARA LA MEMORIA DEL PUENTE
   const [vehiculoParaAbrir, setVehiculoParaAbrir] = useState<any>(null)
@@ -37,6 +42,19 @@ export default function DashboardPage() {
   
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
+
+  // --- SECUESTRO GLOBAL DEL ALERT() ---
+  useEffect(() => {
+    window.alert = (msg) => {
+      // Detectamos si es un error, advertencia o éxito leyendo el texto
+      let type = "info";
+      if (msg.includes("Error") || msg.includes("❌") || msg.includes("⛔")) type = "error";
+      else if (msg.includes("⚠️")) type = "warning";
+      else if (msg.includes("éxito") || msg.includes("¡")) type = "success";
+
+      setCustomAlert({ isOpen: true, message: msg, type });
+    };
+  }, []);
 
   // --- EFECTO OPTIMIZADO: SESIÓN, ROL Y AUTO-CIERRE ---
   useEffect(() => {
@@ -75,7 +93,7 @@ export default function DashboardPage() {
         await supabase.auth.signOut();
         setIsAuthenticated(false);
         setUserRole(null);
-        alert("Por seguridad, tu sesión se ha cerrado tras 30 minutos de inactividad.");
+        alert("⛔ Por seguridad, tu sesión se ha cerrado tras 30 minutos de inactividad.");
         window.location.reload();
       }
     }, 60000); 
@@ -103,7 +121,7 @@ export default function DashboardPage() {
               }}
               onNavigateToTurnos={() => setActiveSection("Turnos")}
               onNavigateToCaja={() => setActiveSection("Caja")}
-              userRole={userRole} // <--- ¡ESTA ES LA MAGIA!
+              userRole={userRole} 
             />
           </div>
         );
@@ -131,7 +149,7 @@ export default function DashboardPage() {
               setVolverA("Vehículos");
               setActiveSection("Presupuestos");
             }}
-            userRole={userRole} // <--- ¡ESTA ES LA MAGIA QUE FALTABA!
+            userRole={userRole} 
           />
         );
       case "Taller":
@@ -151,7 +169,7 @@ export default function DashboardPage() {
               setVolverA("Caja");
               setActiveSection("Presupuestos");
             }}
-            userRole={userRole} // <--- ¡ESTE ES EL CANDADO!
+            userRole={userRole} 
           />
         );
       case "Turnos":
@@ -183,7 +201,7 @@ export default function DashboardPage() {
                 setVolverA(null);
               }
             }}
-            userRole={userRole} // <--- CLAVE PARA EL BLINDAJE
+            userRole={userRole} 
           />
         );
       case "Stock/Repuestos":
@@ -208,7 +226,7 @@ export default function DashboardPage() {
           </div>
         );
       default:
-        return <MetricsCards />
+        return <MetricsCards userRole={userRole}/> // Aseguramos que Inicio también reciba el rol si es default
     }
   }
 
@@ -243,10 +261,52 @@ export default function DashboardPage() {
             onSectionChange={setActiveSection} 
             userRole={userRole}
           />
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="flex-1 overflow-y-auto p-6 relative">
             <div className="mx-auto max-w-7xl">
               {renderContent()}
             </div>
+            
+            {/* --- ALERTA PERSONALIZADA GLOBAL --- */}
+            <Dialog open={customAlert.isOpen} onOpenChange={(open) => setCustomAlert(prev => ({ ...prev, isOpen: open }))}>
+              <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl sm:rounded-2xl top-[35%] translate-y-[-50%] outline-none">
+                <div className="flex flex-col items-center gap-4 text-center">
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${
+                    customAlert.type === "error" ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400" :
+                    customAlert.type === "warning" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400" :
+                    customAlert.type === "success" ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400" :
+                    "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                  }`}>
+                    {customAlert.type === "error" ? <AlertCircle className="w-7 h-7" /> :
+                     customAlert.type === "warning" ? <AlertCircle className="w-7 h-7" /> :
+                     customAlert.type === "success" ? <CheckCircle2 className="w-7 h-7" /> :
+                     <Info className="w-7 h-7" />}
+                  </div>
+                  
+                  <DialogTitle className="text-xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+                    {customAlert.type === "error" ? "Ha ocurrido un error" :
+                     customAlert.type === "warning" ? "Atención" :
+                     customAlert.type === "success" ? "¡Excelente!" :
+                     "Aviso del Sistema"}
+                  </DialogTitle>
+                  
+                  <DialogDescription className="text-base text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
+                    {customAlert.message.replace(/⚠️|❌|⛔|¡/g, "").trim()}
+                  </DialogDescription>
+                  
+                  <Button 
+                    onClick={() => setCustomAlert({ isOpen: false, message: "", type: "info" })} 
+                    className={`w-full mt-4 rounded-xl h-12 text-base font-bold shadow-md transition-all ${
+                      customAlert.type === "error" ? "bg-red-600 hover:bg-red-700 text-white" :
+                      customAlert.type === "success" ? "bg-emerald-600 hover:bg-emerald-700 text-white" :
+                      "bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900"
+                    }`}
+                  >
+                    Entendido
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
           </main>
         </div>
       </div>

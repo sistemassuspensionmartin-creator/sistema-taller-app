@@ -66,37 +66,48 @@ export function WorkOrdersTable({
     }
   }
 
-  // --- MAGIA EN TIEMPO REAL OPTIMIZADA ---
+  // --- MAGIA EN TIEMPO REAL TOTAL (INGRESOS + AVANCES) ---
   useEffect(() => {
-    // 1. Cargamos los datos al entrar
+    // 1. Carga inicial
     cargarDatos();
 
-    // 2. Abrimos el "tubo" para escuchar los movimientos de las tarjetas
-    const canalTaller = supabase.channel('cambios-taller')
+    // 2. Escucha activa de TODO lo que pase en la tabla de órdenes
+    const canalTaller = supabase.channel('sincronizacion-taller')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordenes_trabajo' },
-        (payload) => {
-          // Si el evento es un UPDATE (alguien movió una tarjeta)
+        async (payload) => {
+          
+          // CASO A: Alguien movió un auto (UPDATE)
           if (payload.eventType === 'UPDATE') {
-            // Actualizamos la tarjeta en la pantalla SIN volver a consultar a la base de datos
-            setOrdenes(ordenesActuales => 
-              ordenesActuales.map(orden => 
-                orden.id === payload.new.id 
-                  ? { ...orden, estado: payload.new.estado, fecha_entrega: payload.new.fecha_entrega } 
-                  : orden
-              )
+            setOrdenes(actuales => 
+              actuales.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o)
             );
           } 
-          // Si es un INSERT (entró un auto nuevo), ahí sí recargamos para traer los datos del cliente
+          
+          // CASO B: Mostrador ingresó un auto nuevo (INSERT)
           else if (payload.eventType === 'INSERT') {
-            cargarDatos();
+            // Como el INSERT trae datos básicos, hacemos un refresco rápido 
+            // pero "silencioso" para traer los datos del cliente y presupuesto
+            const { data: nuevaOrdenConDatos } = await supabase
+              .from('ordenes_trabajo')
+              .select('*, presupuestos(numero_correlativo, total_final)')
+              .eq('id', payload.new.id)
+              .single();
+
+            if (nuevaOrdenConDatos) {
+              setOrdenes(actuales => [nuevaOrdenConDatos, ...actuales]);
+            }
+          }
+          
+          // CASO C: Alguien borró una orden (DELETE)
+          else if (payload.eventType === 'DELETE') {
+            setOrdenes(actuales => actuales.filter(o => o.id !== payload.old.id));
           }
         }
       )
       .subscribe();
 
-    // 3. Cerramos el tubo cuando el usuario se va a otra pantalla
     return () => {
       supabase.removeChannel(canalTaller);
     }
