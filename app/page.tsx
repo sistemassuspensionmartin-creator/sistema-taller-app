@@ -144,13 +144,16 @@ export default function DashboardPage() {
                  userRole={userRole} 
                />
       case "Caja":
-        return <CajaView 
-          onNavigateToPresupuesto={(id) => {
-            setPresupuestoParaAbrir(id);
-            setVolverA("Caja");
-            setActiveSection("Presupuestos");
-          }}
-        />;
+        return (
+          <CajaView 
+            onNavigateToPresupuesto={(id) => {
+              setPresupuestoParaAbrir(id);
+              setVolverA("Caja");
+              setActiveSection("Presupuestos");
+            }}
+            userRole={userRole} // <--- ¡ESTE ES EL CANDADO!
+          />
+        );
       case "Turnos":
         return (
           <TurnosView 

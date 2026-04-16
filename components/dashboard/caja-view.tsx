@@ -37,7 +37,13 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?: (id: string) => void }) {
+export function CajaView({ 
+  onNavigateToPresupuesto,
+  userRole // <-- RECIBIMOS EL ROL ACÁ
+}: { 
+  onNavigateToPresupuesto?: (id: string) => void,
+  userRole?: string | null // <-- LO DEFINIMOS
+}) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -46,14 +52,12 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
   const [cajas, setCajas] = useState<any[]>([])
   const [categoriasGasto, setCategoriasGasto] = useState<any[]>([])
   
-  // NUEVA ESTRUCTURA DE LISTAS
   const [cuentasPendientes, setCuentasPendientes] = useState<any[]>([])
   const [cuentasCobradas, setCuentasCobradas] = useState<any[]>([])
   const [movimientos, setMovimientos] = useState<any[]>([])
   
   const [ultimoCierre, setUltimoCierre] = useState<any>(null)
   
-  // TOTALES DEL TURNO
   const [totalesTurno, setTotalesTurno] = useState({ transferencias: 0, tarjetas: 0, cheques: 0 })
   
   const [busqueda, setBusqueda] = useState("")
@@ -63,7 +67,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
   const [isEgresoModalOpen, setIsEgresoModalOpen] = useState(false)
   const [isCierreModalOpen, setIsCierreModalOpen] = useState(false)
 
-  // Estados Cobro
   const [presupuestoACobrar, setPresupuestoACobrar] = useState<any>(null)
   const [montoCobro, setMontoCobro] = useState("")
   const [metodoPago, setMetodoPago] = useState("Efectivo")
@@ -73,30 +76,25 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
   const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
   const [bancoTarjeta, setBancoTarjeta] = useState("")
 
-  // Estados Movimiento Interno
   const [cajaOrigen, setCajaOrigen] = useState("")
   const [cajaDestino, setCajaDestino] = useState("")
   const [montoMovimiento, setMontoMovimiento] = useState("")
   const [notasMovimiento, setNotasMovimiento] = useState("")
 
-  // Estados Egreso/Gasto
   const [montoEgreso, setMontoEgreso] = useState("")
   const [categoriaEgreso, setCategoriaEgreso] = useState("")
   const [cajaEgreso, setCajaEgreso] = useState("")
   const [notasEgreso, setNotasEgreso] = useState("")
 
-  // Estados Cierre de Caja
   const [efectivoContado, setEfectivoContado] = useState("")
   const [notasCierre, setNotasCierre] = useState("")
   const [movimientosTurnoCierre, setMovimientosTurnoCierre] = useState<any[]>([])
 
-  // Estado Impresión
   const [printData, setPrintData] = useState<any>(null)
 
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
-      // 1. Cajas y Categorías
       const [{ data: cajasData }, { data: catData }] = await Promise.all([
         supabase.from('cajas').select('*').order('nombre'),
         supabase.from('categorias_gasto').select('*').order('nombre')
@@ -104,7 +102,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
       setCajas(cajasData || [])
       setCategoriasGasto(catData || [])
 
-      // 2. Último Cierre (Marca el inicio del turno)
       const { data: ultimoCierreData } = await supabase
         .from('cierres_caja')
         .select('*')
@@ -115,7 +112,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
       setUltimoCierre(ultimoCierreData || null)
       const fechaInicio = ultimoCierreData ? ultimoCierreData.fecha_cierre : '2000-01-01T00:00:00Z';
 
-      // 3. Movimientos SOLO DE ESTE TURNO
       const { data: movData } = await supabase
         .from('movimientos_caja')
         .select('*, caja_origen:caja_origen_id(nombre), caja_destino:caja_destino_id(nombre)')
@@ -124,7 +120,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
       
       setMovimientos(movData || [])
 
-      // Calcular totales digitales del turno
       let transf = 0, tarj = 0, cheq = 0;
       (movData || []).forEach((m: any) => {
         if (m.tipo_movimiento === 'ingreso_cobro') {
@@ -135,7 +130,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
       });
       setTotalesTurno({ transferencias: transf, tarjetas: tarj, cheques: cheq });
 
-      // 4. Procesar Presupuestos y Cobros Históricos
       const { data: ordenesData } = await supabase
         .from('ordenes_trabajo')
         .select(`vehiculo_patente, cliente_nombre, presupuestos (*)`)
@@ -192,9 +186,24 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
 
   useEffect(() => { cargarDatos() }, [])
 
-  // Corrección estricta: Solo mostrador
   const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
+
+  // --- MAGIA: FUNCIÓN PARA ABRIR EL GASTO AUTO-SELECCIONANDO EL MOSTRADOR ---
+  const abrirModalGasto = () => {
+    setCategoriaEgreso("");
+    setMontoEgreso("");
+    setNotasEgreso("");
+    
+    // Si es cajero, le seleccionamos automáticamente la caja mostrador
+    if (userRole === 'cajero' && cajaMostrador) {
+      setCajaEgreso(cajaMostrador.id);
+    } else {
+      setCajaEgreso("");
+    }
+    
+    setIsEgresoModalOpen(true);
+  }
 
   const abrirModalCobro = (cuenta: any) => {
     setPresupuestoACobrar(cuenta);
@@ -297,7 +306,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
     }
   }
 
-  // --- LÓGICA DE GASTOS Y EGRESOS ---
   const procesarEgreso = async () => {
     const monto = parseFloat(montoEgreso);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
@@ -309,17 +317,14 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
 
     setIsSaving(true);
     try {
-      // 1. Restar el saldo de la caja seleccionada
       await supabase.from('cajas').update({ saldo: Number(cajaObj.saldo || 0) - monto }).eq('id', cajaEgreso);
-
-      // 2. Anotar en el historial
       const catNombre = categoriasGasto.find(c => c.id === categoriaEgreso)?.nombre || 'Gasto General';
       
       await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'egreso_gasto',
         caja_origen_id: cajaEgreso,
         monto: monto,
-        metodo_pago: 'Efectivo', // Asumimos efectivo, pero en el futuro se puede extender
+        metodo_pago: 'Efectivo', 
         detalle: `Gasto: ${catNombre}`,
         notas: notasEgreso
       }]);
@@ -424,14 +429,12 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
 
     setIsSaving(true);
     try {
-      // 1. Buscamos los datos completos del presupuesto para la factura
       const { data: presFull } = await supabase
         .from('presupuestos')
         .select('*, vehiculos(*, clientes(*)), presupuesto_items(*)')
         .eq('id', id)
         .single();
 
-      // 2. Llamamos a nuestra API Simuladora de AFIP
       const response = await fetch('/api/afip/facturar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -441,10 +444,9 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
 
       if (!afipData.success) throw new Error("AFIP rechazó el comprobante");
 
-      // 3. Guardamos la factura en nuestra base de datos (Tabla que creamos antes)
       const { data: facturaGuardada } = await supabase.from('facturas').insert([{
         presupuesto_id: id,
-        tipo_factura: 'B', // Por defecto para pruebas
+        tipo_factura: 'B', 
         punto_venta: afipData.punto_venta,
         numero_factura: afipData.numero_factura,
         cae: afipData.cae,
@@ -453,13 +455,11 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
         es_simulacion: true
       }]).select().single();
 
-      // 4. Cambiamos el estado en el presupuesto
       await supabase.from('presupuestos').update({ estado_facturacion: 'Facturado' }).eq('id', id);
       
-      // 5. PREPARAMOS EL PDF (Usamos la plantilla legal que creamos)
       const datosParaFactura = {
         ...facturaGuardada,
-        config: cajas[0]?.id ? { nombre_taller: 'Suspensión Martin', cuit: '20-12345678-9', direccion: 'Av. Argentina 1658' } : {}, // Aquí iría tu config real
+        config: cajas[0]?.id ? { nombre_taller: 'Suspensión Martin', cuit: '20-12345678-9', direccion: 'Av. Argentina 1658' } : {}, 
         cliente_nombre: presFull.vehiculos?.clientes?.nombre + ' ' + presFull.vehiculos?.clientes?.apellido,
         cliente_documento: presFull.vehiculos?.clientes?.documento,
         items: presFull.presupuesto_items,
@@ -467,7 +467,7 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
       };
 
       setPrintData(datosParaFactura);
-      setPrintType('factura'); // Necesitamos este nuevo estado
+      setPrintType('factura'); 
 
       alert("¡Factura autorizada por AFIP!");
       cargarDatos();
@@ -502,13 +502,18 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
             <p className="text-sm text-muted-foreground">Gestión ágil de cobros y caja diaria.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {/* NUEVO BOTÓN DE GASTOS */}
-            <Button onClick={() => setIsEgresoModalOpen(true)} variant="outline" className="border-red-200 text-red-700 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
+            
+            <Button onClick={abrirModalGasto} variant="outline" className="border-red-200 text-red-700 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
               <TrendingDown className="mr-2 h-4 w-4" /> Registrar Gasto
             </Button>
-            <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
-              <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
-            </Button>
+            
+            {/* Ocultamos Movimiento Interno al cajero */}
+            {userRole !== 'cajero' && (
+              <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
+                <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
+              </Button>
+            )}
+
             <Button onClick={abrirModalCierre} disabled={isSaving} className="bg-slate-900 hover:bg-slate-800 text-white dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200 shadow-lg">
               <Lock className="mr-2 h-4 w-4" /> Cierre de Caja
             </Button>
@@ -588,7 +593,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
             </div>
           </div>
           
-          {/* PESTAÑA A: PENDIENTES */}
           <TabsContent value="pendientes" className="flex-1 flex flex-col min-h-0 border border-border rounded-xl shadow-sm bg-card mt-0">
             <div className="flex-1 overflow-y-auto p-0">
               <Table>
@@ -639,7 +643,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
             </div>
           </TabsContent>
 
-          {/* PESTAÑA B: COBRADOS HOY */}
           <TabsContent value="cobrados" className="flex-1 flex flex-col min-h-0 border border-border rounded-xl shadow-sm bg-card mt-0">
             <div className="flex-1 overflow-y-auto p-0">
               <Table>
@@ -690,7 +693,6 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
             </div>
           </TabsContent>
 
-          {/* PESTAÑA C: MOVIMIENTOS */}
           <TabsContent value="movimientos" className="flex-1 flex flex-col min-h-0 border border-border rounded-xl shadow-sm bg-card mt-0">
             <div className="flex-1 overflow-y-auto p-0">
               <Table>
@@ -764,10 +766,15 @@ export function CajaView({ onNavigateToPresupuesto }: { onNavigateToPresupuesto?
 
               <div className="space-y-2">
                 <Label>¿De qué caja sale el dinero?</Label>
-                <Select value={cajaEgreso} onValueChange={setCajaEgreso}>
-                  <SelectTrigger className="h-10"><SelectValue placeholder="Caja de origen..."/></SelectTrigger>
+                {/* MAGIA: Si es cajero, le bloqueamos la selección */}
+                <Select value={cajaEgreso} onValueChange={setCajaEgreso} disabled={userRole === 'cajero'}>
+                  <SelectTrigger className={`h-10 ${userRole === 'cajero' ? 'bg-secondary/50 opacity-100 cursor-default' : ''}`}>
+                    <SelectValue placeholder="Caja de origen..."/>
+                  </SelectTrigger>
                   <SelectContent>
-                    {cajas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} (Disp: ${Number(c.saldo).toLocaleString()})</SelectItem>)}
+                    {(userRole === 'cajero' ? cajas.filter(c => c.nombre.toLowerCase().includes('mostrador')) : cajas).map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.nombre} (Disp: ${Number(c.saldo).toLocaleString()})</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
