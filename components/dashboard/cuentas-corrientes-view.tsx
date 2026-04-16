@@ -98,8 +98,11 @@ export function CuentasCorrientesView() {
     setIsSaving(true)
     try {
       await supabase.from('movimientos_proveedores').insert([{
-        proveedor_id: provSeleccionado.id, tipo: 'factura_compra', monto: montoNum,
-        comprobante: datosFactura.comprobante, detalle: datosFactura.detalle || 'Compra / Ingreso de mercadería'
+        proveedor_id: provSeleccionado.id, 
+        tipo: 'factura_compra', 
+        monto: montoNum,
+        comprobante: datosFactura.comprobante, 
+        detalle: datosFactura.detalle || 'Compra / Ingreso de mercadería'
       }])
       const nuevoSaldo = Number(provSeleccionado.saldo || 0) + montoNum
       await supabase.from('proveedores').update({ saldo: nuevoSaldo }).eq('id', provSeleccionado.id)
@@ -124,14 +127,21 @@ export function CuentasCorrientesView() {
       await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosPago.caja_origen_id)
 
       await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'egreso_gasto', caja_origen_id: datosPago.caja_origen_id, monto: montoNum,
+        tipo_movimiento: 'egreso_gasto', 
+        caja_origen_id: datosPago.caja_origen_id, 
+        monto: montoNum,
         metodo_pago: cajaSeleccionada.nombre.includes('Efectivo') || cajaSeleccionada.nombre.includes('Mostrador') ? 'Efectivo' : 'Transferencia',
-        detalle: `Pago a Proveedor: ${provSeleccionado.nombre}`, notas: `Ref: ${datosPago.comprobante}`
+        detalle: `Pago a Proveedor: ${provSeleccionado.nombre}`, 
+        notas: `Ref: ${datosPago.comprobante}`
       }])
 
       await supabase.from('movimientos_proveedores').insert([{
-        proveedor_id: provSeleccionado.id, tipo: 'pago_proveedor', monto: montoNum, caja_origen_id: datosPago.caja_origen_id,
-        comprobante: datosPago.comprobante, detalle: datosPago.detalle || 'Pago a cuenta'
+        proveedor_id: provSeleccionado.id, 
+        tipo: 'pago_proveedor', 
+        monto: montoNum, 
+        caja_origen_id: datosPago.caja_origen_id,
+        comprobante: datosPago.comprobante, 
+        detalle: datosPago.detalle || 'Pago a cuenta'
       }])
 
       const nuevoSaldoProv = Number(provSeleccionado.saldo || 0) - montoNum
@@ -165,8 +175,11 @@ export function CuentasCorrientesView() {
     setIsSaving(true)
     try {
       await supabase.from('movimientos_clientes').insert([{
-        cliente_id: clienteSeleccionado.id, tipo: 'cargo_deuda', monto: montoNum,
-        comprobante: datosCargoCliente.comprobante, detalle: datosCargoCliente.detalle || 'Cargo / Trabajo realizado'
+        cliente_id: clienteSeleccionado.id, 
+        tipo: 'cargo_deuda', 
+        monto: montoNum,
+        comprobante: datosCargoCliente.comprobante, 
+        detalle: datosCargoCliente.detalle || 'Cargo / Trabajo realizado'
       }])
       const nuevoSaldo = Number(clienteSeleccionado.saldo || 0) + montoNum
       await supabase.from('clientes').update({ saldo: nuevoSaldo }).eq('id', clienteSeleccionado.id)
@@ -189,17 +202,23 @@ export function CuentasCorrientesView() {
       await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosCobroCliente.caja_destino_id)
 
       await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'ingreso_cobro', caja_destino_id: datosCobroCliente.caja_destino_id, monto: montoNum,
+        tipo_movimiento: 'ingreso_cobro', 
+        caja_destino_id: datosCobroCliente.caja_destino_id, 
+        monto: montoNum,
         metodo_pago: cajaSeleccionada.nombre.includes('Efectivo') || cajaSeleccionada.nombre.includes('Mostrador') ? 'Efectivo' : 'Transferencia',
-        detalle: `Cobro a Cliente: ${getNombreCliente(clienteSeleccionado)}`, notas: `Ref: ${datosCobroCliente.comprobante}`
+        detalle: `Cobro a Cliente: ${getNombreCliente(clienteSeleccionado)}`, 
+        notas: `Ref: ${datosCobroCliente.comprobante}`
       }])
 
       await supabase.from('movimientos_clientes').insert([{
-        cliente_id: clienteSeleccionado.id, tipo: 'pago_ingreso', monto: montoNum, caja_destino_id: datosCobroCliente.caja_destino_id,
-        comprobante: datosCobroCliente.comprobante, detalle: datosCobroCliente.detalle || 'Pago / Seña recibida'
+        cliente_id: clienteSeleccionado.id, 
+        tipo: 'pago_ingreso', 
+        monto: montoNum, 
+        caja_destino_id: datosCobroCliente.caja_destino_id,
+        comprobante: datosCobroCliente.comprobante, 
+        detalle: datosCobroCliente.detalle || 'Pago / Seña recibida'
       }])
 
-      // Restamos al saldo. Si debía $100 y paga $150, el saldo queda en -$50 (A favor del cliente).
       const nuevoSaldoCli = Number(clienteSeleccionado.saldo || 0) - montoNum
       await supabase.from('clientes').update({ saldo: nuevoSaldoCli }).eq('id', clienteSeleccionado.id)
 
@@ -219,7 +238,6 @@ export function CuentasCorrientesView() {
       setMovimientosLedger(data || [])
     } catch (error) { console.error("Error", error) }
   }
-
 
   // =========================================================================
   // RENDERIZADO
@@ -363,7 +381,7 @@ export function CuentasCorrientesView() {
         {/* --- PESTAÑA B: PROVEEDORES --- */}
         <TabsContent value="proveedores" className="flex-1 flex flex-col min-h-0 m-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
-            {/* AQUÍ ESTÁ EL CAMBIO DEL COLOR DE LA TARJETA */}
+            {/* TARJETA QUE CAMBIA A VERDE SI EL SALDO ES A FAVOR */}
             <Card className="border-border shadow-sm md:col-span-2 flex items-center justify-between p-6">
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Pagar</p>
@@ -443,7 +461,6 @@ export function CuentasCorrientesView() {
 
       {/* ================= MODALES DE CLIENTES ================= */}
       
-      {/* Modal: Cargar Deuda al Cliente */}
       <Dialog open={isCargoClienteOpen} onOpenChange={setIsCargoClienteOpen}>
         <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader><DialogTitle className="text-xl flex items-center gap-2 text-rose-600"><ArrowUpRight className="w-5 h-5" /> Sumar Deuda al Cliente</DialogTitle></DialogHeader>
@@ -453,9 +470,18 @@ export function CuentasCorrientesView() {
                 <p className="text-xs text-muted-foreground uppercase font-bold">Cliente</p>
                 <p className="font-bold text-foreground">{getNombreCliente(clienteSeleccionado)}</p>
               </div>
-              <div className="space-y-2"><Label>Monto de la Deuda ($)</Label><Input type="number" className="text-lg font-mono font-bold h-12" autoFocus value={datosCargoCliente.monto} onChange={e => setDatosCargoCliente({...datosCargoCliente, monto: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Nº Presupuesto / Factura (Opcional)</Label><Input placeholder="Ej: PRE-0012" value={datosCargoCliente.comprobante} onChange={e => setDatosCargoCliente({...datosCargoCliente, comprobante: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Detalle / Motivo</Label><Input placeholder="Ej: Cambio de aceite no facturado..." value={datosCargoCliente.detalle} onChange={e => setDatosCargoCliente({...datosCargoCliente, detalle: e.target.value})} /></div>
+              <div className="space-y-2">
+                <Label>Monto de la Deuda ($)</Label>
+                <Input type="number" className="text-lg font-mono font-bold h-12" autoFocus value={datosCargoCliente.monto} onChange={e => setDatosCargoCliente({...datosCargoCliente, monto: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Nº Presupuesto / Factura (Opcional)</Label>
+                <Input placeholder="Ej: PRE-0012" value={datosCargoCliente.comprobante} onChange={e => setDatosCargoCliente({...datosCargoCliente, comprobante: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Detalle / Motivo</Label>
+                <Input placeholder="Ej: Cambio de aceite no facturado..." value={datosCargoCliente.detalle} onChange={e => setDatosCargoCliente({...datosCargoCliente, detalle: e.target.value})} />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -465,14 +491,16 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Ingresar Cobro / Seña del Cliente */}
       <Dialog open={isCobroClienteOpen} onOpenChange={setIsCobroClienteOpen}>
         <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader><DialogTitle className="text-xl flex items-center gap-2 text-blue-600"><HandCoins className="w-5 h-5" /> Registrar Ingreso de Dinero</DialogTitle></DialogHeader>
           {clienteSeleccionado && (
             <div className="space-y-4 py-4">
               <div className="flex justify-between items-center bg-secondary/30 p-3 rounded-lg border border-border">
-                <div><p className="text-xs text-muted-foreground uppercase font-bold">Cliente</p><p className="font-bold text-foreground">{getNombreCliente(clienteSeleccionado)}</p></div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase font-bold">Cliente</p>
+                  <p className="font-bold text-foreground">{getNombreCliente(clienteSeleccionado)}</p>
+                </div>
                 <div className="text-right">
                   <p className="text-xs text-muted-foreground uppercase font-bold">Saldo Actual</p>
                   <p className={`font-mono font-bold ${Number(clienteSeleccionado.saldo) > 0 ? "text-rose-600" : "text-blue-600"}`}>
@@ -481,16 +509,26 @@ export function CuentasCorrientesView() {
                 </div>
               </div>
               
-              <div className="space-y-2"><Label>Monto Entregado ($)</Label><Input type="number" className="text-lg font-mono font-bold h-12 border-blue-300 focus-visible:ring-blue-500" autoFocus value={datosCobroCliente.monto} onChange={e => setDatosCobroCliente({...datosCobroCliente, monto: e.target.value})} /></div>
-              <div className="space-y-2"><Label>¿A qué caja ingresa la plata?</Label>
+              <div className="space-y-2">
+                <Label>Monto Entregado ($)</Label>
+                <Input type="number" className="text-lg font-mono font-bold h-12 border-blue-300 focus-visible:ring-blue-500" autoFocus value={datosCobroCliente.monto} onChange={e => setDatosCobroCliente({...datosCobroCliente, monto: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>¿A qué caja ingresa la plata?</Label>
                 <Select value={datosCobroCliente.caja_destino_id} onValueChange={(val: string) => setDatosCobroCliente({...datosCobroCliente, caja_destino_id: val})}>
                   <SelectTrigger className="h-10 border-blue-200"><SelectValue placeholder="Seleccionar Caja destino..." /></SelectTrigger>
                   <SelectContent>{cajas.map(c => (<SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>))}</SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Recibo Nº (Opcional)</Label><Input value={datosCobroCliente.comprobante} onChange={e => setDatosCobroCliente({...datosCobroCliente, comprobante: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Notas</Label><Input placeholder="Ej: Seña por repuestos..." value={datosCobroCliente.detalle} onChange={e => setDatosCobroCliente({...datosCobroCliente, detalle: e.target.value})} /></div>
+                <div className="space-y-2">
+                  <Label>Recibo Nº (Opcional)</Label>
+                  <Input value={datosCobroCliente.comprobante} onChange={e => setDatosCobroCliente({...datosCobroCliente, comprobante: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Notas</Label>
+                  <Input placeholder="Ej: Seña por repuestos..." value={datosCobroCliente.detalle} onChange={e => setDatosCobroCliente({...datosCobroCliente, detalle: e.target.value})} />
+                </div>
               </div>
             </div>
           )}
@@ -501,51 +539,57 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Historial Cliente */}
+      {/* --- MODAL ANCHO: HISTORIAL CLIENTE --- */}
       <Dialog open={isLedgerClienteOpen} onOpenChange={setIsLedgerClienteOpen}>
-        <DialogContent className="max-w-2xl border-border bg-card">
-          <DialogHeader>
+        <DialogContent className="max-w-[90vw] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-xl flex items-center justify-between">
               <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Ficha de Cuenta: {clienteSeleccionado && getNombreCliente(clienteSeleccionado)}</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto mt-4 border rounded-md border-border">
-            <Table>
-              <TableHeader className="bg-secondary/50 sticky top-0">
-                <TableRow><TableHead>Fecha</TableHead><TableHead>Movimiento</TableHead><TableHead>Detalle / Ref</TableHead><TableHead className="text-right">Monto</TableHead></TableRow>
-              </TableHeader>
-              <TableBody>
-                {movimientosLedger.length === 0 ? (
-                  <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Sin movimientos.</TableCell></TableRow>
-                ) : (
-                  movimientosLedger.map(mov => (
-                    <TableRow key={mov.id}>
-                      <TableCell className="text-muted-foreground text-sm font-mono">{new Date(mov.fecha).toLocaleDateString('es-AR')} {new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</TableCell>
-                      <TableCell>
-                        {mov.tipo === 'cargo_deuda' ? <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50"><ArrowUpRight className="w-3 h-3 mr-1"/> Cargo</Badge> : <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50"><ArrowDownRight className="w-3 h-3 mr-1"/> Pago</Badge>}
-                      </TableCell>
-                      <TableCell>
-                        <p className="font-medium text-sm">{mov.detalle}</p>
-                        <div className="flex gap-2 items-center mt-1">
-                          {mov.comprobante && <span className="text-xs text-muted-foreground">Doc: {mov.comprobante}</span>}
-                          {mov.caja_destino_id && <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase">Entró a {cajas.find(c => c.id === mov.caja_destino_id)?.nombre || 'Caja'}</Badge>}
-                        </div>
-                      </TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${mov.tipo === 'cargo_deuda' ? 'text-rose-600' : 'text-blue-600'}`}>
-                        {mov.tipo === 'cargo_deuda' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="border rounded-md border-border">
+              <Table>
+                <TableHeader className="bg-secondary/50 sticky top-0 backdrop-blur-sm shadow-sm">
+                  <TableRow>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Movimiento</TableHead>
+                    <TableHead>Detalle / Ref</TableHead>
+                    <TableHead className="text-right">Monto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {movimientosLedger.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="text-center py-12 text-muted-foreground">Sin movimientos.</TableCell></TableRow>
+                  ) : (
+                    movimientosLedger.map(mov => (
+                      <TableRow key={mov.id} className="hover:bg-secondary/20">
+                        <TableCell className="text-muted-foreground text-sm font-mono">{new Date(mov.fecha).toLocaleDateString('es-AR')} {new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</TableCell>
+                        <TableCell>
+                          {mov.tipo === 'cargo_deuda' ? <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50"><ArrowUpRight className="w-3 h-3 mr-1"/> Cargo</Badge> : <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50"><ArrowDownRight className="w-3 h-3 mr-1"/> Pago</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          <p className="font-medium text-sm">{mov.detalle}</p>
+                          <div className="flex gap-2 items-center mt-1">
+                            {mov.comprobante && <span className="text-xs text-muted-foreground">Doc: {mov.comprobante}</span>}
+                            {mov.caja_destino_id && <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase">Entró a {cajas.find(c => c.id === mov.caja_destino_id)?.nombre || 'Caja'}</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell className={`text-right font-mono font-bold ${mov.tipo === 'cargo_deuda' ? 'text-rose-600' : 'text-blue-600'}`}>
+                          {mov.tipo === 'cargo_deuda' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
       {/* ================= MODALES DE PROVEEDORES ================= */}
     
-      {/* Modal: Crear Proveedor */}
       <Dialog open={isNuevoProveedorOpen} onOpenChange={setIsNuevoProveedorOpen}>
         <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader><DialogTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-primary" /> Nuevo Proveedor</DialogTitle></DialogHeader>
@@ -560,17 +604,21 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Cargar Factura Proveedor */}
       <Dialog open={isFacturaOpen} onOpenChange={setIsFacturaOpen}>
         <DialogContent className="max-w-2xl border-border bg-card">
           <DialogHeader><DialogTitle className="text-xl flex items-center gap-2 text-rose-600"><ArrowUpRight className="w-5 h-5" /> Registrar Compra</DialogTitle></DialogHeader>
           {provSeleccionado && (
             <div className="space-y-4 py-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Monto Factura ($)</Label><Input type="number" className="text-lg font-mono font-bold h-12" autoFocus value={datosFactura.monto} onChange={e => setDatosFactura({...datosFactura, monto: e.target.value})} /></div>
-                <div className="space-y-2"><Label>Nº Comprobante</Label><Input className="h-12" value={datosFactura.comprobante} onChange={e => setDatosFactura({...datosFactura, comprobante: e.target.value})} /></div>
+                <div className="space-y-2">
+                  <Label>Monto Factura ($)</Label>
+                  <Input type="number" className="text-lg font-mono font-bold h-12" autoFocus value={datosFactura.monto} onChange={e => setDatosFactura({...datosFactura, monto: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Nº Comprobante</Label>
+                  <Input className="h-12" value={datosFactura.comprobante} onChange={e => setDatosFactura({...datosFactura, comprobante: e.target.value})} />
+                </div>
               </div>
-              
               <div className="space-y-2 pt-2">
                 <Label>Detalle / Referencia (Opcional)</Label>
                 <Input placeholder="Ej: Amortiguadores, Aceite, Filtros..." value={datosFactura.detalle} onChange={e => setDatosFactura({...datosFactura, detalle: e.target.value})} />
@@ -581,7 +629,6 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Pagar Proveedor */}
       <Dialog open={isPagoOpen} onOpenChange={setIsPagoOpen}>
         <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader><DialogTitle className="text-xl flex items-center gap-2 text-emerald-600"><Wallet className="w-5 h-5" /> Registrar Pago</DialogTitle></DialogHeader>
@@ -600,11 +647,9 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* AQUÍ ESTÁ EL CAMBIO DE ANCHO DEL MODAL */}
-      {/* Modal: Historial Proveedor */}
+      {/* --- MODAL ANCHO: HISTORIAL PROVEEDOR --- */}
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
-        {/* Cambiamos max-w-4xl a max-w-[90vw] para que tome casi toda la pantalla */}
-        <DialogContent className="max-w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
+        <DialogContent className="max-w-[90vw] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-xl flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -612,7 +657,6 @@ export function CuentasCorrientesView() {
                 Resumen de Cuenta: {provSeleccionado?.nombre}
               </span>
               
-              {/* AQUÍ ESTÁ EL CAMBIO DE COLOR DEL SALDO NEGATIVO EN EL MODAL */}
               <span className={`font-mono text-xl ${Number(provSeleccionado?.saldo || 0) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 Deuda Actual: ${Number(provSeleccionado?.saldo || 0).toLocaleString()}
               </span>
