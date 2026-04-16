@@ -199,7 +199,6 @@ export function CuentasCorrientesView() {
         comprobante: datosCobroCliente.comprobante, detalle: datosCobroCliente.detalle || 'Pago / Seña recibida'
       }])
 
-      // Restamos al saldo. Si debía $100 y paga $150, el saldo queda en -$50 (A favor del cliente).
       const nuevoSaldoCli = Number(clienteSeleccionado.saldo || 0) - montoNum
       await supabase.from('clientes').update({ saldo: nuevoSaldoCli }).eq('id', clienteSeleccionado.id)
 
@@ -537,9 +536,8 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* ================= MODALES DE PROVEEDORES (YA LOS TENÍAMOS) ================= */}
+      {/* ================= MODALES DE PROVEEDORES ================= */}
     
-      
       {/* Modal: Crear Proveedor */}
       <Dialog open={isNuevoProveedorOpen} onOpenChange={setIsNuevoProveedorOpen}>
         <DialogContent className="max-w-md border-border bg-card">
@@ -557,12 +555,21 @@ export function CuentasCorrientesView() {
 
       {/* Modal: Cargar Factura Proveedor */}
       <Dialog open={isFacturaOpen} onOpenChange={setIsFacturaOpen}>
-        <DialogContent className="max-w-md border-border bg-card">
+        {/* Usamos max-w-2xl para que el modal sea más ancho */}
+        <DialogContent className="max-w-2xl border-border bg-card">
           <DialogHeader><DialogTitle className="text-xl flex items-center gap-2 text-rose-600"><ArrowUpRight className="w-5 h-5" /> Registrar Compra</DialogTitle></DialogHeader>
           {provSeleccionado && (
             <div className="space-y-4 py-4">
-              <div className="space-y-2"><Label>Monto Factura ($)</Label><Input type="number" className="text-lg font-mono font-bold h-12" autoFocus value={datosFactura.monto} onChange={e => setDatosFactura({...datosFactura, monto: e.target.value})} /></div>
-              <div className="space-y-2"><Label>Nº Comprobante</Label><Input value={datosFactura.comprobante} onChange={e => setDatosFactura({...datosFactura, comprobante: e.target.value})} /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Monto Factura ($)</Label><Input type="number" className="text-lg font-mono font-bold h-12" autoFocus value={datosFactura.monto} onChange={e => setDatosFactura({...datosFactura, monto: e.target.value})} /></div>
+                <div className="space-y-2"><Label>Nº Comprobante</Label><Input className="h-12" value={datosFactura.comprobante} onChange={e => setDatosFactura({...datosFactura, comprobante: e.target.value})} /></div>
+              </div>
+              
+              {/* Nuevo campo de Detalle de Compra */}
+              <div className="space-y-2 pt-2">
+                <Label>Detalle / Referencia (Opcional)</Label>
+                <Input placeholder="Ej: Amortiguadores, Aceite, Filtros..." value={datosFactura.detalle} onChange={e => setDatosFactura({...datosFactura, detalle: e.target.value})} />
+              </div>
             </div>
           )}
           <DialogFooter><Button variant="ghost" onClick={() => setIsFacturaOpen(false)}>Cancelar</Button><Button onClick={handleCargarFactura} disabled={isSaving} className="bg-rose-600 hover:bg-rose-700 text-white">Registrar Deuda</Button></DialogFooter>
@@ -588,9 +595,8 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal: Historial Proveedor (Versión Ampliada y con Buscador) */}
+      {/* Modal: Historial Proveedor */}
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
-        {/* Cambiamos max-w-2xl por max-w-4xl para que sea bien ancho */}
         <DialogContent className="max-w-4xl border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-xl flex items-center justify-between">
