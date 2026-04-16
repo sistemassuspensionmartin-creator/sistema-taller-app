@@ -38,7 +38,20 @@ const MARCAS_COMUNES = [
   "Kia", "Chery", "Suzuki", "Otra"
 ]
 
-export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNavigateToClients, onNavigateToPresupuesto }: { vehiculoAbreDetalle?: any, onClearVehiculoDetalle?: () => void, onNavigateToClients?: (cliente: any) => void, onNavigateToPresupuesto?: (id: string, vehiculo?: any) => void }) {  const [vista, setVista] = useState<"lista" | "detalle">("lista")
+export function VehiclesView({ 
+  vehiculoAbreDetalle, 
+  onClearVehiculoDetalle, 
+  onNavigateToClients, 
+  onNavigateToPresupuesto,
+  userRole // <-- 1. RECIBIMOS EL ROL
+}: { 
+  vehiculoAbreDetalle?: any, 
+  onClearVehiculoDetalle?: () => void, 
+  onNavigateToClients?: (cliente: any) => void, 
+  onNavigateToPresupuesto?: (id: string, vehiculo?: any) => void,
+  userRole?: string | null // <-- LO DEFINIMOS ACÁ
+}) { 
+  const [vista, setVista] = useState<"lista" | "detalle">("lista")
 
   const [vieneDeCliente, setVieneDeCliente] = useState(false)
 
@@ -442,7 +455,6 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
             <div className="flex items-center gap-4">
               
-              {/* BOTÓN CAMALEÓN: El que sabe a dónde volver */}
               <Button 
                 variant="ghost" 
                 onClick={() => {
@@ -450,7 +462,7 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                     onNavigateToClients(vehiculoSeleccionado.clientes);
                   } else {
                     setVista("lista");
-                    setVieneDeCliente(false); // Limpiamos por las dudas
+                    setVieneDeCliente(false);
                   }
                 }} 
                 className="text-muted-foreground hover:text-foreground"
@@ -468,6 +480,7 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                 </h2>
               </div>
             </div>
+            {/* Ocultamos botón Editar si es mecánico (opcional, depende de qué quieras que haga el mecánico) */}
             <Button variant="outline" onClick={abrirModalEditar} className="bg-background hover:bg-secondary">
               <Edit className="w-4 h-4 mr-2"/> Editar Datos Principales
             </Button>
@@ -633,13 +646,20 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                   <TableRow>
                     <TableHead>Nro</TableHead>
                     <TableHead>Fecha Emisión</TableHead>
-                    <TableHead>Total Estimado</TableHead>
+                    {/* 2. CONDICIONAMOS LA COLUMNA DE PRECIO EN EL ENCABEZADO */}
+                    {userRole !== 'mecanico' && (
+                      <TableHead>Total Estimado</TableHead>
+                    )}
                     <TableHead className="text-center">Estado</TableHead>
+                    {/* Agregamos una columna de acción para el mecánico si no ve el precio */}
+                    {userRole === 'mecanico' && (
+                       <TableHead className="text-right">Detalle</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {historialPresupuestos.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">No hay presupuestos registrados para este vehículo.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={userRole === 'mecanico' ? 4 : 4} className="h-24 text-center text-muted-foreground italic">No hay presupuestos registrados para este vehículo.</TableCell></TableRow>
                   ) : (
                     historialPresupuestos.map(hp => (
                       <TableRow 
@@ -649,8 +669,18 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                       >
                         <TableCell className="font-mono font-bold group-hover:text-emerald-600 transition-colors">PRE-{hp.numero_correlativo}</TableCell>
                         <TableCell>{new Date(hp.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
-                        <TableCell className="font-bold font-mono text-emerald-700 dark:text-emerald-500">${hp.total_final?.toLocaleString()}</TableCell>
+                        
+                        {/* 3. CONDICIONAMOS EL VALOR DEL PRECIO EN LA FILA */}
+                        {userRole !== 'mecanico' && (
+                           <TableCell className="font-bold font-mono text-emerald-700 dark:text-emerald-500">${hp.total_final?.toLocaleString()}</TableCell>
+                        )}
+
                         <TableCell className="text-center"><Badge variant="outline">{hp.estado}</Badge></TableCell>
+                        
+                        {/* 4. AGREGAMOS UN INDICADOR VISUAL PARA EL MECÁNICO */}
+                        {userRole === 'mecanico' && (
+                           <TableCell className="text-right text-muted-foreground">Ver Trabajos →</TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}
@@ -696,7 +726,6 @@ export function VehiclesView({ vehiculoAbreDetalle, onClearVehiculoDetalle, onNa
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
-                    /* MAGIA VISUAL: Esqueletos de carga en vez del círculo giratorio */
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
                         <TableCell><div className="h-8 w-24 bg-secondary/60 rounded animate-pulse"></div></TableCell>

@@ -126,20 +126,23 @@ export default function DashboardPage() {
                  }} 
                />
       case "Vehículos":
-        return <VehiclesView 
-                 vehiculoAbreDetalle={vehiculoParaAbrir}
-                 onClearVehiculoDetalle={() => setVehiculoParaAbrir(null)}
-                 onNavigateToClients={(cliente) => {
-                   setClienteParaAbrir(cliente);
-                   setActiveSection("Clientes");
-                 }}
-                 onNavigateToPresupuesto={(id, vehiculoInfo) => {
-                   setPresupuestoParaAbrir(id);
-                   setVehiculoParaAbrir(vehiculoInfo); 
-                   setVolverA("Vehículos");
-                   setActiveSection("Presupuestos");
-                 }}
-               />
+        return (
+          <VehiclesView 
+            vehiculoAbreDetalle={vehiculoParaAbrir}
+            onClearVehiculoDetalle={() => setVehiculoParaAbrir(null)}
+            onNavigateToClients={(cliente) => {
+              setClienteParaAbrir(cliente);
+              setActiveSection("Clientes");
+            }}
+            onNavigateToPresupuesto={(id, vehiculoInfo) => {
+              setPresupuestoParaAbrir(id);
+              setVehiculoParaAbrir(vehiculoInfo); 
+              setVolverA("Vehículos");
+              setActiveSection("Presupuestos");
+            }}
+            userRole={userRole} // <--- ¡ESTA ES LA MAGIA QUE FALTABA!
+          />
+        );
       case "Taller":
         return <WorkOrdersTable 
                  onNavigateToPresupuesto={(id) => {
