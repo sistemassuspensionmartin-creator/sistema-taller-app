@@ -141,6 +141,7 @@ export default function DashboardPage() {
                    setVolverA("Taller");
                    setActiveSection("Presupuestos");
                  }}
+                 userRole={userRole} 
                />
       case "Caja":
         return <CajaView 

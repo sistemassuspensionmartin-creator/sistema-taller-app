@@ -29,7 +29,15 @@ const getLocalDateString = (d: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: { onNavigateToPresupuesto?: (id: string) => void, readOnly?: boolean }) {
+export function WorkOrdersTable({ 
+  onNavigateToPresupuesto, 
+  readOnly = false,
+  userRole // <-- RECIBIMOS EL ROL
+}: { 
+  onNavigateToPresupuesto?: (id: string) => void, 
+  readOnly?: boolean,
+  userRole?: string | null // <-- LO DEFINIMOS
+}) {
   const [ordenes, setOrdenes] = useState<any[]>([])
   const [configuracion, setConfiguracion] = useState<any>({})
   const [isLoading, setIsLoading] = useState(true)
@@ -160,7 +168,7 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
         const asunto = reemplazos(configuracion.msj_postventa_email_asunto);
         const cuerpo = reemplazos(configuracion.msj_postventa_email_cuerpo);
         
-        // LA MAGIA DE GMAIL WEB: Salteamos a Windows y abrimos la web directa
+        // LA MAGIA DE GMAIL WEB
         const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${email}&su=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
         window.open(gmailUrl, '_blank');
       }
@@ -226,27 +234,33 @@ export function WorkOrdersTable({ onNavigateToPresupuesto, readOnly = false }: {
                         {orden.presupuestos && (
                           <div className="bg-primary/5 text-primary text-xs font-mono p-1.5 rounded flex justify-between items-center border border-primary/10">
                             <span className="flex items-center gap-1"><FileText className="w-3 h-3"/> PRE-{orden.presupuestos.numero_correlativo}</span>
-                            <span className="font-bold">${orden.presupuestos.total_final?.toLocaleString()}</span>
+                            
+                            {/* OCULTAMOS EL PRECIO AL MECANICO */}
+                            {userRole !== 'mecanico' && (
+                              <span className="font-bold">${orden.presupuestos.total_final?.toLocaleString()}</span>
+                            )}
                           </div>
                         )}
 
                         {!readOnly && (
                           <div className="mt-3 flex flex-col gap-1.5">
                             
-                            {columna.id === "Terminado" && (
+                            {/* OCULTAMOS AVISO DE WHATSAPP AL MECANICO */}
+                            {columna.id === "Terminado" && userRole !== 'mecanico' && (
                               <Button size="sm" className="w-full h-7 text-xs bg-[#25D366] hover:bg-[#128C7E] text-white border-none transition-colors" onClick={(e) => { e.stopPropagation(); handleNotificarCliente(orden); }}>
                                 <MessageCircle className="w-3 h-3 mr-1" /> Avisar al Cliente
                               </Button>
                             )}
 
-                            {/* BOTÓN DE POST-VENTA EN LA COLUMNA ENTREGADO */}
-                            {columna.id === "Entregado" && (
+                            {/* OCULTAMOS POST VENTA AL MECANICO */}
+                            {columna.id === "Entregado" && userRole !== 'mecanico' && (
                               <Button size="sm" className="w-full h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white border-none transition-colors" onClick={(e) => abrirModalPostVenta(orden, e)}>
                                 <Star className="w-3 h-3 mr-1" /> Post-Venta
                               </Button>
                             )}
 
-                            {columna.id !== "Entregado" && (
+                            {/* EL MECÁNICO NO PUEDE AVANZAR DESDE "TERMINADO" A "ENTREGADO" */}
+                            {columna.id !== "Entregado" && !(columna.id === "Terminado" && userRole === 'mecanico') && (
                               <Button size="sm" variant="secondary" className="w-full h-7 text-xs bg-background hover:bg-emerald-50 hover:text-emerald-700 border border-border group-hover:border-emerald-200 transition-colors" onClick={(e) => { e.stopPropagation(); avanzarEstado(orden.id, orden.estado); }}>
                                 Avanzar <ArrowRight className="w-3 h-3 ml-1" />
                               </Button>
