@@ -50,8 +50,6 @@ const SERVICE_UI: Record<string, { sigla: string, color: string }> = {
   "Cubiertas": { sigla: "CUB", color: "bg-stone-500/10 text-stone-500 border-stone-500/20" },
 }
 
-// --- FUNCIÓN MAGICA CORREGIDA PARA ZONA HORARIA ARGENTINA ---
-// Obtiene la fecha local en formato YYYY-MM-DD sin importar la hora UTC
 const getLocalDateString = (d: Date) => {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -59,25 +57,25 @@ const getLocalDateString = (d: Date) => {
   return `${year}-${month}-${day}`;
 };
 
-// DEFINIMOS LAS PROPS QUE ACEPTA LA VISTA
+// --- AGREGAMOS userRole A LAS PROPIEDADES ---
 interface TurnosViewProps {
   turnoAgendarInfo?: any;
   onClearTurnoAgendarInfo?: () => void;
-  // --- NUEVA PROP PARA NAVEGACIÓN ---
   onNavigateToBudgetDetail?: (budgetId: string) => void;
+  userRole?: string | null; 
 }
 
 export function TurnosView({ 
   turnoAgendarInfo, 
   onClearTurnoAgendarInfo,
-  onNavigateToBudgetDetail // RECIBIMOS LA PROP
+  onNavigateToBudgetDetail,
+  userRole 
 }: TurnosViewProps) {
   const [fechaActual, setFechaActual] = useState(new Date())
   const [isLoading, setIsLoading] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   
-  // Modales
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
   
@@ -98,10 +96,8 @@ export function TurnosView({
 
   const [turnos, setTurnos] = useState<any[]>([])
 
-  // --- USAMOS LA FUNCIÓN CORREGIDA PARA "HOY" ---
   const hoyString = getLocalDateString(new Date())
 
-  // Cargar turnos desde Supabase
   const fetchTurnos = async () => {
     setIsLoading(true)
     try {
@@ -122,7 +118,6 @@ export function TurnosView({
     fetchTurnos()
   }, [])
 
-  // EFECTO MODO AGENDAMIENTO
   useEffect(() => {
     const cargarAutoPredefinido = async (patente: string, pres_id: string) => {
       setIsSearching(true);
@@ -151,7 +146,6 @@ export function TurnosView({
           presupuestos: presups || []
         });
 
-        // Auto-selecciona el presupuesto si hay ID
         const presIdASeleccionar = pres_id || (presups && presups.length > 0 ? presups[0].id : "");
 
         setFormData(prev => ({ 
@@ -184,7 +178,6 @@ export function TurnosView({
   limitePasado.setDate(limitePasado.getDate() - 14)
   const isPrevDisabled = fechaActual <= limitePasado
 
-  // --- LÓGICA DE SEMANAS CORREGIDA ---
   const obtenerFechasSemana = (fechaBase: Date) => {
     const fechas = []
     const diaSemana = fechaBase.getDay()
@@ -257,7 +250,6 @@ export function TurnosView({
         presupuestos: presups || []
       });
 
-      // Auto-asigna el presupuesto
       const presIdAuto = presups && presups.length > 0 ? presups[0].id : "";
 
       setFormData({ 
@@ -334,7 +326,6 @@ export function TurnosView({
       const { error } = await supabase.from('turnos').insert([payload]);
       if (error) throw error;
 
-      // Transacción: Aprobamos presupuesto SOLO si hay ID
       if (payload.presupuesto_id) {
         await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', payload.presupuesto_id);
       }
@@ -366,15 +357,12 @@ export function TurnosView({
 
   const cambiarEstadoTurno = async (id: string, nuevoEstado: string) => {
     try {
-      // 1. Cambiamos el estado del turno
       const { error } = await supabase.from('turnos').update({ estado: nuevoEstado }).eq('id', id);
       if (error) throw error;
       
       if (nuevoEstado === "asistio") {
         const turno = turnos.find(t => t.id === id);
         if (turno) {
-          
-          // 2. Creamos la tarjeta en el tablero del Taller
           const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
             presupuesto_id: turno.presupuesto_id || null,
             vehiculo_patente: turno.patente,
@@ -384,7 +372,6 @@ export function TurnosView({
           }]);
           if (tallerError) throw tallerError;
 
-          // 3. APROBAMOS EL PRESUPUESTO AUTOMÁTICAMENTE (Si es que tenía uno asociado)
           if (turno.presupuesto_id) {
             const { error: presError } = await supabase
               .from('presupuestos')
@@ -406,19 +393,14 @@ export function TurnosView({
     }
   }
 
-  // --- NUEVA FUNCIÓN: VALIDA INGRESO POR FECHA ---
   const handleValidarIngreso = (turno: any) => {
-    // Calculamos "hoy" local
     const hoyLocal = getLocalDateString(new Date());
 
     if (turno.fecha !== hoyLocal) {
-      alert(`⚠️ ATENCIÓN: No se puede ingresar el vehículo. El turno está agendado para el día ${turno.fecha} y hoy es ${hoyLocal}. 
-
-Si el vehículo llegó antes, primero debe reprogramar el turno para el día de la fecha en la agenda.`);
+      alert(`⚠️ ATENCIÓN: No se puede ingresar el vehículo. El turno está agendado para el día ${turno.fecha} y hoy es ${hoyLocal}. \n\nSi el vehículo llegó antes, primero debe reprogramar el turno para el día de la fecha en la agenda.`);
       return;
     }
 
-    // Si la fecha coincide, procedemos al ingreso
     cambiarEstadoTurno(turno.id, "asistio");
   }
 
@@ -462,7 +444,6 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
   const getTurnoStyle = (estado: string, esPasado: boolean) => {
     let baseStyle = "group relative flex flex-col rounded border p-1.5 text-xs shadow-sm transition-all cursor-pointer overflow-hidden";
     
-    // --- ESTILO PASADO CORREGIDO ---
     if (esPasado) {
       return `${baseStyle} bg-slate-100 border-slate-300 dark:bg-slate-800/20 opacity-60 grayscale`;
     }
@@ -473,7 +454,8 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 pb-4">
-      {turnoAgendarInfo && (
+      {/* Ocultamos el cartel flotante de "Agendando..." si es mecánico */}
+      {turnoAgendarInfo && userRole !== 'mecanico' && (
         <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm animate-in slide-in-from-top-4 shrink-0">
           <div className="flex gap-3">
             <BookmarkPlus className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
@@ -513,10 +495,13 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
             </Button>
           </div>
 
-          <Button onClick={() => setIsModalOpen(true)} className={`${turnoAgendarInfo ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-500/30 ring-offset-2 ring-offset-background animate-pulse' : 'bg-primary hover:bg-primary/90'} text-primary-foreground transition-all`}>
-            <Plus className="mr-2 h-4 w-4" />
-            {turnoAgendarInfo ? "Agendar Vehículo" : "Nuevo Turno"}
-          </Button>
+          {/* Ocultamos el botón "Nuevo Turno" al mecánico */}
+          {userRole !== 'mecanico' && (
+            <Button onClick={() => setIsModalOpen(true)} className={`${turnoAgendarInfo ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-500/30 ring-offset-2 ring-offset-background animate-pulse' : 'bg-primary hover:bg-primary/90'} text-primary-foreground transition-all`}>
+              <Plus className="mr-2 h-4 w-4" />
+              {turnoAgendarInfo ? "Agendar Vehículo" : "Nuevo Turno"}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -531,7 +516,6 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
           {fechasSemana.map(fecha => {
-            // --- USAMOS LA FUNCIÓN CORREGIDA ---
             const fechaString = getLocalDateString(fecha)
             const esHoy = fechaString === hoyString
             const esPasado = fechaString < hoyString
@@ -548,7 +532,8 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
                 <span className={`text-xs font-semibold uppercase ${esHoyStyle}`}>{DIAS_SEMANA[fecha.getDay() - 1]}</span>
                 <span className={`font-bold text-2xl ${esNoLaborable ? 'text-destructive/50' : esHoy ? esHoyStyle : 'text-card-foreground'}`}>{fecha.getDate()}</span>
                 
-                {!esPasado && (
+                {/* Ocultamos el botón para marcar "No Laborable" al mecánico */}
+                {!esPasado && userRole !== 'mecanico' && (
                   <Button 
                     variant="ghost" size="icon" 
                     className={`absolute top-1 right-1 h-6 w-6 rounded-full ${esNoLaborable ? 'text-destructive hover:bg-destructive/20' : 'text-muted-foreground hover:bg-secondary/50'}`}
@@ -571,7 +556,6 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
                   {hora}
                 </div>
                 {fechasSemana.map(fecha => {
-                  // --- USAMOS LA FUNCIÓN CORREGIDA ---
                   const fechaString = getLocalDateString(fecha)
                   const turnosEnCelda = turnos.filter(t => t.fecha === fechaString && t.hora === hora)
                   const esHoy = fechaString === hoyString
@@ -673,12 +657,10 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
               </div>
 
               {turnoSeleccionado.presupuesto_id && (
-                // --- BOTÓN DE PRESUPUESTO ACTUALIZADO ---
                 <button 
                   onClick={() => {
-                    // Llama a la navegación que definimos en el puente
                     onNavigateToBudgetDetail?.(turnoSeleccionado.presupuesto_id);
-                    setIsDetailModalOpen(false); // Cierra este modal
+                    setIsDetailModalOpen(false);
                   }}
                   className="w-full mt-2 p-3 bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md flex items-center justify-between transition-colors group"
                 >
@@ -713,30 +695,39 @@ Si el vehículo llegó antes, primero debe reprogramar el turno para el día de 
               </>
             ) : (
               <div className="flex flex-col w-full gap-2">
-                <div className="grid grid-cols-3 gap-2 w-full">
-                    {turnoSeleccionado?.estado !== "cancelado" && turnoSeleccionado?.estado !== "asistio" && (
-                        // --- BOTÓN INGRESÓ CON VALIDACIÓN ---
-                        <Button variant="outline" onClick={() => handleValidarIngreso(turnoSeleccionado)} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
-                            <CheckCircle2 className="w-4 h-4 mr-2" /> Ingresó
-                        </Button>
-                    )}
-                    {turnoSeleccionado?.estado !== "cancelado" && (
-                        <Button variant="outline" onClick={() => setIsReprogramming(true)} className="border-border text-foreground hover:bg-secondary">
-                            <CalendarClock className="w-4 h-4 mr-2" /> Reprogramar
-                        </Button>
-                    )}
-                    {turnoSeleccionado?.estado !== "cancelado" && (
-                        <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "cancelado")} className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
-                            <XCircle className="w-4 h-4 mr-2" /> Cancelar
-                        </Button>
-                    )}
-                </div>
+                {/* CONDICIONAL: Si es mecánico, solo ve el botón de cerrar. Si es otro rol, ve los botones de acción */}
+                {userRole !== 'mecanico' && (
+                  <div className="grid grid-cols-3 gap-2 w-full">
+                      {turnoSeleccionado?.estado !== "cancelado" && turnoSeleccionado?.estado !== "asistio" && (
+                          <Button variant="outline" onClick={() => handleValidarIngreso(turnoSeleccionado)} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
+                              <CheckCircle2 className="w-4 h-4 mr-2" /> Ingresó
+                          </Button>
+                      )}
+                      {turnoSeleccionado?.estado !== "cancelado" && (
+                          <Button variant="outline" onClick={() => setIsReprogramming(true)} className="border-border text-foreground hover:bg-secondary">
+                              <CalendarClock className="w-4 h-4 mr-2" /> Reprogramar
+                          </Button>
+                      )}
+                      {turnoSeleccionado?.estado !== "cancelado" && (
+                          <Button variant="outline" onClick={() => cambiarEstadoTurno(turnoSeleccionado.id, "cancelado")} className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                              <XCircle className="w-4 h-4 mr-2" /> Cancelar
+                          </Button>
+                      )}
+                  </div>
+                )}
+                
+                {userRole === 'mecanico' && (
+                  <div className="flex justify-end w-full">
+                    <Button variant="ghost" onClick={() => setIsDetailModalOpen(false)}>Cerrar</Button>
+                  </div>
+                )}
               </div>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Modal para Crear Turno */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">

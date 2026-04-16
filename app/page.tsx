@@ -152,15 +152,18 @@ export default function DashboardPage() {
           }}
         />;
       case "Turnos":
-        return <TurnosView 
-                 turnoAgendarInfo={turnoAgendarInfo}
-                 onClearTurnoAgendarInfo={() => setTurnoAgendarInfo(null)}
-                 onNavigateToBudgetDetail={(budgetId) => {
-                   setPresupuestoParaAbrir(budgetId);
-                   setVolverA("Turnos");
-                   setActiveSection("Presupuestos");
-                 }}
-               />
+        return (
+          <TurnosView 
+            turnoAgendarInfo={turnoAgendarInfo}
+            onClearTurnoAgendarInfo={() => setTurnoAgendarInfo(null)}
+            onNavigateToBudgetDetail={(budgetId) => {
+              setPresupuestoParaAbrir(budgetId);
+              setVolverA("Turnos");
+              setActiveSection("Presupuestos");
+            }}
+            userRole={userRole} 
+          />
+        );
       case "Presupuestos":
         return (
           <PresupuestosView 
