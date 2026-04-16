@@ -91,12 +91,12 @@ export function DashboardHeader({
             <DropdownMenuLabel className="text-foreground">Mi cuenta</DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-border" />
             
-            {/* <-- LE CONECTAMOS EL onClick A TUS BOTONES --> */}
-            <DropdownMenuItem className="cursor-pointer" onClick={handleIrAPerfil}>
+            <DropdownMenuItem className="cursor-pointer" onClick={() => onSectionChange && onSectionChange("Perfil")}>
               <User className="mr-2 h-4 w-4" />
               Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer" onClick={handleIrAPerfil}>
+            
+            <DropdownMenuItem className="cursor-pointer" onClick={() => onSectionChange && onSectionChange("Configuración")}>
               Configuración
             </DropdownMenuItem>
             

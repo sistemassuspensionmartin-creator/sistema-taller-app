@@ -214,7 +214,11 @@ export default function DashboardPage() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <div className="flex h-screen bg-background">
-        <DashboardSidebar activeSection={activeSection} setActiveSection={setActiveSection} userRole={userRole} />
+        <DashboardSidebar 
+          activeSection={activeSection} 
+          onSectionChange={setActiveSection} 
+          userRole={userRole} 
+        />
         <div className="flex flex-1 flex-col overflow-hidden">
           <DashboardHeader activeSection={activeSection} onSectionChange={setActiveSection} />
           <main className="flex-1 overflow-y-auto p-6">
