@@ -66,7 +66,41 @@ export function WorkOrdersTable({
     }
   }
 
-  useEffect(() => { cargarDatos() }, [])
+  // --- MAGIA EN TIEMPO REAL OPTIMIZADA ---
+  useEffect(() => {
+    // 1. Cargamos los datos al entrar
+    cargarDatos();
+
+    // 2. Abrimos el "tubo" para escuchar los movimientos de las tarjetas
+    const canalTaller = supabase.channel('cambios-taller')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ordenes_trabajo' },
+        (payload) => {
+          // Si el evento es un UPDATE (alguien movió una tarjeta)
+          if (payload.eventType === 'UPDATE') {
+            // Actualizamos la tarjeta en la pantalla SIN volver a consultar a la base de datos
+            setOrdenes(ordenesActuales => 
+              ordenesActuales.map(orden => 
+                orden.id === payload.new.id 
+                  ? { ...orden, estado: payload.new.estado, fecha_entrega: payload.new.fecha_entrega } 
+                  : orden
+              )
+            );
+          } 
+          // Si es un INSERT (entró un auto nuevo), ahí sí recargamos para traer los datos del cliente
+          else if (payload.eventType === 'INSERT') {
+            cargarDatos();
+          }
+        }
+      )
+      .subscribe();
+
+    // 3. Cerramos el tubo cuando el usuario se va a otra pantalla
+    return () => {
+      supabase.removeChannel(canalTaller);
+    }
+  }, []);
 
   const avanzarEstado = async (id: string, estadoActual: string) => {
     const currentIndex = COLUMNAS.findIndex(c => c.id === estadoActual)
