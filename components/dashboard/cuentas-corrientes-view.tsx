@@ -199,6 +199,7 @@ export function CuentasCorrientesView() {
         comprobante: datosCobroCliente.comprobante, detalle: datosCobroCliente.detalle || 'Pago / Seña recibida'
       }])
 
+      // Restamos al saldo. Si debía $100 y paga $150, el saldo queda en -$50 (A favor del cliente).
       const nuevoSaldoCli = Number(clienteSeleccionado.saldo || 0) - montoNum
       await supabase.from('clientes').update({ saldo: nuevoSaldoCli }).eq('id', clienteSeleccionado.id)
 
@@ -242,6 +243,9 @@ export function CuentasCorrientesView() {
     const ref = (mov.comprobante || '').toLowerCase();
     return fecha.includes(b) || monto.includes(b) || detalle.includes(b) || ref.includes(b);
   });
+
+  const totalDeudaProveedores = getTotalDeudaProveedores();
+  const totalProveedoresNegativo = totalDeudaProveedores < 0;
 
   return (
     <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300">
@@ -359,15 +363,16 @@ export function CuentasCorrientesView() {
         {/* --- PESTAÑA B: PROVEEDORES --- */}
         <TabsContent value="proveedores" className="flex-1 flex flex-col min-h-0 m-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
+            {/* AQUÍ ESTÁ EL CAMBIO DEL COLOR DE LA TARJETA */}
             <Card className="border-border shadow-sm md:col-span-2 flex items-center justify-between p-6">
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Pagar</p>
-                <h3 className="text-3xl font-black text-rose-600 font-mono">
-                  ${getTotalDeudaProveedores().toLocaleString()}
+                <h3 className={`text-3xl font-black font-mono ${totalProveedoresNegativo ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  ${totalDeudaProveedores.toLocaleString()}
                 </h3>
               </div>
-              <div className="p-4 bg-rose-50 dark:bg-rose-900/20 rounded-full">
-                <Receipt className="w-8 h-8 text-rose-600" />
+              <div className={`p-4 rounded-full ${totalProveedoresNegativo ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-rose-50 dark:bg-rose-900/20'}`}>
+                <Receipt className={`w-8 h-8 ${totalProveedoresNegativo ? 'text-emerald-600' : 'text-rose-600'}`} />
               </div>
             </Card>
             <Button onClick={() => setIsNuevoProveedorOpen(true)} className="h-full min-h-[100px] border-2 border-dashed border-border bg-transparent text-foreground hover:bg-secondary hover:border-primary flex flex-col gap-2">
@@ -412,6 +417,8 @@ export function CuentasCorrientesView() {
                         <TableCell className="text-center">
                           {Number(prov.saldo) > 0 ? (
                             <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50">Con Deuda</Badge>
+                          ) : Number(prov.saldo) < 0 ? (
+                            <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">Saldo a Favor</Badge>
                           ) : (
                             <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50">Al Día</Badge>
                           )}
@@ -420,7 +427,7 @@ export function CuentasCorrientesView() {
                           <div className="flex items-center justify-end gap-2">
                             <Button size="sm" variant="outline" className="h-8" onClick={() => abrirLedgerProv(prov)}><Search className="w-3 h-3 mr-1" /> Resumen</Button>
                             <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => { setProvSeleccionado(prov); setIsFacturaOpen(true); }}><FileText className="w-3 h-3 mr-1" /> Cargar Fra</Button>
-                            <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" disabled={Number(prov.saldo) <= 0} onClick={() => { setProvSeleccionado(prov); setIsPagoOpen(true); }}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
+                            <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setProvSeleccionado(prov); setIsPagoOpen(true); }}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -555,7 +562,6 @@ export function CuentasCorrientesView() {
 
       {/* Modal: Cargar Factura Proveedor */}
       <Dialog open={isFacturaOpen} onOpenChange={setIsFacturaOpen}>
-        {/* Usamos max-w-2xl para que el modal sea más ancho */}
         <DialogContent className="max-w-2xl border-border bg-card">
           <DialogHeader><DialogTitle className="text-xl flex items-center gap-2 text-rose-600"><ArrowUpRight className="w-5 h-5" /> Registrar Compra</DialogTitle></DialogHeader>
           {provSeleccionado && (
@@ -565,7 +571,6 @@ export function CuentasCorrientesView() {
                 <div className="space-y-2"><Label>Nº Comprobante</Label><Input className="h-12" value={datosFactura.comprobante} onChange={e => setDatosFactura({...datosFactura, comprobante: e.target.value})} /></div>
               </div>
               
-              {/* Nuevo campo de Detalle de Compra */}
               <div className="space-y-2 pt-2">
                 <Label>Detalle / Referencia (Opcional)</Label>
                 <Input placeholder="Ej: Amortiguadores, Aceite, Filtros..." value={datosFactura.detalle} onChange={e => setDatosFactura({...datosFactura, detalle: e.target.value})} />
@@ -595,16 +600,20 @@ export function CuentasCorrientesView() {
         </DialogContent>
       </Dialog>
 
+      {/* AQUÍ ESTÁ EL CAMBIO DE ANCHO DEL MODAL */}
       {/* Modal: Historial Proveedor */}
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
-        <DialogContent className="max-w-4xl border-border bg-card h-[85vh] flex flex-col p-0">
+        {/* Cambiamos max-w-4xl a max-w-[90vw] para que tome casi toda la pantalla */}
+        <DialogContent className="max-w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
           <DialogHeader className="shrink-0 p-6 border-b border-border">
             <DialogTitle className="text-xl flex items-center justify-between">
               <span className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> 
                 Resumen de Cuenta: {provSeleccionado?.nombre}
               </span>
-              <span className="font-mono text-xl text-rose-600">
+              
+              {/* AQUÍ ESTÁ EL CAMBIO DE COLOR DEL SALDO NEGATIVO EN EL MODAL */}
+              <span className={`font-mono text-xl ${Number(provSeleccionado?.saldo || 0) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 Deuda Actual: ${Number(provSeleccionado?.saldo || 0).toLocaleString()}
               </span>
             </DialogTitle>
