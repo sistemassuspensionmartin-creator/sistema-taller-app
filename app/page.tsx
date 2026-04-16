@@ -193,6 +193,18 @@ export default function DashboardPage() {
         return <CuentasCorrientesView />;
       case "Estadísticas":
         return <AdminDashboardView />;
+      case "Perfil":
+        return (
+          <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-in fade-in">
+            <div className="bg-emerald-100 p-6 rounded-full mb-4">
+              <User className="w-12 h-12 text-emerald-700" />
+            </div>
+            <h2 className="text-3xl font-bold text-foreground">Mi Perfil</h2>
+            <p className="text-muted-foreground mt-2 text-lg">
+              Sesión iniciada como <span className="font-bold uppercase text-emerald-600">{userRole}</span>
+            </p>
+          </div>
+        );
       default:
         return <MetricsCards />
     }

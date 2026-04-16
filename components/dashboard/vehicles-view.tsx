@@ -43,18 +43,16 @@ export function VehiclesView({
   onClearVehiculoDetalle, 
   onNavigateToClients, 
   onNavigateToPresupuesto,
-  userRole // <-- 1. RECIBIMOS EL ROL
+  userRole // <-- RECIBIMOS EL ROL
 }: { 
   vehiculoAbreDetalle?: any, 
   onClearVehiculoDetalle?: () => void, 
   onNavigateToClients?: (cliente: any) => void, 
   onNavigateToPresupuesto?: (id: string, vehiculo?: any) => void,
-  userRole?: string | null // <-- LO DEFINIMOS ACÁ
+  userRole?: string | null 
 }) { 
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
-
   const [vieneDeCliente, setVieneDeCliente] = useState(false)
-
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [clientes, setClientes] = useState<any[]>([]) 
   const [isLoading, setIsLoading] = useState(true)
@@ -64,7 +62,6 @@ export function VehiclesView({
 
   const [busquedaCliente, setBusquedaCliente] = useState("")
   const [clienteSeleccionadoInfo, setClienteSeleccionadoInfo] = useState<any>(null)
-
   const [isEditingCar, setIsEditingCar] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -78,11 +75,9 @@ export function VehiclesView({
     cliente_id: ""
   })
 
-  // Estados para la Vista de Detalle
   const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<any>(null)
   const [historialPresupuestos, setHistorialPresupuestos] = useState<any[]>([])
   
-  // Estados de Transferencia y Edición de Km
   const [modoTransferencia, setModoTransferencia] = useState(false)
   const [busquedaNuevoDueno, setBusquedaNuevoDueno] = useState("")
   const [nuevoDuenoId, setNuevoDuenoId] = useState<string>("")
@@ -92,7 +87,6 @@ export function VehiclesView({
   const [nuevoKm, setNuevoKm] = useState("")
   const [isUpdatingKm, setIsUpdatingKm] = useState(false)
 
-  // Estados de Edición de Cliente
   const [isEditClientModalOpen, setIsEditClientModalOpen] = useState(false)
   const [isSavingClient, setIsSavingClient] = useState(false)
   const [clientFormData, setClientFormData] = useState({
@@ -141,7 +135,6 @@ export function VehiclesView({
     }
   }, [vista])
 
-  // EFECTO MÁGICO 3: Aterrizamos en Vehículos y leemos la etiqueta
   useEffect(() => {
     if (vehiculoAbreDetalle) {
       setVieneDeCliente(vehiculoAbreDetalle.vieneDeCliente || false);
@@ -480,10 +473,13 @@ export function VehiclesView({
                 </h2>
               </div>
             </div>
-            {/* Ocultamos botón Editar si es mecánico (opcional, depende de qué quieras que haga el mecánico) */}
-            <Button variant="outline" onClick={abrirModalEditar} className="bg-background hover:bg-secondary">
-              <Edit className="w-4 h-4 mr-2"/> Editar Datos Principales
-            </Button>
+            
+            {/* CONDICIONAL: Solo Admin/Cajero pueden editar la chapa del auto */}
+            {userRole !== 'mecanico' && (
+              <Button variant="outline" onClick={abrirModalEditar} className="bg-background hover:bg-secondary">
+                <Edit className="w-4 h-4 mr-2"/> Editar Datos Principales
+              </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -521,6 +517,7 @@ export function VehiclesView({
                     ) : (
                       <div className="flex items-center gap-2 group">
                         <p className="font-medium text-base">{vehiculoSeleccionado.kilometraje ? `${vehiculoSeleccionado.kilometraje.toLocaleString()} km` : 'Sin registrar'}</p>
+                        {/* El mecánico SÍ puede editar los KM, dejamos el botón libre */}
                         <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-emerald-600" onClick={() => {setNuevoKm(vehiculoSeleccionado.kilometraje?.toString() || ""); setEditandoKm(true);}}>
                           <Pencil className="w-3.5 h-3.5"/>
                         </Button>
@@ -539,12 +536,13 @@ export function VehiclesView({
                   <User className="w-5 h-5" /> Propietario Actual
                 </CardTitle>
                 <div className="flex gap-2">
-                  {vehiculoSeleccionado.clientes && !modoTransferencia && (
+                  {/* CONDICIONAL: Solo Admin/Cajero edita al cliente o transfiere el auto */}
+                  {vehiculoSeleccionado.clientes && !modoTransferencia && userRole !== 'mecanico' && (
                     <Button variant="ghost" size="sm" onClick={abrirModalEditarCliente} className="text-muted-foreground hover:text-primary">
                       <Edit className="w-4 h-4 mr-2"/> Editar Cliente
                     </Button>
                   )}
-                  {!modoTransferencia && (
+                  {!modoTransferencia && userRole !== 'mecanico' && (
                     <Button variant="outline" size="sm" onClick={() => setModoTransferencia(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
                       Cambiar Propietario
                     </Button>
@@ -627,7 +625,9 @@ export function VehiclesView({
                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center">
                         <UserMinus className="w-12 h-12 mb-3 opacity-20" />
                         <p>Este vehículo no está vinculado a ningún cliente.</p>
-                        <Button variant="link" onClick={() => setModoTransferencia(true)} className="text-blue-600 mt-2">Asignar a un cliente</Button>
+                        {userRole !== 'mecanico' && (
+                          <Button variant="link" onClick={() => setModoTransferencia(true)} className="text-blue-600 mt-2">Asignar a un cliente</Button>
+                        )}
                       </div>
                     )}
                   </>
@@ -646,12 +646,10 @@ export function VehiclesView({
                   <TableRow>
                     <TableHead>Nro</TableHead>
                     <TableHead>Fecha Emisión</TableHead>
-                    {/* 2. CONDICIONAMOS LA COLUMNA DE PRECIO EN EL ENCABEZADO */}
                     {userRole !== 'mecanico' && (
                       <TableHead>Total Estimado</TableHead>
                     )}
                     <TableHead className="text-center">Estado</TableHead>
-                    {/* Agregamos una columna de acción para el mecánico si no ve el precio */}
                     {userRole === 'mecanico' && (
                        <TableHead className="text-right">Detalle</TableHead>
                     )}
@@ -670,14 +668,12 @@ export function VehiclesView({
                         <TableCell className="font-mono font-bold group-hover:text-emerald-600 transition-colors">PRE-{hp.numero_correlativo}</TableCell>
                         <TableCell>{new Date(hp.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
                         
-                        {/* 3. CONDICIONAMOS EL VALOR DEL PRECIO EN LA FILA */}
                         {userRole !== 'mecanico' && (
                            <TableCell className="font-bold font-mono text-emerald-700 dark:text-emerald-500">${hp.total_final?.toLocaleString()}</TableCell>
                         )}
 
                         <TableCell className="text-center"><Badge variant="outline">{hp.estado}</Badge></TableCell>
                         
-                        {/* 4. AGREGAMOS UN INDICADOR VISUAL PARA EL MECÁNICO */}
                         {userRole === 'mecanico' && (
                            <TableCell className="text-right text-muted-foreground">Ver Trabajos →</TableCell>
                         )}
@@ -696,9 +692,12 @@ export function VehiclesView({
               <h2 className="text-2xl font-semibold text-foreground">Flota de Vehículos</h2>
               <p className="text-sm text-muted-foreground">Administrá los autos de tus clientes y su historial.</p>
             </div>
-            <Button onClick={abrirModalCrear} className="bg-primary text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Nuevo Vehículo
-            </Button>
+            {/* CONDICIONAL: El mecánico no registra autos nuevos */}
+            {userRole !== 'mecanico' && (
+              <Button onClick={abrirModalCrear} className="bg-primary text-primary-foreground">
+                <Plus className="mr-2 h-4 w-4" /> Nuevo Vehículo
+              </Button>
+            )}
           </div>
 
           <Card className="border-border bg-card">
@@ -721,7 +720,7 @@ export function VehiclesView({
                     <TableHead>Vehículo</TableHead>
                     <TableHead>Dueño</TableHead>
                     <TableHead>Detalles</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    {userRole !== 'mecanico' && <TableHead className="text-right">Acciones</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -742,7 +741,7 @@ export function VehiclesView({
                             <div className="h-3 w-28 bg-secondary/40 rounded animate-pulse"></div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right"><div className="h-8 w-8 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                        {userRole !== 'mecanico' && <TableCell className="text-right"><div className="h-8 w-8 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>}
                       </TableRow>
                     ))
                   ) : vehiculosFiltrados.length === 0 ? (
@@ -775,9 +774,11 @@ export function VehiclesView({
                               {v.kilometraje && <span className="flex items-center gap-1"><Gauge className="h-3 w-3"/> {v.kilometraje.toLocaleString()} km</span>}
                             </div>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setVehiculoSeleccionado(v); abrirModalEditar(); }} className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
-                          </TableCell>
+                          {userRole !== 'mecanico' && (
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setVehiculoSeleccionado(v); abrirModalEditar(); }} className="h-8 w-8 text-muted-foreground hover:text-primary"><Edit className="h-4 w-4" /></Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       )
                     })
