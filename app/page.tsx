@@ -2,7 +2,7 @@
 "use client"
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { AlertCircle, CheckCircle2, Info, Loader2, User } from "lucide-react"
+import { AlertCircle, CheckCircle2, Info, Loader2, User, Car, Settings} from "lucide-react"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -232,18 +232,55 @@ export default function DashboardPage() {
 
   // --- LAS BARRERAS DE SEGURIDAD ---
 
-  // 1. Si todavía está pensando (cargando la página), mostramos un loader
+  // 1. Si todavía está pensando (cargando la página o validando el login), mostramos la animación del Taller
   if (isAuthenticated === null) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-50">
-        <Loader2 className="w-10 h-10 animate-spin text-emerald-500" />
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-50 dark:bg-background gap-6">
+        <div className="relative flex items-center justify-center">
+          {/* Ícono de auto rebotando (efecto andando) */}
+          <Car className="w-16 h-16 text-emerald-600 animate-bounce relative z-10" />
+          {/* Rueditas girando (usamos el ícono de configuración como llanta) */}
+          <div className="absolute bottom-1 left-1.5 z-20 bg-background rounded-full">
+             <Settings className="w-4 h-4 text-slate-800 dark:text-slate-300 animate-spin" />
+          </div>
+          <div className="absolute bottom-1 right-1.5 z-20 bg-background rounded-full">
+             <Settings className="w-4 h-4 text-slate-800 dark:text-slate-300 animate-spin" />
+          </div>
+          {/* Sombrita dinámica en el piso */}
+          <div className="absolute -bottom-2 w-16 h-2 bg-black/10 dark:bg-white/10 rounded-[100%] animate-pulse"></div>
+        </div>
+        
+        <div className="flex flex-col items-center gap-2">
+          <h2 className="text-2xl font-black tracking-widest text-slate-800 dark:text-slate-100 uppercase">
+            Suspensión Martín
+          </h2>
+          <div className="flex items-center gap-2 text-muted-foreground font-medium">
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+            <span>Abriendo el taller...</span>
+          </div>
+        </div>
       </div>
     )
   }
 
   // 2. Si NO está logueado, lo frenamos en el Login
   if (isAuthenticated === false) {
-    return <LoginView onLoginSuccess={() => setIsAuthenticated(true)} />
+    return (
+      <LoginView onLoginSuccess={async () => {
+        // EN VEZ DE UN F5 BRUSCO:
+        // 1. Volvemos a mostrar la pantalla de carga del autito
+        setIsAuthenticated(null); 
+        
+        // 2. Buscamos la sesión fresca y su rol en silencio
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', session.user.id).single();
+          setUserRole(perfil?.rol || null);
+          // 3. Abrimos la puerta al sistema ya con los candados correctos
+          setIsAuthenticated(true);
+        }
+      }} />
+    )
   }
 
   // 3. Si PASÓ las barreras, le mostramos el sistema
