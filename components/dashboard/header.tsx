@@ -32,11 +32,13 @@ export function DashboardHeader({
 
   // --- ESCUCHA EN VIVO DE SUPABASE (REALTIME) ---
   useEffect(() => {
+    // Al mecánico no le avisamos nada, su trabajo es generar los cambios.
     if (userRole === 'mecanico' || !userRole) return;
 
-    const reproducirSonido = () => {
+    // MAGIA: Ahora la función recibe qué sonido debe tocar
+    const reproducirSonido = (archivoAudio: string) => {
       try {
-        const audio = new Audio('/ding.mp3'); 
+        const audio = new Audio(archivoAudio); 
         audio.currentTime = 0; // Mejora para navegadores
         const playPromise = audio.play();
         
@@ -60,7 +62,10 @@ export function DashboardHeader({
     const canalTaller = supabase.channel('notif-taller')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordenes_trabajo' }, (payload) => {
         if (payload.new.estado === 'Terminado' && payload.old.estado !== 'Terminado') {
-          reproducirSonido();
+          
+          // ACÁ SUENA EL NUEVO SONIDO PARA AUTOS LISTOS
+          reproducirSonido('/listo.mp3'); 
+          
           agregarNotif({
             id: Date.now().toString(),
             referencia_id: payload.new.presupuesto_id || payload.new.id, 
@@ -79,7 +84,9 @@ export function DashboardHeader({
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload) => {
         if (payload.new.modificado_por_rol !== 'mecanico') return;
 
-        reproducirSonido();
+        // ACÁ SUENA EL DING CLÁSICO PARA PRESUPUESTOS
+        reproducirSonido('/ding.mp3');
+        
         agregarNotif({
           id: Date.now().toString(),
           referencia_id: payload.new.id,
@@ -95,7 +102,10 @@ export function DashboardHeader({
         if (payload.new.modificado_por_rol !== 'mecanico') return;
 
         if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
-          reproducirSonido();
+          
+          // ACÁ SUENA EL DING CLÁSICO PARA PRESUPUESTOS
+          reproducirSonido('/ding.mp3');
+          
           agregarNotif({
             id: Date.now().toString() + Math.random(),
             referencia_id: payload.new.id,
