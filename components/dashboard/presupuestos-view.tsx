@@ -60,7 +60,7 @@ export function PresupuestosView({
   presupuestoAbreDetalle, 
   onClearPresupuestoDetalle, 
   onVolver,
-  userRole // <-- RECIBIMOS EL ROL
+  userRole 
 }: { 
   onNavigateToTurnos?: (vehiculoInfo: any) => void, 
   onNavigateToTaller?: () => void, 
@@ -213,6 +213,7 @@ export function PresupuestosView({
   const aplicarItemCatalogo = (idFila: string, idCatalogo: string) => {
     if (!isEditing) return;
     const item = catalogo.find(c => c.id === idCatalogo)
+    // Aunque el mecánico no vea los precios en pantalla, guardamos los valores reales de fondo para el cajero
     if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0" } : f))
   }
 
@@ -581,17 +582,21 @@ export function PresupuestosView({
               <div className="flex flex-wrap items-center gap-2">
                 {!isEditing && editandoId && (
                   <>
-                    {/* Botones de administrador: Aprobar, Asociar, Editar */}
+                    {/* Botones de administrador: Aprobar, Asociar */}
+                    {estado !== "Aprobado" && estado !== "Facturado" && userRole !== 'mecanico' && (
+                      <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
+                        <CheckCircle className="w-4 h-4 mr-2"/> Aprobar Presupuesto
+                      </Button>
+                    )}
                     {userRole !== 'mecanico' && (
+                      <Button variant="outline" onClick={() => setIsAsociarModalOpen(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
+                        <Link2 className="w-4 h-4 mr-2"/> Asociar
+                      </Button>
+                    )}
+
+                    {/* Activar Edición (Visible para todos si no está facturado) */}
+                    {estado !== "Facturado" && (
                       <>
-                        {estado !== "Aprobado" && estado !== "Facturado" && (
-                          <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
-                            <CheckCircle className="w-4 h-4 mr-2"/> Aprobar Presupuesto
-                          </Button>
-                        )}
-                        <Button variant="outline" onClick={() => setIsAsociarModalOpen(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
-                          <Link2 className="w-4 h-4 mr-2"/> Asociar
-                        </Button>
                         <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
                           <Pencil className="w-4 h-4 mr-2"/> Activar Edición
                         </Button>
@@ -601,7 +606,8 @@ export function PresupuestosView({
                   </>
                 )}
 
-                {isEditing && userRole !== 'mecanico' && (
+                {/* Botones al estar editando (VISIBLES PARA EL MECÁNICO AHORA) */}
+                {isEditing && (
                   <>
                     <Button variant="ghost" onClick={() => { if(editandoId) { setIsEditing(false); handleAbrirPresupuesto(presupuestos.find(p=>p.id === editandoId)); } else { setVista("lista"); } }} className="text-muted-foreground hover:text-destructive">
                       <X className="w-4 h-4 mr-2"/> Cancelar Edición
@@ -695,7 +701,8 @@ export function PresupuestosView({
                   </div>
                   <div className="md:col-span-4 space-y-2">
                     <Label>Estado</Label>
-                    <Select value={estado} onValueChange={setEstado} disabled={!isEditing}>
+                    {/* El mecánico no puede cambiar el estado de un presupuesto, se bloquea */}
+                    <Select value={estado} onValueChange={setEstado} disabled={!isEditing || userRole === 'mecanico'}>
                       <SelectTrigger className={`h-10 border-border font-medium disabled:opacity-100 ${getEstadoColor(estado)}`}>
                         <SelectValue />
                       </SelectTrigger>
@@ -983,10 +990,11 @@ export function PresupuestosView({
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div><h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2><p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p></div>
               
-              {/* Oculto el botón Nuevo al mecánico */}
-              {userRole !== 'mecanico' && (
-                <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> Nuevo Presupuesto</Button>
-              )}
+              {/* Ahora el mecánico también puede crear presupuestos nuevos (diagnósticos) */}
+              <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground">
+                <Plus className="mr-2 h-4 w-4" /> 
+                {userRole === 'mecanico' ? "Nuevo Diagnóstico" : "Nuevo Presupuesto"}
+              </Button>
             </div>
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border bg-secondary/10 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
