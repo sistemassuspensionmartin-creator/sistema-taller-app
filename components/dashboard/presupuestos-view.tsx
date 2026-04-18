@@ -213,7 +213,6 @@ export function PresupuestosView({
   const aplicarItemCatalogo = (idFila: string, idCatalogo: string) => {
     if (!isEditing) return;
     const item = catalogo.find(c => c.id === idCatalogo)
-    // Aunque el mecánico no vea los precios en pantalla, guardamos los valores reales de fondo para el cajero
     if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0" } : f))
   }
 
@@ -353,7 +352,8 @@ export function PresupuestosView({
           total_final: totalFinal,
           estado: estado,
           observaciones_publicas: notasCliente,
-          notas_internas: notasInternas
+          notas_internas: notasInternas,
+          modificado_por_rol: userRole || 'admin' // <-- ESTA ES LA MAGIA: Enviamos quién lo editó
         }).eq('id', editandoId)
 
         if (presError) throw new Error("Error al actualizar presupuesto: " + presError.message)
@@ -370,7 +370,8 @@ export function PresupuestosView({
           total_final: totalFinal,
           estado: estado,
           observaciones_publicas: notasCliente,
-          notas_internas: notasInternas
+          notas_internas: notasInternas,
+          modificado_por_rol: userRole || 'admin' // <-- ESTA ES LA MAGIA: Enviamos quién lo creó
         }]).select()
 
         if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)

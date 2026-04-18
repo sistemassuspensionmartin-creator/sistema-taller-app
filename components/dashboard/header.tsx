@@ -19,12 +19,12 @@ export function DashboardHeader({
   activeSection, 
   onSectionChange,
   userRole,
-  onNavigateToPresupuesto // <--- NUEVA PROP PARA ABRIR PRESUPUESTOS
+  onNavigateToPresupuesto 
 }: { 
   activeSection?: string, 
   onSectionChange?: (section: string) => void,
   userRole?: string | null,
-  onNavigateToPresupuesto?: (id: string) => void // <--- NUEVA PROP
+  onNavigateToPresupuesto?: (id: string) => void 
 }) {
   
   const [notificaciones, setNotificaciones] = useState<any[]>([])
@@ -32,8 +32,8 @@ export function DashboardHeader({
 
   // --- ESCUCHA EN VIVO DE SUPABASE (REALTIME) ---
   useEffect(() => {
-    // Al mecánico no le avisamos de sus propios trabajos, esto es para mostrador/admin
-    if (userRole === 'mecanico') return;
+    // Al mecánico no le avisamos nada, su trabajo es generar los cambios.
+    if (userRole === 'mecanico' || !userRole) return;
 
     const reproducirSonido = () => {
       try {
@@ -46,7 +46,6 @@ export function DashboardHeader({
 
     const agregarNotif = (nuevaNotif: any) => {
       setNotificaciones(prev => {
-        // Evitamos notificaciones duplicadas en el mismo segundo
         const existe = prev.find(n => n.referencia_id === nuevaNotif.referencia_id && n.tipo === nuevaNotif.tipo);
         if (existe) return prev;
         return [nuevaNotif, ...prev];
@@ -60,10 +59,10 @@ export function DashboardHeader({
           reproducirSonido();
           agregarNotif({
             id: Date.now().toString(),
-            referencia_id: payload.new.id,
+            referencia_id: payload.new.presupuesto_id || payload.new.id, 
             tipo: 'taller',
             titulo: 'Vehículo Terminado',
-            mensaje: `El vehículo ${payload.new.vehiculo_patente} (${payload.new.cliente_nombre}) ya fue marcado como listo.`,
+            mensaje: `El vehículo ${payload.new.vehiculo_patente} (${payload.new.cliente_nombre}) ya fue marcado como listo en el taller.`,
             hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
             icono: 'Car',
             color: 'text-emerald-600 dark:text-emerald-400'
@@ -74,28 +73,33 @@ export function DashboardHeader({
     // CANAL 2: PRESUPUESTOS Y DIAGNÓSTICOS
     const canalPresupuestos = supabase.channel('notif-presupuestos')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload) => {
+        // MAGIA: Solo suena la campana si el que apretó Guardar era un Mecánico
+        if (payload.new.modificado_por_rol !== 'mecanico') return;
+
         reproducirSonido();
         agregarNotif({
           id: Date.now().toString(),
           referencia_id: payload.new.id,
           tipo: 'presupuesto',
           titulo: 'Nuevo Diagnóstico Creado',
-          mensaje: `Se ha creado un nuevo presupuesto/diagnóstico para el vehículo ${payload.new.vehiculo_patente}.`,
+          mensaje: `Un mecánico ha creado un nuevo diagnóstico para la patente ${payload.new.vehiculo_patente}.`,
           hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
           icono: 'FileText',
           color: 'text-blue-600 dark:text-blue-400'
         });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload) => {
-        // Solo avisamos si es una modificación que vale la pena (ignoramos si solo cambió la fecha)
-        if (payload.new.total_final !== payload.old.total_final || payload.new.estado !== payload.old.estado) {
+        // MAGIA: Solo suena la campana si el que apretó Guardar era un Mecánico
+        if (payload.new.modificado_por_rol !== 'mecanico') return;
+
+        if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
           reproducirSonido();
           agregarNotif({
             id: Date.now().toString() + Math.random(),
             referencia_id: payload.new.id,
             tipo: 'presupuesto',
-            titulo: 'Presupuesto Modificado',
-            mensaje: `El presupuesto PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}) ha sido modificado.`,
+            titulo: 'Diagnóstico Modificado',
+            mensaje: `Un mecánico ha modificado el diagnóstico PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}).`,
             hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
             icono: 'Pencil',
             color: 'text-orange-600 dark:text-orange-400'
@@ -181,7 +185,7 @@ export function DashboardHeader({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80 border-border bg-popover p-0">
             <div className="p-3 border-b border-border bg-secondary/30 flex justify-between items-center">
-              <span className="font-bold text-sm text-foreground">Notificaciones</span>
+              <span className="font-bold text-sm text-foreground">Notificaciones del Sistema</span>
               {notificaciones.length > 0 && (
                 <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{notificaciones.length} nuevas</span>
               )}
