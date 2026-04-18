@@ -32,13 +32,17 @@ export function DashboardHeader({
 
   // --- ESCUCHA EN VIVO DE SUPABASE (REALTIME) ---
   useEffect(() => {
-    // Al mecánico no le avisamos nada, su trabajo es generar los cambios.
     if (userRole === 'mecanico' || !userRole) return;
 
     const reproducirSonido = () => {
       try {
         const audio = new Audio('/ding.mp3'); 
-        audio.play().catch(e => console.log("Navegador bloqueó el sonido", e));
+        audio.currentTime = 0; // Mejora para navegadores
+        const playPromise = audio.play();
+        
+        if (playPromise !== undefined) {
+          playPromise.catch(e => console.log("El navegador bloqueó el sonido (requiere clic previo en la pantalla)."));
+        }
       } catch (error) {}
       setCampanaSuena(true);
       setTimeout(() => setCampanaSuena(false), 3000);
@@ -73,7 +77,6 @@ export function DashboardHeader({
     // CANAL 2: PRESUPUESTOS Y DIAGNÓSTICOS
     const canalPresupuestos = supabase.channel('notif-presupuestos')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload) => {
-        // MAGIA: Solo suena la campana si el que apretó Guardar era un Mecánico
         if (payload.new.modificado_por_rol !== 'mecanico') return;
 
         reproducirSonido();
@@ -89,7 +92,6 @@ export function DashboardHeader({
         });
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload) => {
-        // MAGIA: Solo suena la campana si el que apretó Guardar era un Mecánico
         if (payload.new.modificado_por_rol !== 'mecanico') return;
 
         if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {

@@ -321,7 +321,10 @@ export function PresupuestosView({
 
   const handleCambiarEstadoRapido = async (id: string, nuevoEstado: string) => {
     try {
-      const { error } = await supabase.from('presupuestos').update({ estado: nuevoEstado }).eq('id', id);
+      const { error } = await supabase.from('presupuestos').update({ 
+        estado: nuevoEstado,
+        modificado_por_rol: userRole || 'admin' // <--- DEJAMOS NUESTRA FIRMA
+      }).eq('id', id);
       if (error) throw error;
       
       setPresupuestos(presupuestos.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
@@ -353,7 +356,7 @@ export function PresupuestosView({
           estado: estado,
           observaciones_publicas: notasCliente,
           notas_internas: notasInternas,
-          modificado_por_rol: userRole || 'admin' // <-- ESTA ES LA MAGIA: Enviamos quién lo editó
+          modificado_por_rol: userRole || 'admin' // <--- FIRMA
         }).eq('id', editandoId)
 
         if (presError) throw new Error("Error al actualizar presupuesto: " + presError.message)
@@ -371,7 +374,7 @@ export function PresupuestosView({
           estado: estado,
           observaciones_publicas: notasCliente,
           notas_internas: notasInternas,
-          modificado_por_rol: userRole || 'admin' // <-- ESTA ES LA MAGIA: Enviamos quién lo creó
+          modificado_por_rol: userRole || 'admin' // <--- FIRMA
         }]).select()
 
         if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
@@ -416,7 +419,10 @@ export function PresupuestosView({
   const actualizarAEnEsperaSiEsBorrador = async () => {
     if (estado === "Borrador" && editandoId) {
       setEstado("En Espera");
-      await supabase.from('presupuestos').update({ estado: "En Espera" }).eq('id', editandoId);
+      await supabase.from('presupuestos').update({ 
+        estado: "En Espera",
+        modificado_por_rol: userRole || 'admin' // <--- FIRMA
+      }).eq('id', editandoId);
     }
   }
 
@@ -541,7 +547,12 @@ export function PresupuestosView({
           });
         }
       } else if (opcion === "inmediato") {
-        await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', editandoId);
+        // <--- FIRMA EN LA APROBACIÓN --->
+        await supabase.from('presupuestos').update({ 
+          estado: "Aprobado",
+          modificado_por_rol: userRole || 'admin'
+        }).eq('id', editandoId);
+        
         setEstado("Aprobado");
         setIsAprobarModalOpen(false);
 
