@@ -297,6 +297,11 @@ export default function DashboardPage() {
             activeSection={activeSection} 
             onSectionChange={setActiveSection} 
             userRole={userRole}
+            onNavigateToPresupuesto={(id) => {
+              setPresupuestoParaAbrir(id);
+              setVolverA(activeSection);
+              setActiveSection("Presupuestos");
+            }}
           />
           <main className="flex-1 overflow-y-auto p-6 relative">
             <div className="mx-auto max-w-7xl">

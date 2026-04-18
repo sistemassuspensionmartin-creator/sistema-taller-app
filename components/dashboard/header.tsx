@@ -1,7 +1,7 @@
 "use client"
 
 import { supabase } from "@/lib/supabase"
-import { Bell, Search, User, CheckCircle2, Car, ArrowRight } from "lucide-react"
+import { Bell, Search, User, CheckCircle2, Car, ArrowRight, FileText, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -18,14 +18,15 @@ import { useState, useEffect } from "react"
 export function DashboardHeader({ 
   activeSection, 
   onSectionChange,
-  userRole
+  userRole,
+  onNavigateToPresupuesto // <--- NUEVA PROP PARA ABRIR PRESUPUESTOS
 }: { 
   activeSection?: string, 
   onSectionChange?: (section: string) => void,
-  userRole?: string | null 
+  userRole?: string | null,
+  onNavigateToPresupuesto?: (id: string) => void // <--- NUEVA PROP
 }) {
   
-  // --- ESTADOS PARA LAS NOTIFICACIONES ---
   const [notificaciones, setNotificaciones] = useState<any[]>([])
   const [campanaSuena, setCampanaSuena] = useState(false)
 
@@ -34,43 +35,77 @@ export function DashboardHeader({
     // Al mecánico no le avisamos de sus propios trabajos, esto es para mostrador/admin
     if (userRole === 'mecanico') return;
 
-    const canal = supabase.channel('notificaciones-taller')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'ordenes_trabajo' },
-        (payload) => {
-          // Si el estado nuevo es 'Terminado' y el viejo no lo era...
-          if (payload.new.estado === 'Terminado' && payload.old.estado !== 'Terminado') {
-            
-            // 1. Reproducir Sonido
-            try {
-              const audio = new Audio('/ding.mp3'); // Busca el archivo en la carpeta public
-              audio.play().catch(e => console.log("Navegador bloqueó el sonido automático", e));
-            } catch (error) {
-              console.log("Error al reproducir audio");
-            }
+    const reproducirSonido = () => {
+      try {
+        const audio = new Audio('/ding.mp3'); 
+        audio.play().catch(e => console.log("Navegador bloqueó el sonido", e));
+      } catch (error) {}
+      setCampanaSuena(true);
+      setTimeout(() => setCampanaSuena(false), 3000);
+    };
 
-            // 2. Hacer que la campanita vibre visualmente un par de segundos
-            setCampanaSuena(true);
-            setTimeout(() => setCampanaSuena(false), 3000);
+    const agregarNotif = (nuevaNotif: any) => {
+      setNotificaciones(prev => {
+        // Evitamos notificaciones duplicadas en el mismo segundo
+        const existe = prev.find(n => n.referencia_id === nuevaNotif.referencia_id && n.tipo === nuevaNotif.tipo);
+        if (existe) return prev;
+        return [nuevaNotif, ...prev];
+      });
+    };
 
-            // 3. Guardar la notificación
-            const nuevaNotif = {
-              id: payload.new.id,
-              patente: payload.new.vehiculo_patente,
-              cliente: payload.new.cliente_nombre,
-              hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' })
-            };
-
-            setNotificaciones(prev => [nuevaNotif, ...prev]);
-          }
+    // CANAL 1: TALLER (Vehículos Terminados)
+    const canalTaller = supabase.channel('notif-taller')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordenes_trabajo' }, (payload) => {
+        if (payload.new.estado === 'Terminado' && payload.old.estado !== 'Terminado') {
+          reproducirSonido();
+          agregarNotif({
+            id: Date.now().toString(),
+            referencia_id: payload.new.id,
+            tipo: 'taller',
+            titulo: 'Vehículo Terminado',
+            mensaje: `El vehículo ${payload.new.vehiculo_patente} (${payload.new.cliente_nombre}) ya fue marcado como listo.`,
+            hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+            icono: 'Car',
+            color: 'text-emerald-600 dark:text-emerald-400'
+          });
         }
-      )
-      .subscribe();
+      }).subscribe();
 
-    // Limpiamos el canal si el componente se desmonta
+    // CANAL 2: PRESUPUESTOS Y DIAGNÓSTICOS
+    const canalPresupuestos = supabase.channel('notif-presupuestos')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload) => {
+        reproducirSonido();
+        agregarNotif({
+          id: Date.now().toString(),
+          referencia_id: payload.new.id,
+          tipo: 'presupuesto',
+          titulo: 'Nuevo Diagnóstico Creado',
+          mensaje: `Se ha creado un nuevo presupuesto/diagnóstico para el vehículo ${payload.new.vehiculo_patente}.`,
+          hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+          icono: 'FileText',
+          color: 'text-blue-600 dark:text-blue-400'
+        });
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload) => {
+        // Solo avisamos si es una modificación que vale la pena (ignoramos si solo cambió la fecha)
+        if (payload.new.total_final !== payload.old.total_final || payload.new.estado !== payload.old.estado) {
+          reproducirSonido();
+          agregarNotif({
+            id: Date.now().toString() + Math.random(),
+            referencia_id: payload.new.id,
+            tipo: 'presupuesto',
+            titulo: 'Presupuesto Modificado',
+            mensaje: `El presupuesto PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}) ha sido modificado.`,
+            hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+            icono: 'Pencil',
+            color: 'text-orange-600 dark:text-orange-400'
+          });
+        }
+      }).subscribe();
+
     return () => {
-      supabase.removeChannel(canal);
+      supabase.removeChannel(canalTaller);
+      supabase.removeChannel(canalPresupuestos);
     }
   }, [userRole]);
 
@@ -81,13 +116,25 @@ export function DashboardHeader({
   }
 
   const descartarNotificacion = (id: string, e: any) => {
-    e.stopPropagation(); // Evita que se cierre el menú al hacer clic en descartar
+    e.stopPropagation(); 
     setNotificaciones(prev => prev.filter(n => n.id !== id));
   }
 
-  const irAlTallerYDescartar = (id: string) => {
-    setNotificaciones(prev => prev.filter(n => n.id !== id));
-    if (onSectionChange) onSectionChange("Taller");
+  const ejecutarAccionNotificacion = (notif: any) => {
+    setNotificaciones(prev => prev.filter(n => n.id !== notif.id));
+    
+    if (notif.tipo === 'taller') {
+      if (onSectionChange) onSectionChange("Taller");
+    } else if (notif.tipo === 'presupuesto') {
+      if (onNavigateToPresupuesto) onNavigateToPresupuesto(notif.referencia_id);
+    }
+  }
+
+  const renderIcono = (iconoStr: string) => {
+    if (iconoStr === 'Car') return <Car className="h-4 w-4" />;
+    if (iconoStr === 'FileText') return <FileText className="h-4 w-4" />;
+    if (iconoStr === 'Pencil') return <Pencil className="h-4 w-4" />;
+    return <Bell className="h-4 w-4" />;
   }
 
   const nombreMostrado = userRole === 'admin' ? 'Administrador' : 
@@ -134,35 +181,35 @@ export function DashboardHeader({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80 border-border bg-popover p-0">
             <div className="p-3 border-b border-border bg-secondary/30 flex justify-between items-center">
-              <span className="font-bold text-sm text-foreground">Notificaciones del Taller</span>
+              <span className="font-bold text-sm text-foreground">Notificaciones</span>
               {notificaciones.length > 0 && (
                 <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{notificaciones.length} nuevas</span>
               )}
             </div>
             
-            <div className="max-h-[300px] overflow-y-auto">
+            <div className="max-h-[350px] overflow-y-auto">
               {notificaciones.length === 0 ? (
                 <div className="p-6 text-center text-sm text-muted-foreground flex flex-col items-center">
                   <CheckCircle2 className="h-8 w-8 mb-2 opacity-20" />
-                  <p>No hay novedades en el taller.</p>
+                  <p>Todo al día. No hay novedades.</p>
                 </div>
               ) : (
                 notificaciones.map((notif) => (
                   <div key={notif.id} className="p-3 border-b border-border/50 hover:bg-secondary/50 transition-colors flex flex-col gap-2 group">
                     <div className="flex justify-between items-start">
-                      <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
-                        <Car className="h-4 w-4" /> Vehículo Terminado
+                      <div className={`flex items-center gap-2 font-bold text-sm ${notif.color}`}>
+                        {renderIcono(notif.icono)} {notif.titulo}
                       </div>
                       <span className="text-xs text-muted-foreground">{notif.hora}</span>
                     </div>
                     
                     <p className="text-sm text-foreground leading-snug">
-                      El vehículo <span className="font-mono font-bold uppercase tracking-wider">{notif.patente}</span> ({notif.cliente}) ya fue marcado como listo por los mecánicos.
+                      {notif.mensaje}
                     </p>
                     
                     <div className="flex gap-2 mt-1">
-                      <Button size="sm" onClick={() => irAlTallerYDescartar(notif.id)} className="flex-1 h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-xs">
-                        Ir al Taller <ArrowRight className="w-3 h-3 ml-1" />
+                      <Button size="sm" onClick={() => ejecutarAccionNotificacion(notif)} className={`flex-1 h-8 text-white text-xs shadow-sm ${notif.tipo === 'taller' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                        Abrir Documento <ArrowRight className="w-3 h-3 ml-1" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={(e) => descartarNotificacion(notif.id, e)} className="h-8 text-xs text-muted-foreground hover:text-red-600 hover:bg-red-50">
                         Ocultar
