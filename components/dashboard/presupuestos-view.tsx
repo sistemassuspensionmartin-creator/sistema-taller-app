@@ -97,6 +97,10 @@ export function PresupuestosView({
   const [notasCliente, setNotasCliente] = useState("Los repuestos pueden sufrir variaciones de precio sin previo aviso. Validez sujeta a stock.")
   const [notasInternas, setNotasInternas] = useState("")
   const [descuento, setDescuento] = useState<string | number>("0")
+  
+  // --- NUEVO ESTADO PARA DIFFING ---
+  const [itemsOriginales, setItemsOriginales] = useState<any[]>([])
+  
   const [filas, setFilas] = useState<any[]>([
     { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }
   ])
@@ -239,6 +243,17 @@ export function PresupuestosView({
   const totalFinal = subtotalNeto - (parseFloat(descuento.toString()) || 0)
   const gananciaEstimada = totalFinal - costoTotal
 
+  // --- ACÁ ESTÁ EL CAMBIO DE TU FIRMA PARA EVITAR EL REBOTE ---
+  const limpiarAvisosVisuales = async (idPres: string) => {
+    await supabase.from('presupuesto_items').delete().eq('presupuesto_id', idPres).eq('estado_cambio', 'eliminado');
+    await supabase.from('presupuesto_items').update({ estado_cambio: null }).eq('presupuesto_id', idPres);
+    await supabase.from('presupuestos').update({ 
+      visto_admin: true,
+      modificado_por_rol: userRole || 'admin', 
+      modificado_por_nombre: userName || 'Usuario' 
+    }).eq('id', idPres);
+  }
+
   const handleAbrirPresupuesto = (p?: any) => {
     setPresupuestosAEliminar([]);
     
@@ -255,8 +270,14 @@ export function PresupuestosView({
       setNotasInternas(p.notas_internas || "")
       setIsEditing(false)
 
-      if (p.presupuesto_items && p.presupuesto_items.length > 0) {
-        setFilas(p.presupuesto_items.map((item: any) => ({
+      let itemsTraidos = p.presupuesto_items || [];
+      if (userRole === 'mecanico') {
+        itemsTraidos = itemsTraidos.filter((i: any) => i.estado_cambio !== 'eliminado');
+      }
+      setItemsOriginales(itemsTraidos);
+
+      if (itemsTraidos.length > 0) {
+        setFilas(itemsTraidos.map((item: any) => ({
           id: item.id || Date.now().toString() + Math.random(),
           tipo: item.tipo,
           detalle: item.detalle,
@@ -272,7 +293,7 @@ export function PresupuestosView({
       // Si lo abre el mostrador, quitamos la alerta azul silenciosamente de la tabla, 
       // pero MANTENEMOS los colores intactos para que decidan si guardan o borran.
       if (p.visto_admin === false && userRole !== 'mecanico') {
-        supabase.from('presupuestos').update({ visto_admin: true }).eq('id', p.id).then();
+        limpiarAvisosVisuales(p.id);
       }
 
     } else {
@@ -282,6 +303,7 @@ export function PresupuestosView({
       setVehiculoSeleccionado("")
       setFecha(new Date().toISOString().split('T')[0])
       setEstado("Borrador")
+      setItemsOriginales([])
       setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }])
       setIsEditing(true)
     }
@@ -824,12 +846,14 @@ export function PresupuestosView({
                     <TableBody>
                       {filas.map((fila) => {
                         const catalogoFiltrado = catalogo.filter(c => c.tipo === fila.tipo)
-
+                        
                         let colorFila = "hover:bg-transparent";
-                        if (fila.estado_cambio === 'nuevo') {
-                          colorFila = "bg-green-100/50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30";
-                        } else if (fila.estado_cambio === 'eliminado') {
-                          colorFila = "bg-red-100/50 dark:bg-red-900/20 opacity-60 line-through hover:bg-red-100 dark:hover:bg-red-900/30";
+                        if (!isEditing && userRole !== 'mecanico') {
+                          if (fila.estado_cambio === 'nuevo') {
+                            colorFila = "bg-green-100/50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30";
+                          } else if (fila.estado_cambio === 'eliminado') {
+                            colorFila = "bg-red-100/50 dark:bg-red-900/20 opacity-60 line-through hover:bg-red-100 dark:hover:bg-red-900/30 pointer-events-none";
+                          }
                         }
 
                         return (

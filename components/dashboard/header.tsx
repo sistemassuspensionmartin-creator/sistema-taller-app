@@ -19,13 +19,13 @@ export function DashboardHeader({
   activeSection, 
   onSectionChange,
   userRole,
-  userName, // <--- RECIBIMOS EL NOMBRE
+  userName,
   onNavigateToPresupuesto 
 }: { 
   activeSection?: string, 
   onSectionChange?: (section: string) => void,
   userRole?: string | null,
-  userName?: string | null, // <--- NUEVO
+  userName?: string | null,
   onNavigateToPresupuesto?: (id: string) => void 
 }) {
   
@@ -78,7 +78,7 @@ export function DashboardHeader({
         if (payload.new.modificado_por_rol !== 'mecanico') return;
         reproducirSonido('/ding.mp3');
         
-        const autor = payload.new.modificado_por_nombre || 'Un mecánico'; // <--- USAMOS EL NOMBRE
+        const autor = payload.new.modificado_por_nombre || 'Un mecánico';
         
         agregarNotif({
           id: Date.now().toString(),
@@ -93,10 +93,14 @@ export function DashboardHeader({
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload) => {
         if (payload.new.modificado_por_rol !== 'mecanico') return;
+        
+        // --- MAGIA ANTI-REBOTE ---
+        if (payload.new.visto_admin === true && payload.old.visto_admin === false) return;
+
         if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
           reproducirSonido('/ding.mp3');
 
-          const autor = payload.new.modificado_por_nombre || 'Un mecánico'; // <--- USAMOS EL NOMBRE
+          const autor = payload.new.modificado_por_nombre || 'Un mecánico';
 
           agregarNotif({
             id: Date.now().toString() + Math.random(),
@@ -147,7 +151,6 @@ export function DashboardHeader({
                     userRole === 'mecanico' ? 'Mecánico' : 
                     userRole === 'cajero' ? 'Ventas / Caja' : 'Usuario';
                          
-  // AHORA LAS INICIALES Y EL NOMBRE VIENEN DE userName
   const iniciales = userName ? userName.substring(0, 2).toUpperCase() : (userRole ? userRole.substring(0, 2).toUpperCase() : 'US');
   const nombreMostrar = userName || rolFormat;
 
@@ -156,7 +159,7 @@ export function DashboardHeader({
       <div>
         <h1 className="text-xl font-semibold text-foreground">{activeSection || "Panel de Control"}</h1>
         <p className="text-sm text-muted-foreground">
-          Bienvenido de vuelta, {nombreMostrar} {/* <--- SALUDO PERSONALIZADO */}
+          Bienvenido de vuelta, {nombreMostrar}
         </p>
       </div>
 
