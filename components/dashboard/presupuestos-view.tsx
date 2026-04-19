@@ -41,30 +41,35 @@ const getEstadoColor = (estado: string) => {
 
 const TipoBadge = ({ tipo }: { tipo: string }) => {
   switch (tipo) {
-    case 'Repuesto': return <Badge className="bg-blue-100 text-blue-700 border-none shadow-none gap-1.5 px-2.5 py-1 font-medium"><Package className="w-3.5 h-3.5"/> Repuesto</Badge>;
-    case 'Servicio': return <Badge className="bg-orange-100 text-orange-700 border-none shadow-none gap-1.5 px-2.5 py-1 font-medium"><Wrench className="w-3.5 h-3.5"/> Servicio</Badge>;
-    case 'Mano de Obra': return <Badge className="bg-purple-100 text-purple-700 border-none shadow-none gap-1.5 px-2.5 py-1 font-medium"><PenTool className="w-3.5 h-3.5"/> Mano de Obra</Badge>;
-    case 'Neumático': return <Badge className="bg-slate-100 text-slate-700 border-none shadow-none gap-1.5 px-2.5 py-1 font-medium"><CircleDashed className="w-3.5 h-3.5"/> Neumático</Badge>;
-    default: return <Badge variant="outline">{tipo}</Badge>;
+    case 'Repuesto':
+      return <Badge className="bg-blue-100 text-blue-700 border-none hover:bg-blue-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><Package className="w-3.5 h-3.5"/> Repuesto</Badge>;
+    case 'Servicio':
+      return <Badge className="bg-orange-100 text-orange-700 border-none hover:bg-orange-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><Wrench className="w-3.5 h-3.5"/> Servicio</Badge>;
+    case 'Mano de Obra':
+      return <Badge className="bg-purple-100 text-purple-700 border-none hover:bg-purple-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><PenTool className="w-3.5 h-3.5"/> Mano de Obra</Badge>;
+    case 'Neumático':
+      return <Badge className="bg-slate-100 text-slate-700 border-none hover:bg-slate-100 shadow-none gap-1.5 px-2.5 py-1 font-medium"><CircleDashed className="w-3.5 h-3.5"/> Neumático</Badge>;
+    default:
+      return <Badge variant="outline">{tipo}</Badge>;
   }
 }
 
-export function PresupuestosView({ 
-  onNavigateToTurnos, 
-  onNavigateToTaller, 
-  presupuestoAbreDetalle, 
-  onClearPresupuestoDetalle, 
+export function PresupuestosView({
+  onNavigateToTurnos,
+  onNavigateToTaller,
+  presupuestoAbreDetalle,
+  onClearPresupuestoDetalle,
   onVolver,
   userRole,
-  userName 
-}: { 
-  onNavigateToTurnos?: (vehiculoInfo: any) => void, 
-  onNavigateToTaller?: () => void, 
-  presupuestoAbreDetalle?: string | null, 
-  onClearPresupuestoDetalle?: () => void, 
+  userName
+}: {
+  onNavigateToTurnos?: (vehiculoInfo: any) => void,
+  onNavigateToTaller?: () => void,
+  presupuestoAbreDetalle?: string | null,
+  onClearPresupuestoDetalle?: () => void,
   onVolver?: () => void,
   userRole?: string | null,
-  userName?: string | null 
+  userName?: string | null
 }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   const [isEditing, setIsEditing] = useState(false)
@@ -93,8 +98,9 @@ export function PresupuestosView({
   const [notasInternas, setNotasInternas] = useState("")
   const [descuento, setDescuento] = useState<string | number>("0")
   
-  // Guardamos la versión original para comparar cambios
+  // --- NUEVO ESTADO PARA DIFFING ---
   const [itemsOriginales, setItemsOriginales] = useState<any[]>([])
+  
   const [filas, setFilas] = useState<any[]>([
     { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }
   ])
@@ -141,7 +147,9 @@ export function PresupuestosView({
   useEffect(() => {
     if (presupuestoAbreDetalle && presupuestos.length > 0) {
       const pres = presupuestos.find(p => p.id === presupuestoAbreDetalle);
-      if (pres) handleAbrirPresupuesto(pres);
+      if (pres) {
+        handleAbrirPresupuesto(pres);
+      }
       if (onClearPresupuestoDetalle) onClearPresupuestoDetalle();
     }
   }, [presupuestoAbreDetalle, presupuestos])
@@ -168,8 +176,8 @@ export function PresupuestosView({
   });
 
   const terminoBusqueda = busquedaEntidad.toLowerCase().trim()
-  const vehiculosBusqueda = terminoBusqueda === "" ? [] : vehiculos.filter(v => 
-    (v.patente && v.patente.toLowerCase().includes(terminoBusqueda.replace(/\s/g, ""))) || 
+  const vehiculosBusqueda = terminoBusqueda === "" ? [] : vehiculos.filter(v =>
+    (v.patente && v.patente.toLowerCase().includes(terminoBusqueda.replace(/\s/g, ""))) ||
     (v.marca && v.marca.toLowerCase().includes(terminoBusqueda)) ||
     (v.modelo && v.modelo.toLowerCase().includes(terminoBusqueda))
   ).slice(0, 4)
@@ -190,7 +198,7 @@ export function PresupuestosView({
 
   const seleccionarClienteBuscador = (c: any) => {
     setClienteSeleccionado(c.id)
-    setVehiculoSeleccionado("") 
+    setVehiculoSeleccionado("")
     setBusquedaEntidad("")
     setMostrarResultados(false)
   }
@@ -219,24 +227,22 @@ export function PresupuestosView({
   const vehiculoActual = vehiculos.find(v => v.patente === vehiculoSeleccionado)
   const clienteActual = clientes.find(c => c.id === clienteSeleccionado)
 
-  // Subtotales (ignoramos los marcados como eliminados visualmente)
+  // --- CALCULO ACTUALIZADO: IGNORA LOS ELIMINADOS ---
   const filasParaCalculo = filas.filter(f => f.estado_cambio !== 'eliminado');
   const subtotalNeto = filasParaCalculo.reduce((acc, fila) => acc + ((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)), 0)
   const costoTotal = filasParaCalculo.reduce((acc, fila) => acc + ((parseFloat(fila.costo) || 0) * (parseFloat(fila.cant) || 1)), 0)
   const totalFinal = subtotalNeto - (parseFloat(descuento.toString()) || 0)
   const gananciaEstimada = totalFinal - costoTotal
 
+  // --- FUNCION PARA LIMPIAR LA GUÍA VISUAL ---
   const limpiarAvisosVisuales = async (idPres: string) => {
-    // Elimina permanentemente los que estaban tachados
     await supabase.from('presupuesto_items').delete().eq('presupuesto_id', idPres).eq('estado_cambio', 'eliminado');
-    // Quita la etiqueta "nuevo"
     await supabase.from('presupuesto_items').update({ estado_cambio: null }).eq('presupuesto_id', idPres);
-    // Marca el presupuesto como visto
     await supabase.from('presupuestos').update({ visto_admin: true }).eq('id', idPres);
   }
 
   const handleAbrirPresupuesto = (p?: any) => {
-    setPresupuestosAEliminar([]); 
+    setPresupuestosAEliminar([]);
     
     if (p) {
       setEditandoId(p.id)
@@ -249,19 +255,17 @@ export function PresupuestosView({
       setDescuento(p.descuento || "0")
       setNotasCliente(p.observaciones_publicas || "")
       setNotasInternas(p.notas_internas || "")
-      setIsEditing(false) 
+      setIsEditing(false)
 
-      // Filtramos para el mecánico: Nunca le mostramos los elementos que él mismo eliminó
       let itemsTraidos = p.presupuesto_items || [];
       if (userRole === 'mecanico') {
         itemsTraidos = itemsTraidos.filter((i: any) => i.estado_cambio !== 'eliminado');
       }
-
       setItemsOriginales(itemsTraidos);
 
       if (itemsTraidos.length > 0) {
         setFilas(itemsTraidos.map((item: any) => ({
-          id: item.id,
+          id: item.id || Date.now().toString() + Math.random(),
           tipo: item.tipo,
           detalle: item.detalle,
           cant: item.cantidad?.toString() || "1",
@@ -273,7 +277,7 @@ export function PresupuestosView({
         setFilas([])
       }
 
-      // Si somos la oficina y el presupuesto tiene cambios sin ver, disparamos la limpieza
+      // Si lo abre alguien de la oficina y tiene cambios, limpiamos las etiquetas en la BD
       if (p.visto_admin === false && userRole !== 'mecanico') {
         limpiarAvisosVisuales(p.id);
       }
@@ -287,7 +291,7 @@ export function PresupuestosView({
       setEstado("Borrador")
       setItemsOriginales([])
       setFilas([{ id: Date.now().toString(), tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }])
-      setIsEditing(true) 
+      setIsEditing(true)
     }
     
     setVista("detalle")
@@ -295,18 +299,28 @@ export function PresupuestosView({
 
   const handleEliminarPresupuesto = async (id: string) => {
     if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Esta acción no se puede deshacer.")) return;
+
     try {
       await supabase.from('presupuesto_items').delete().eq('presupuesto_id', id);
-      await supabase.from('presupuestos').delete().eq('id', id);
-      setVista("lista"); cargarDatos();
-    } catch (error: any) { alert("Error: " + error.message); }
+      const { error } = await supabase.from('presupuestos').delete().eq('id', id);
+      if (error) throw error;
+      
+      setVista("lista")
+      cargarDatos()
+    } catch (error: any) {
+      console.error("Error al eliminar:", error);
+      alert("Hubo un error al eliminar el presupuesto: " + error.message);
+    }
   }
 
   const confirmarFusion = async () => {
     if (!presupuestoAFusionar) return alert("Seleccione un presupuesto para asociar.");
+    
     setIsSaving(true);
     try {
-      const { data: itemsAnteriores } = await supabase.from('presupuesto_items').select('*').eq('presupuesto_id', presupuestoAFusionar);
+      const { data: itemsAnteriores, error } = await supabase.from('presupuesto_items').select('*').eq('presupuesto_id', presupuestoAFusionar);
+      if (error) throw error;
+
       if (itemsAnteriores && itemsAnteriores.length > 0) {
         const nuevasFilas = itemsAnteriores.map((item: any) => ({
           id: 'fusion_' + Date.now().toString() + Math.random(),
@@ -317,56 +331,54 @@ export function PresupuestosView({
           precio: item.precio_unitario?.toString() || "0",
           estado_cambio: userRole === 'mecanico' ? 'nuevo' : null
         }));
+        
         setFilas([...filas, ...nuevasFilas]);
       }
+
       setPresupuestosAEliminar([...presupuestosAEliminar, presupuestoAFusionar]);
-      setIsEditing(true); setIsAsociarModalOpen(false); setPresupuestoAFusionar("");
-      alert("Ítems importados. Revise y guarde los cambios.");
-    } catch (error: any) { alert(error.message); } finally { setIsSaving(false); }
+      
+      setIsEditing(true);
+      setIsAsociarModalOpen(false);
+      setPresupuestoAFusionar("");
+      
+      alert("Ítems importados correctamente. Revise el nuevo total y haga clic en 'Guardar Cambios' para confirmar la asociación.");
+    } catch (error: any) {
+      alert("Error al intentar fusionar: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   const handleCambiarEstadoRapido = async (id: string, nuevoEstado: string) => {
     try {
-      await supabase.from('presupuestos').update({ 
-        estado: nuevoEstado, modificado_por_rol: userRole || 'admin', modificado_por_nombre: userName || 'Usuario' 
+      const { error } = await supabase.from('presupuestos').update({
+        estado: nuevoEstado,
+        modificado_por_rol: userRole || 'admin'
       }).eq('id', id);
+      if (error) throw error;
+      
       setPresupuestos(presupuestos.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
-    } catch (error: any) { alert(error.message); }
+    } catch (error: any) {
+      alert("Error al actualizar el estado: " + error.message);
+    }
   }
 
   const handleGuardarPresupuesto = async () => {
-    if (!clienteSeleccionado) return alert("Falta seleccionar el cliente.");
-    if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo.");
+    if (!clienteSeleccionado) return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
+    if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
 
-    const filasValidas = filas.filter(f => f.detalle.trim() !== "");
-    if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem.");
+    const filasValidas = filas.filter(f => f.detalle.trim() !== "")
+    if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
 
     setIsSaving(true)
     try {
       let presId = editandoId;
       const descParsed = parseFloat(descuento.toString()) || 0;
-      let numAleatorio = 0; 
-      
+      let numAleatorio = 0;
       const isMecanico = userRole === 'mecanico';
 
       if (editandoId) {
-        await supabase.from('presupuestos').update({
-          vehiculo_patente: vehiculoSeleccionado,
-          fecha_emision: fecha,
-          validez_dias: parseInt(validez) || 15,
-          descuento: descParsed,
-          total_final: totalFinal,
-          estado: estado,
-          observaciones_publicas: notasCliente,
-          notas_internas: notasInternas,
-          modificado_por_rol: userRole || 'admin',
-          modificado_por_nombre: userName || 'Usuario',
-          visto_admin: !isMecanico 
-        }).eq('id', editandoId)
-      } else {
-        numAleatorio = Math.floor(1000 + Math.random() * 9000);
-        const { data: presData } = await supabase.from('presupuestos').insert([{
-          numero_correlativo: numAleatorio, 
+        const { error: presError } = await supabase.from('presupuestos').update({
           vehiculo_patente: vehiculoSeleccionado,
           fecha_emision: fecha,
           validez_dias: parseInt(validez) || 15,
@@ -378,11 +390,33 @@ export function PresupuestosView({
           modificado_por_rol: userRole || 'admin',
           modificado_por_nombre: userName || 'Usuario',
           visto_admin: !isMecanico
-        }]).select();
-        presId = presData![0].id;
+        }).eq('id', editandoId)
+
+        if (presError) throw new Error("Error al actualizar presupuesto: " + presError.message)
+        // NOTA: Acá antes se hacía un delete() brutal de todos los ítems. Ahora usamos Diffing abajo.
+      } else {
+        numAleatorio = Math.floor(1000 + Math.random() * 9000);
+        const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
+          numero_correlativo: numAleatorio,
+          vehiculo_patente: vehiculoSeleccionado,
+          fecha_emision: fecha,
+          validez_dias: parseInt(validez) || 15,
+          descuento: descParsed,
+          total_final: totalFinal,
+          estado: estado,
+          observaciones_publicas: notasCliente,
+          notas_internas: notasInternas,
+          modificado_por_rol: userRole || 'admin',
+          modificado_por_nombre: userName || 'Usuario',
+          visto_admin: !isMecanico
+        }]).select()
+
+        if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
+        if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
+        presId = presData[0].id;
       }
 
-      // --- LOGICA DE DIFERENCIAS (DIFFING) ---
+      // --- DIFFING LOGIC (Control de Cambios) ---
       const itemsOriginalesIds = itemsOriginales.map(i => String(i.id));
       const filasValidasIds = filasValidas.map(f => String(f.id));
 
@@ -431,32 +465,109 @@ export function PresupuestosView({
       if (toInsert.length > 0) await supabase.from('presupuesto_items').insert(toInsert);
       if (toUpdate.length > 0) await supabase.from('presupuesto_items').upsert(toUpdate);
       if (toDelete.length > 0) await supabase.from('presupuesto_items').delete().in('id', toDelete);
+      // -------------------------------------------
 
       if (presupuestosAEliminar.length > 0) {
         await supabase.from('presupuesto_items').delete().in('presupuesto_id', presupuestosAEliminar);
         await supabase.from('presupuestos').delete().in('id', presupuestosAEliminar);
       }
 
-      alert("¡Presupuesto guardado con éxito!");
+      alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
+      
+      if (!editandoId && numAleatorio !== 0) {
+        setNumeroCorrelativo(numAleatorio.toString());
+      }
       setEditandoId(presId);
       setIsEditing(false);
       cargarDatos();
       
     } catch (error: any) {
+      console.error("Error al guardar:", error)
       alert(error.message)
     } finally {
       setIsSaving(false)
     }
   }
 
+  const actualizarAEnEsperaSiEsBorrador = async () => {
+    if (estado === "Borrador" && editandoId) {
+      setEstado("En Espera");
+      await supabase.from('presupuestos').update({
+        estado: "En Espera",
+        modificado_por_rol: userRole || 'admin'
+      }).eq('id', editandoId);
+    }
+  }
+
+  const handleWhatsApp = async () => {
+    if (!clienteActual || !vehiculoActual) return alert("Seleccione un cliente y vehículo para enviar el mensaje.")
+    if (!clienteActual.telefono) return alert("El cliente no tiene un número de teléfono registrado.")
+    
+    await actualizarAEnEsperaSiEsBorrador();
+
+    const telefonoLimpio = clienteActual.telefono.replace(/\D/g, '')
+    
+    let mensaje = configuracion.msj_presupuesto || "Hola {{cliente}}, te enviamos el presupuesto para tu {{vehiculo}} ({{patente}}). Total: {{total}}. Saludos!";
+    
+    mensaje = mensaje
+      .replace(/{{cliente}}/g, clienteActual.nombre)
+      .replace(/{{vehiculo}}/g, `${vehiculoActual.marca} ${vehiculoActual.modelo}`)
+      .replace(/{{patente}}/g, vehiculoActual.patente)
+      .replace(/{{total}}/g, `$${totalFinal.toLocaleString()}`)
+      .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
+    
+    window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
+  }
+
+  const handleVerFactura = async (presupuestoId: string) => {
+    try {
+      const { data: factura, error: errFactura } = await supabase
+        .from('facturas')
+        .select('*')
+        .eq('presupuesto_id', presupuestoId)
+        .single();
+
+      if (errFactura || !factura) return alert("No se encontró la factura para este presupuesto.");
+
+      const { data: presFull } = await supabase
+        .from('presupuestos')
+        .select('*, vehiculos(*, clientes(*)), presupuesto_items(*)')
+        .eq('id', presupuestoId)
+        .single();
+
+      const datosParaFactura = {
+        ...factura,
+        config: configuracion,
+        cliente_nombre: presFull.vehiculos?.clientes?.nombre + ' ' + (presFull.vehiculos?.clientes?.apellido || ''),
+        cliente_documento: presFull.vehiculos?.clientes?.documento,
+        items: presFull.presupuesto_items,
+        fecha_emision: factura.created_at
+      };
+
+      setPrintData(datosParaFactura);
+      setPrintType('factura');
+
+      setTimeout(() => {
+        window.print();
+        setPrintData(null);
+        setPrintType(null);
+      }, 500);
+
+    } catch (error) {
+      alert("Error al recuperar la factura.");
+    }
+  }
+
   const generarDocumento = async (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
+    if (tipo === 'presupuesto') await actualizarAEnEsperaSiEsBorrador();
+
     const esHistorico = !!datosHistoricos;
     const v_cliente = esHistorico ? datosHistoricos.vehiculos?.clientes : clienteActual;
     const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
     
-    if (!v_cliente || !v_vehiculo) return alert("Faltan datos para generar el documento.");
+    if (!v_cliente || !v_vehiculo) return alert("Faltan datos del cliente o vehículo para generar el documento.");
 
-    // Al imprimir, filtramos los que estaban tachados
+    // --- CORRECCIÓN: IGNORA LOS ITEMS ELIMINADOS AL IMPRIMIR ---
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "" && f.estado_cambio !== 'eliminado');
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
 
@@ -480,26 +591,61 @@ export function PresupuestosView({
 
     setPrintType(tipo);
     setPrintData(datosFormateadosParaPlantilla);
-    setTimeout(() => window.print(), 300);
+
+    setTimeout(() => {
+      window.print();
+    }, 300);
   }
 
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     try {
-      const { data: tallerExistente } = await supabase.from('ordenes_trabajo').select('id').eq('presupuesto_id', editandoId);
-      if (tallerExistente && tallerExistente.length > 0) return alert("⚠️ Ya tiene una Orden de Trabajo ingresada.");
+      const { data: tallerExistente, error: errExistente } = await supabase
+        .from('ordenes_trabajo')
+        .select('id')
+        .eq('presupuesto_id', editandoId);
+        
+      if (errExistente) throw errExistente;
+
+      if (tallerExistente && tallerExistente.length > 0) {
+        alert("⚠️ ATENCIÓN: Este presupuesto ya tiene una Orden de Trabajo ingresada en el Taller. No se puede volver a ingresar.");
+        setIsAprobarModalOpen(false);
+        return;
+      }
 
       if (opcion === "turnos") {
         setIsAprobarModalOpen(false);
-        if (onNavigateToTurnos) onNavigateToTurnos({ patente: vehiculoSeleccionado, presupuesto_id: editandoId });
+        if (onNavigateToTurnos) {
+          onNavigateToTurnos({
+            patente: vehiculoSeleccionado,
+            presupuesto_id: editandoId
+          });
+        }
       } else if (opcion === "inmediato") {
-        await supabase.from('presupuestos').update({ estado: "Aprobado", modificado_por_rol: userRole||'admin' }).eq('id', editandoId);
-        setEstado("Aprobado"); setIsAprobarModalOpen(false);
+        await supabase.from('presupuestos').update({
+          estado: "Aprobado",
+          modificado_por_rol: userRole || 'admin'
+        }).eq('id', editandoId);
+        
+        setEstado("Aprobado");
+        setIsAprobarModalOpen(false);
+
         const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre} ${clienteActual?.apellido || ''}`.trim();
-        await supabase.from('ordenes_trabajo').insert([{ presupuesto_id: editandoId, vehiculo_patente: vehiculoSeleccionado, cliente_nombre: nombreCompleto || "Cliente", estado: 'A Ingresar' }]);
+        
+        const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
+          presupuesto_id: editandoId,
+          vehiculo_patente: vehiculoSeleccionado,
+          cliente_nombre: nombreCompleto || "Cliente",
+          estado: 'A Ingresar'
+        }]);
+
+        if (tallerError) throw tallerError;
+        
         setVista("lista");
         if (onNavigateToTaller) onNavigateToTaller();
       }
-    } catch (error) { alert("Error al aprobar."); }
+    } catch (error) {
+      alert("Error al procesar la aprobación.");
+    }
   }
 
   return (
@@ -508,10 +654,12 @@ export function PresupuestosView({
         {vista === "detalle" ? (
           <div className="max-w-7xl mx-auto animate-in fade-in duration-300 space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
-              <Button variant="ghost" onClick={() => { 
-                setVista("lista"); setEditandoId(null); setIsEditing(false); 
+              <Button variant="ghost" onClick={() => {
+                setVista("lista");
+                setEditandoId(null);
+                setIsEditing(false);
                 if (onClearPresupuestoDetalle) onClearPresupuestoDetalle();
-                if (onVolver) onVolver(); 
+                if (onVolver) onVolver();
               }} className="text-muted-foreground hover:text-foreground w-fit">
                 <ArrowLeft className="h-4 w-4 mr-2"/> Volver
               </Button>
@@ -529,6 +677,7 @@ export function PresupuestosView({
                         <Link2 className="w-4 h-4 mr-2"/> Asociar
                       </Button>
                     )}
+
                     {estado !== "Facturado" && (
                       <>
                         <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
@@ -557,10 +706,21 @@ export function PresupuestosView({
                 </Button>
                 
                 {userRole !== 'mecanico' && (
-                  <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
-                    <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
-                  </Button>
+                  <>
+                    <Button variant="outline" onClick={() => generarDocumento('presupuesto')} className="bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">
+                      <Printer className="w-4 h-4 mr-2"/> PDF / Imprimir
+                    </Button>
+                    <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
+                      <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
+                    </Button>
+                    {estado === "Facturado" && editandoId && (
+                      <Button variant="outline" onClick={() => handleVerFactura(editandoId)} className="bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm">
+                        <FileText className="w-4 h-4 mr-2"/> Ver Factura AFE
+                      </Button>
+                    )}
+                  </>
                 )}
+
               </div>
             </div>
 
@@ -573,19 +733,23 @@ export function PresupuestosView({
               </CardHeader>
               <CardContent className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
+                  
                   {isEditing && (
                     <div className="md:col-span-6 space-y-2 relative">
                       <Label>Buscador Inteligente <span className="text-muted-foreground text-xs font-normal">(Patente, Nombre o DNI)</span></Label>
                       <div className="flex">
-                        <Input 
-                          placeholder="Escriba aquí para buscar..." 
-                          className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 shadow-sm"
-                          value={busquedaEntidad} onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
-                          onFocus={() => setMostrarResultados(true)} onBlur={() => setTimeout(() => setMostrarResultados(false), 300)}
+                        <Input
+                          placeholder="Escriba aquí para buscar..."
+                          className="bg-white dark:bg-slate-950 h-10 rounded-r-none border-r-0 border-emerald-500 ring-emerald-500 focus-visible:ring-emerald-500 shadow-sm"
+                          value={busquedaEntidad}
+                          onChange={(e: any) => { setBusquedaEntidad(e.target.value); setMostrarResultados(true); }}
+                          onFocus={() => setMostrarResultados(true)}
+                          onBlur={() => setTimeout(() => setMostrarResultados(false), 300)}
                         />
-                        <Button variant="outline" className="rounded-l-none bg-emerald-50 border-emerald-500 text-emerald-700 px-4 h-10 border-l-0"><Search className="h-4 w-4"/></Button>
+                        <Button variant="outline" className="rounded-l-none bg-emerald-50 border-emerald-500 text-emerald-700 hover:bg-emerald-100 px-4 h-10 border-l-0"><Search className="h-4 w-4"/></Button>
                       </div>
-                      {mostrarResultados && busquedaEntidad.length > 0 && (
+
+                      {mostrarResultados && busquedaEntidad.length > 0 && (vehiculosBusqueda.length > 0 || clientesBusqueda.length > 0) && (
                         <div className="absolute top-[72px] left-0 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
                           {vehiculosBusqueda.map(v => {
                             const c = clientes.find(cl => cl.id === v.cliente_id)
@@ -596,6 +760,13 @@ export function PresupuestosView({
                               </div>
                             )
                           })}
+                          {clientesBusqueda.map(c => (
+                            <div key={c.id} onMouseDown={() => seleccionarClienteBuscador(c)} className="p-3 hover:bg-secondary cursor-pointer flex items-center gap-2 border-b border-border/50 text-sm transition-colors">
+                              <User className="w-4 h-4 text-muted-foreground" />
+                              <span className="font-bold">{c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido}`}</span>
+                              <span className="text-muted-foreground text-xs">({c.documento || 'Sin DNI'})</span>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -619,6 +790,8 @@ export function PresupuestosView({
                         <SelectItem value="Borrador">Borrador</SelectItem>
                         <SelectItem value="En Espera">En Espera</SelectItem>
                         <SelectItem value="Aprobado">Aprobado</SelectItem>
+                        <SelectItem value="Rechazado">Rechazado</SelectItem>
+                        <SelectItem value="Facturado">Facturado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -627,18 +800,41 @@ export function PresupuestosView({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
                   <div className="space-y-2">
                     <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
-                    <Input readOnly value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""} className="bg-secondary/20 text-foreground font-bold h-10 border-border pointer-events-none" />
+                    <Input
+                      readOnly
+                      placeholder={isEditing ? "Se completa al buscar arriba..." : "Sin registrar"}
+                      value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""}
+                      className="bg-secondary/20 text-foreground font-bold h-10 border-border pointer-events-none"
+                    />
                   </div>
+
                   <div className="space-y-2">
                     <Label className="text-muted-foreground flex items-center gap-1"><Car className="w-3 h-3"/> Vehículo a Reparar {isEditing && <span className="text-destructive">*</span>}</Label>
-                    <select className={`flex h-10 w-full rounded-md border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-bold ${!isEditing ? 'bg-secondary/20 pointer-events-none appearance-none' : 'bg-white dark:bg-slate-950'}`} value={vehiculoSeleccionado} onChange={(e) => setVehiculoSeleccionado(e.target.value)} disabled={!isEditing || !clienteSeleccionado}>
-                      <option value="" disabled>{clienteSeleccionado ? "Seleccione un vehículo..." : (isEditing ? "Esperando cliente..." : "Sin registrar")}</option>
-                      {vehiculosDelCliente.map(v => <option key={v.patente} value={v.patente}>{v.marca} {v.modelo} ({v.patente})</option>)}
+                    <select
+                      className={`flex h-10 w-full rounded-md border border-input px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 font-bold ${!isEditing ? 'bg-secondary/20 pointer-events-none appearance-none' : 'bg-white dark:bg-slate-950'}`}
+                      value={vehiculoSeleccionado}
+                      onChange={(e) => setVehiculoSeleccionado(e.target.value)}
+                      disabled={!isEditing || !clienteSeleccionado}
+                    >
+                      <option value="" disabled>
+                        {clienteSeleccionado ? "Seleccione un vehículo..." : (isEditing ? "Esperando cliente..." : "Sin registrar")}
+                      </option>
+                      {vehiculosDelCliente.map(v => (
+                        <option key={v.patente} value={v.patente}>
+                          {v.marca} {v.modelo} ({v.patente})
+                        </option>
+                      ))}
                     </select>
                   </div>
+
                   <div className="space-y-2">
                     <Label className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</Label>
-                    <Input readOnly value={clienteActual?.telefono || ""} className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none" />
+                    <Input
+                      readOnly
+                      placeholder="-"
+                      value={clienteActual?.telefono || ""}
+                      className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none"
+                    />
                   </div>
                 </div>
               </CardContent>
@@ -648,7 +844,7 @@ export function PresupuestosView({
               <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-lg">Detalle de Repuestos y Trabajos</CardTitle>
                 {userRole !== 'mecanico' && (
-                  <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100"}`}>
+                  <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}`}>
                     {mostrarCostos ? <Eye className="w-4 h-4 mr-2"/> : <EyeOff className="w-4 h-4 mr-2"/>} {mostrarCostos ? "Ocultar Costos" : "Costos Ocultos"}
                   </Button>
                 )}
@@ -669,9 +865,9 @@ export function PresupuestosView({
                     </TableHeader>
                     <TableBody>
                       {filas.map((fila) => {
-                        const catalogoFiltrado = catalogo.filter(c => c.tipo === fila.tipo);
-
-                        // --- MAGIA VISUAL DE COLORES ---
+                        const catalogoFiltrado = catalogo.filter(c => c.tipo === fila.tipo)
+                        
+                        // --- MAGIA VISUAL: COLORES EN LA TABLA ---
                         let colorFila = "hover:bg-transparent";
                         if (!isEditing && userRole !== 'mecanico') {
                           if (fila.estado_cambio === 'nuevo') {
@@ -686,23 +882,36 @@ export function PresupuestosView({
                             <TableCell className="print:hidden">
                               {isEditing ? (
                                 <Select value={fila.tipo} onValueChange={(v: string) => actualizarFila(fila.id, 'tipo', v)}>
-                                  <SelectTrigger className="h-10 bg-white dark:bg-slate-950 w-full px-2"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="h-10 bg-white dark:bg-slate-950 w-full px-2">
+                                    <SelectValue />
+                                  </SelectTrigger>
                                   <SelectContent>
                                     <SelectItem value="Servicio"><TipoBadge tipo="Servicio" /></SelectItem>
                                     <SelectItem value="Mano de Obra"><TipoBadge tipo="Mano de Obra" /></SelectItem>
                                     <SelectItem value="Repuesto"><TipoBadge tipo="Repuesto" /></SelectItem>
+                                    <SelectItem value="Neumático"><TipoBadge tipo="Neumático" /></SelectItem>
                                   </SelectContent>
                                 </Select>
                               ) : (
-                                <div className="pointer-events-none"><TipoBadge tipo={fila.tipo} /></div>
+                                <div className="pointer-events-none">
+                                  <TipoBadge tipo={fila.tipo} />
+                                </div>
                               )}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
                                 {isEditing && (
                                   <Select onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}>
-                                    <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 shrink-0 print:hidden"><SelectValue placeholder={`Elegir ${fila.tipo}...`} /></SelectTrigger>
-                                    <SelectContent>{catalogoFiltrado.map(c => <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>)}</SelectContent>
+                                    <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
+                                      <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {catalogoFiltrado.length === 0 ? (
+                                        <SelectItem value="none" disabled>No hay {fila.tipo.toLowerCase()}s</SelectItem>
+                                      ) : (
+                                        catalogoFiltrado.map(c => <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>)
+                                      )}
+                                    </SelectContent>
                                   </Select>
                                 )}
                                 <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Escriba el detalle..." : ""} className={`h-10 flex-1 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} />
@@ -710,8 +919,9 @@ export function PresupuestosView({
                             </TableCell>
                             <TableCell><Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} readOnly={!isEditing} className={`h-10 text-center font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
                             
+                            {/* Columnas ocultas al mecánico */}
                             {mostrarCostos && userRole !== 'mecanico' && (
-                              <TableCell className="print:hidden"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 text-amber-700' : 'border-amber-200 bg-amber-50/50 focus-visible:ring-amber-400'}`} /></TableCell>
+                              <TableCell className="print:hidden"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 text-amber-700' : 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400'}`} /></TableCell>
                             )}
                             {userRole !== 'mecanico' && (
                               <>
@@ -747,12 +957,13 @@ export function PresupuestosView({
                 </Card>
                 <Card className={`border-amber-300 border-dashed bg-amber-50 dark:bg-amber-950/20 shadow-sm print:hidden ${isEditing ? 'ring-2 ring-amber-500/30' : ''}`}>
                   <CardContent className="p-4 space-y-2">
-                    <Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas</Label>
-                    <Textarea value={notasInternas} onChange={(e: any) => setNotasInternas(e.target.value)} readOnly={!isEditing} className={`min-h-[80px] ${!isEditing ? 'bg-transparent border-transparent resize-none' : 'bg-white dark:bg-slate-950 border-amber-200 focus-visible:ring-amber-400'}`} />
+                    <Label className="font-bold text-amber-700 dark:text-amber-500 flex items-center gap-2"><Lock className="w-4 h-4"/> Notas Internas Ocultas <span className="text-amber-600/70 font-normal text-xs">(Sale en Orden de Trabajo)</span></Label>
+                    <Textarea value={notasInternas} onChange={(e: any) => setNotasInternas(e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Información solo visible para el taller..." : "Sin notas internas."} className={`min-h-[80px] ${!isEditing ? 'bg-transparent border-transparent resize-none' : 'bg-white dark:bg-slate-950 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400'}`} />
                   </CardContent>
                 </Card>
               </div>
               
+              {/* Ocultamos los totales para el mecánico */}
               {userRole !== 'mecanico' && (
                 <div className="flex flex-col justify-between">
                   <Card className="border-border shadow-md mb-6">
@@ -766,24 +977,100 @@ export function PresupuestosView({
                         </div>
                       </div>
                       <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
+                      {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
                     </CardContent>
                   </Card>
+
+                  {!isEditing && editandoId && (
+                    <div className="flex justify-end print:hidden">
+                      <Button variant="outline" onClick={() => handleEliminarPresupuesto(editandoId)} className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/50 dark:hover:bg-red-900/20">
+                        <Trash2 className="w-4 h-4 mr-2" /> Eliminar Presupuesto Permanentemente
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
+            {/* MODALES OCULTOS EN IMPRESION */}
             <div className="print:hidden">
+              <Dialog open={isAsociarModalOpen} onOpenChange={setIsAsociarModalOpen}>
+                <DialogContent className="border-border bg-card max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+                      <Link2 className="w-5 h-5 text-blue-600" /> Asociar Presupuesto
+                    </DialogTitle>
+                    <DialogDescription>
+                      Seleccioná otro presupuesto abierto de este mismo vehículo. Los repuestos se fusionarán y el presupuesto viejo será eliminado de la lista.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="py-4">
+                    <Label className="mb-2 block">Presupuestos Disponibles (Borrador o En Espera)</Label>
+                    <Select value={presupuestoAFusionar} onValueChange={setPresupuestoAFusionar}>
+                      <SelectTrigger className="bg-slate-50 dark:bg-slate-900">
+                        <SelectValue placeholder="Elegir presupuesto a fusionar..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {presupuestos
+                          .filter(p => p.vehiculo_patente === vehiculoSeleccionado && p.id !== editandoId && (p.estado === 'Borrador' || p.estado === 'En Espera'))
+                          .map(p => (
+                            <SelectItem key={p.id} value={p.id}>
+                              PRE-{p.numero_correlativo} - ${p.total_final?.toLocaleString()} ({p.estado})
+                            </SelectItem>
+                          ))
+                        }
+                        {presupuestos.filter(p => p.vehiculo_patente === vehiculoSeleccionado && p.id !== editandoId && (p.estado === 'Borrador' || p.estado === 'En Espera')).length === 0 && (
+                          <SelectItem value="none" disabled>No hay otros presupuestos abiertos para este vehículo.</SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsAsociarModalOpen(false)}>Cancelar</Button>
+                    <Button onClick={confirmarFusion} disabled={!presupuestoAFusionar || isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Fusionar Ítems
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
               <Dialog open={isAprobarModalOpen} onOpenChange={setIsAprobarModalOpen}>
                 <DialogContent className="border-border bg-card max-w-md">
-                  <DialogHeader><DialogTitle>Presupuesto Aprobado</DialogTitle></DialogHeader>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+                      <CheckCircle className="w-6 h-6 text-emerald-600" /> Presupuesto Aprobado
+                    </DialogTitle>
+                    <DialogDescription>
+                      ¡Excelente! El cliente aprobó el trabajo. ¿Cómo desea ingresar el vehículo al sistema del taller?
+                    </DialogDescription>
+                  </DialogHeader>
+
                   <div className="grid grid-cols-1 gap-4 py-4">
-                    <Button variant="outline" className="h-24 flex flex-col items-center justify-center border-emerald-200 bg-emerald-50 text-emerald-800" onClick={() => procesarAprobacion("turnos")}>
-                      <CalendarDays className="w-6 h-6 mb-1" /><span className="font-bold">Programar Turno</span>
+                    <Button 
+                      variant="outline" 
+                      className="h-24 flex flex-col items-center justify-center gap-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                      onClick={() => procesarAprobacion("turnos")}
+                    >
+                      <CalendarDays className="w-6 h-6 mb-1" />
+                      <span className="font-bold">Programar Turno</span>
+                      <span className="text-xs opacity-80 font-normal">Agendar en el calendario para otro día</span>
                     </Button>
-                    <Button variant="outline" className="h-24 flex flex-col items-center justify-center border-blue-200 bg-blue-50 text-blue-800" onClick={() => procesarAprobacion("inmediato")}>
-                      <Wrench className="w-6 h-6 mb-1" /><span className="font-bold">Recepción Inmediata</span>
+
+                    <Button 
+                      variant="outline" 
+                      className="h-24 flex flex-col items-center justify-center gap-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-800 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                      onClick={() => procesarAprobacion("inmediato")}
+                    >
+                      <Wrench className="w-6 h-6 mb-1" />
+                      <span className="font-bold">Recepción Inmediata</span>
+                      <span className="text-xs opacity-80 font-normal">El vehículo ya está en el taller</span>
                     </Button>
                   </div>
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsAprobarModalOpen(false)}>Cancelar</Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
@@ -792,13 +1079,23 @@ export function PresupuestosView({
           <div className="space-y-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div><h2 className="text-2xl font-semibold text-foreground">Presupuestos y Órdenes</h2><p className="text-sm text-muted-foreground">Administrá las cotizaciones y órdenes de trabajo del taller.</p></div>
-              <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground"><Plus className="mr-2 h-4 w-4" /> {userRole === 'mecanico' ? "Nuevo Diagnóstico" : "Nuevo Presupuesto"}</Button>
+              
+              {/* Ahora el mecánico también puede crear presupuestos nuevos (diagnósticos) */}
+              <Button onClick={() => handleAbrirPresupuesto()} className="bg-primary text-primary-foreground">
+                <Plus className="mr-2 h-4 w-4" /> 
+                {userRole === 'mecanico' ? "Nuevo Diagnóstico" : "Nuevo Presupuesto"}
+              </Button>
             </div>
             <Card className="border-border bg-card">
               <CardHeader className="border-b border-border bg-secondary/10 pb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="relative flex-1 max-w-md w-full">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar por cliente, patente o Nro..." className="pl-9 bg-background" value={busquedaLista} onChange={(e) => setBusquedaLista(e.target.value)} />
+                  <Input 
+                    placeholder="Buscar por cliente, patente o Nro..." 
+                    className="pl-9 bg-background" 
+                    value={busquedaLista}
+                    onChange={(e) => setBusquedaLista(e.target.value)}
+                  />
                 </div>
               </CardHeader>
               <CardContent className="p-0">
@@ -808,38 +1105,107 @@ export function PresupuestosView({
                       <TableHead>Nro</TableHead>
                       <TableHead>Fecha</TableHead>
                       <TableHead>Cliente y Vehículo</TableHead>
+                      
+                      {/* Ocultamos el Total al mecánico en la lista */}
                       {userRole !== 'mecanico' && <TableHead className="text-right">Total</TableHead>}
+                      
                       <TableHead className="text-center">Estado</TableHead>
                       <TableHead className="text-right">Acciones Rápidas</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {presupuestosFiltrados.map((p) => (
-                      <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group" onClick={() => handleAbrirPresupuesto(p)}>
-                        <TableCell className="font-mono font-bold">
-                          PRE-{p.numero_correlativo}
-                          {p.visto_admin === false && userRole !== 'mecanico' && <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block animate-pulse" title="Cambios sin ver"></span>}
-                        </TableCell>
-                        <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
-                        <TableCell>
-                          <div className="font-medium text-foreground">{p.vehiculos?.clientes?.nombre}</div>
-                          <div className="text-xs text-muted-foreground">{p.vehiculo_patente}</div>
-                        </TableCell>
-                        {userRole !== 'mecanico' && <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>}
-                        <TableCell className="text-center">
-                          <Badge className={`${getEstadoColor(p.estado)}`}>{p.estado}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                           <Button variant="ghost" size="icon" onClick={(e) => {e.stopPropagation(); generarDocumento('orden', p)}} className="h-8 w-8 text-blue-600"><ClipboardList className="h-4 w-4" /></Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                        {isLoading ? (
+                          Array.from({ length: 5 }).map((_, i) => (
+                            <TableRow key={i}>
+                              <TableCell><div className="h-6 w-24 bg-secondary/60 rounded animate-pulse"></div></TableCell>
+                              <TableCell><div className="h-5 w-28 bg-secondary/40 rounded animate-pulse"></div></TableCell>
+                              <TableCell>
+                                <div className="space-y-2">
+                                  <div className="h-5 w-48 bg-secondary/60 rounded animate-pulse"></div>
+                                  <div className="h-4 w-32 bg-secondary/40 rounded animate-pulse"></div>
+                                </div>
+                              </TableCell>
+                              {userRole !== 'mecanico' && <TableCell className="text-right"><div className="h-6 w-28 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>}
+                              <TableCell className="text-center"><div className="h-8 w-32 bg-secondary/60 rounded animate-pulse mx-auto"></div></TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
+                                  {userRole !== 'mecanico' && <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        ) : presupuestosFiltrados.length === 0 ? (
+                      <TableRow><TableCell colSpan={userRole !== 'mecanico' ? 6 : 5} className="h-32 text-center text-muted-foreground">No se encontraron presupuestos.</TableCell></TableRow>
+                    ) : (
+                      presupuestosFiltrados.map((p) => (
+                        <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group transition-colors" onClick={() => handleAbrirPresupuesto(p)}>
+                          <TableCell className="font-mono font-bold">
+                            PRE-{p.numero_correlativo}
+                            {/* --- MAGIA VISUAL: PUNTITO AZUL DE ALERTA --- */}
+                            {p.visto_admin === false && userRole !== 'mecanico' && <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block animate-pulse" title="Cambios sin ver"></span>}
+                          </TableCell>
+                          <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
+                          <TableCell>
+                            <div className="font-medium text-foreground group-hover:text-emerald-600 transition-colors">
+                              {p.vehiculos?.clientes?.tipo_cliente === 'empresa' 
+                                ? p.vehiculos?.clientes?.razon_social 
+                                : `${p.vehiculos?.clientes?.nombre || ''} ${p.vehiculos?.clientes?.apellido || ''}`}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
+                          </TableCell>
+                          
+                          {/* Ocultamos el precio en la fila al mecánico */}
+                          {userRole !== 'mecanico' && (
+                            <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
+                          )}
+                          
+                          <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                            {/* El mecánico ve una etiqueta estática. Los demás ven el selector. */}
+                            {userRole === 'mecanico' ? (
+                              <Badge className={`${getEstadoColor(p.estado)}`}>{p.estado}</Badge>
+                            ) : (
+                              <Select value={p.estado} onValueChange={(val: string) => handleCambiarEstadoRapido(p.id, val)}>
+                                <SelectTrigger className={`h-8 text-xs w-[130px] mx-auto border ${getEstadoColor(p.estado)}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Borrador">Borrador</SelectItem>
+                                  <SelectItem value="En Espera">En Espera</SelectItem>
+                                  <SelectItem value="Aprobado">Aprobado</SelectItem>
+                                  <SelectItem value="Rechazado">Rechazado</SelectItem>
+                                  <SelectItem value="Facturado">Facturado</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => generarDocumento('orden', p)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" title="Orden de Trabajo"><ClipboardList className="h-4 w-4" /></Button>
+                              {userRole !== 'mecanico' && (
+                                <Button variant="ghost" size="icon" onClick={() => generarDocumento('presupuesto', p)} className="h-8 w-8 text-muted-foreground hover:text-primary" title="PDF Presupuesto"><Printer className="h-4 w-4" /></Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
             </Card>
           </div>
         )}
+
+      </div>
+
+      {/* ============================================================== */}
+      {/* ZONA DE IMPRESIÓN (Solo visible al tocar Ctrl+P o Imprimir)  */}
+      <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
+        {printType === 'presupuesto' && <PresupuestoImprimible datos={printData} />}
+        {printType === 'orden' && <OrdenTrabajoImprimible datos={printData} />}
+        {printType === 'factura' && <FacturaImprimible datos={printData} />} 
       </div>
     </>
   )
