@@ -146,7 +146,7 @@ export function TurnosView({
           presupuestos: presups || []
         });
 
-        const presIdASeleccionar = pres_id || (presups && presups.length > 0 ? presups[0].id : "");
+        const presIdASeleccionar = pres_id ? String(pres_id) : (presups && presups.length > 0 ? String(presups[0].id) : "");
 
         setFormData(prev => ({ 
           ...prev, 
@@ -250,7 +250,7 @@ export function TurnosView({
         presupuestos: presups || []
       });
 
-      const presIdAuto = presups && presups.length > 0 ? presups[0].id : "";
+      const presIdAuto = presups && presups.length > 0 ? String(presups[0].id) : "";
 
       setFormData({ 
         ...formData, 
@@ -849,14 +849,14 @@ export function TurnosView({
                             <Label className="text-primary font-bold flex items-center gap-2">
                               <FileText className="w-4 h-4" /> Presupuestos Activos
                             </Label>
-                            <Select value={formData.presupuesto_id} onValueChange={(val: string) => setFormData({...formData, presupuesto_id: val})}>
+                            <Select value={formData.presupuesto_id ? String(formData.presupuesto_id) : "ninguno"} onValueChange={(val: string) => setFormData({...formData, presupuesto_id: val})}>
                               <SelectTrigger className="bg-background border-primary/50 text-foreground">
                                 <SelectValue placeholder="Asociar un presupuesto (Opcional)" />
                               </SelectTrigger>
                               <SelectContent className="border-border bg-popover">
                                 <SelectItem value="ninguno">No asociar ninguno</SelectItem>
                                 {autoEncontrado.presupuestos.map((p: any) => (
-                                  <SelectItem key={p.id} value={p.id}>
+                                  <SelectItem key={p.id} value={String(p.id)}>
                                     PRE-{p.numero_correlativo} - {p.estado} (${p.total_final?.toLocaleString()})
                                   </SelectItem>
                                 ))}
