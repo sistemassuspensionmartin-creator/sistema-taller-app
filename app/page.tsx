@@ -64,10 +64,11 @@ export default function DashboardPage() {
       if (session) {
         setIsAuthenticated(true)
         const { data: perfil } = await supabase.from('perfiles').select('rol', 'nombre').eq('id', session.user.id).single()
-        if (perfil) 
+        if (perfil){ 
           setUserRole(perfil.rol)
           setUserName(perfil.nombre) 
-      } else {
+          }
+        } else {
         setIsAuthenticated(false)
         setUserRole(null)
       }

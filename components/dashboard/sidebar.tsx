@@ -41,7 +41,7 @@ const navItems: NavItem[] = [
   { label: "Inicio", icon: Home, href: "#", active: true, roles: ["admin", "cajero", "mecanico"] },
   { label: "Turnos", icon: Calendar, href: "#", roles: ["admin", "cajero", "mecanico"] },
   { label: "Vehículos", icon: Car, href: "#", roles: ["admin", "cajero", "mecanico"] },
-  { label: "Taller", icon: Wrench, href: "#", roles: ["admin", "mecanico"] },
+  { label: "Taller", icon: Wrench, href: "#", roles: ["admin", "cajero", "mecanico"] },
   { label: "Stock/Repuestos", icon: Package, href: "#", roles: ["admin", "cajero"] },
   { label: "Clientes", icon: Users, href: "#", roles: ["admin", "cajero"] },
   { label: "Presupuestos", icon: FileText, href: "#", roles: ["admin", "cajero", "mecanico"] },
