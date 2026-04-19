@@ -27,16 +27,13 @@ import { AdminDashboardView } from "@/components/dashboard/admin-dashboard-view"
 import { LoginView } from "@/components/dashboard/login-view"
 
 export default function DashboardPage() {
-  // --- ESTADO DE AUTENTICACIÓN (EL CANDADO) ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState("Inicio")
 
-  // Estado para la Alerta Personalizada Global
   const [customAlert, setCustomAlert] = useState({ isOpen: false, message: "", type: "info" });
   
-  // ESTADOS PARA LA MEMORIA DEL PUENTE
   const [vehiculoParaAbrir, setVehiculoParaAbrir] = useState<any>(null)
   const [clienteParaAbrir, setClienteParaAbrir] = useState<any>(null)
   const [presupuestoParaAbrir, setPresupuestoParaAbrir] = useState<string | null>(null) 
@@ -44,10 +41,8 @@ export default function DashboardPage() {
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
 
-  // --- SECUESTRO GLOBAL DEL ALERT() ---
   useEffect(() => {
     window.alert = (msg) => {
-      // Detectamos si es un error, advertencia o éxito leyendo el texto
       let type = "info";
       if (msg.includes("Error") || msg.includes("❌") || msg.includes("⛔")) type = "error";
       else if (msg.includes("⚠️")) type = "warning";
@@ -57,20 +52,23 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // --- EFECTO OPTIMIZADO: SESIÓN, ROL Y AUTO-CIERRE ---
   useEffect(() => {
     const inicializarSesion = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setIsAuthenticated(true)
-        const { data: perfil } = await supabase.from('perfiles').select('rol', 'nombre').eq('id', session.user.id).single()
-        if (perfil){ 
+        
+        // --- CORRECCIÓN MAGICA: UNA SOLA COMILLA ---
+        const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', session.user.id).single()
+        
+        if (perfil) {
           setUserRole(perfil.rol)
           setUserName(perfil.nombre) 
-          }
-        } else {
+        }
+      } else {
         setIsAuthenticated(false)
         setUserRole(null)
+        setUserName(null)
       }
     }
     
@@ -78,10 +76,12 @@ export default function DashboardPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session)
-      if (!session) setUserRole(null)
+      if (!session) {
+        setUserRole(null)
+        setUserName(null)
+      }
     })
 
-    // 3. DETECTOR DE INACTIVIDAD (VERSIÓN LIVIANA)
     let ultimaActividad = Date.now();
     const actualizarActividad = () => { ultimaActividad = Date.now(); };
 
@@ -90,13 +90,13 @@ export default function DashboardPage() {
     window.addEventListener('click', actualizarActividad);
     window.addEventListener('scroll', actualizarActividad);
     
-    // Revisamos silenciosamente cada 1 minuto si el usuario se olvidó la sesión abierta
     const intervaloRevision = setInterval(async () => {
       const tiempoInactivo = Date.now() - ultimaActividad;
-      if (tiempoInactivo > 30 * 60 * 1000) { // 30 minutos
+      if (tiempoInactivo > 30 * 60 * 1000) { 
         await supabase.auth.signOut();
         setIsAuthenticated(false);
         setUserRole(null);
+        setUserName(null);
         alert("⛔ Por seguridad, tu sesión se ha cerrado tras 30 minutos de inactividad.");
         window.location.reload();
       }
@@ -226,33 +226,27 @@ export default function DashboardPage() {
             </div>
             <h2 className="text-3xl font-bold text-foreground">Mi Perfil</h2>
             <p className="text-muted-foreground mt-2 text-lg">
-              Sesión iniciada como <span className="font-bold uppercase text-emerald-600">{userRole}</span>
+              Sesión iniciada como <span className="font-bold uppercase text-emerald-600">{userName || userRole}</span>
             </p>
             <p className="text-sm text-slate-400 mt-1">Suspensión Martín - Panel de Gestión</p>
           </div>
         );
       default:
-        return <MetricsCards userRole={userRole}/> // Aseguramos que Inicio también reciba el rol si es default
+        return <MetricsCards userRole={userRole} userName={userName}/> 
     }
   }
 
-  // --- LAS BARRERAS DE SEGURIDAD ---
-
-  // 1. Si todavía está pensando (cargando la página o validando el login), mostramos la animación del Taller
   if (isAuthenticated === null) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-50 dark:bg-background gap-6">
         <div className="relative flex items-center justify-center">
-          {/* Ícono de auto rebotando (efecto andando) */}
           <Car className="w-16 h-16 text-emerald-600 animate-bounce relative z-10" />
-          {/* Rueditas girando (usamos el ícono de configuración como llanta) */}
           <div className="absolute bottom-1 left-1.5 z-20 bg-background rounded-full">
              <Settings className="w-4 h-4 text-slate-800 dark:text-slate-300 animate-spin" />
           </div>
           <div className="absolute bottom-1 right-1.5 z-20 bg-background rounded-full">
              <Settings className="w-4 h-4 text-slate-800 dark:text-slate-300 animate-spin" />
           </div>
-          {/* Sombrita dinámica en el piso */}
           <div className="absolute -bottom-2 w-16 h-2 bg-black/10 dark:bg-white/10 rounded-[100%] animate-pulse"></div>
         </div>
         
@@ -269,28 +263,25 @@ export default function DashboardPage() {
     )
   }
 
-  // 2. Si NO está logueado, lo frenamos en el Login
   if (isAuthenticated === false) {
     return (
       <LoginView onLoginSuccess={async () => {
-        // EN VEZ DE UN F5 BRUSCO:
-        // 1. Volvemos a mostrar la pantalla de carga del autito
         setIsAuthenticated(null); 
         
-        // 2. Buscamos la sesión fresca y su rol en silencio
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          const { data: perfil } = await supabase.from('perfiles').select('rol', 'nombre').eq('id', session.user.id).single();
+          
+          // --- CORRECCIÓN MAGICA: UNA SOLA COMILLA ---
+          const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', session.user.id).single();
+          
           setUserRole(perfil?.rol || null);
           setUserName(perfil?.nombre || null);
-          // 3. Abrimos la puerta al sistema ya con los candados correctos
           setIsAuthenticated(true);
         }
       }} />
     )
   }
 
-  // 3. Si PASÓ las barreras, le mostramos el sistema
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <div className="flex h-screen bg-background">
@@ -316,7 +307,6 @@ export default function DashboardPage() {
               {renderContent()}
             </div>
             
-            {/* --- ALERTA PERSONALIZADA GLOBAL --- */}
             <Dialog open={customAlert.isOpen} onOpenChange={(open) => setCustomAlert(prev => ({ ...prev, isOpen: open }))}>
               <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl sm:rounded-2xl top-[35%] translate-y-[-50%] outline-none">
                 <div className="flex flex-col items-center gap-4 text-center">

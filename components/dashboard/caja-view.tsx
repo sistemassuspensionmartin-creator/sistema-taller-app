@@ -39,10 +39,10 @@ import {
 
 export function CajaView({ 
   onNavigateToPresupuesto,
-  userRole // <-- RECIBIMOS EL ROL ACÁ
+  userRole 
 }: { 
   onNavigateToPresupuesto?: (id: string) => void,
-  userRole?: string | null // <-- LO DEFINIMOS
+  userRole?: string | null 
 }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -189,13 +189,11 @@ export function CajaView({
   const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
   const saldoMostrador = cajaMostrador ? Number(cajaMostrador.saldo || 0) : 0;
 
-  // --- MAGIA: FUNCIÓN PARA ABRIR EL GASTO AUTO-SELECCIONANDO EL MOSTRADOR ---
   const abrirModalGasto = () => {
     setCategoriaEgreso("");
     setMontoEgreso("");
     setNotasEgreso("");
     
-    // Si es cajero, le seleccionamos automáticamente la caja mostrador
     if (userRole === 'cajero' && cajaMostrador) {
       setCajaEgreso(cajaMostrador.id);
     } else {
@@ -241,6 +239,28 @@ export function CajaView({
       let detalleMetodo = "";
       if (metodoPago === 'Transferencia' && bancoOrigen) detalleMetodo = ` [Banco: ${bancoOrigen}]`;
       if (metodoPago === 'Tarjeta') detalleMetodo = ` [${marcaTarjeta} ${tipoTarjeta}${bancoTarjeta ? ' - ' + bancoTarjeta : ''}]`;
+
+      // --- MAGIA: SI PASA A CUENTA CORRIENTE, ACTIVAMOS EL INTERRUPTOR DEL CLIENTE ---
+      if (metodoPago === 'Cuenta Corriente') {
+        // 1. Buscamos a quién pertenece este presupuesto
+        const { data: pData } = await supabase
+          .from('presupuestos')
+          .select('vehiculos(cliente_id)')
+          .eq('id', presupuestoACobrar.id)
+          .single();
+
+        // 2. Le encendemos la cuenta corriente (Corregido para TypeScript)
+        const clienteId = Array.isArray(pData?.vehiculos) 
+          ? pData?.vehiculos[0]?.cliente_id 
+          : (pData?.vehiculos as any)?.cliente_id;
+
+        if (clienteId) {
+          await supabase.from('clientes')
+            .update({ tiene_cuenta_corriente: true })
+            .eq('id', clienteId);
+        }
+      }
+      // ---------------------------------------------------------------------------------
 
       await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
@@ -507,7 +527,6 @@ export function CajaView({
               <TrendingDown className="mr-2 h-4 w-4" /> Registrar Gasto
             </Button>
             
-            {/* Ocultamos Movimiento Interno al cajero */}
             {userRole !== 'cajero' && (
               <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
                 <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
