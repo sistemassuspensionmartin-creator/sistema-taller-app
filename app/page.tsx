@@ -30,6 +30,7 @@ export default function DashboardPage() {
   // --- ESTADO DE AUTENTICACIÓN (EL CANDADO) ---
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [userName, setUserName] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState("Inicio")
 
   // Estado para la Alerta Personalizada Global
@@ -62,8 +63,10 @@ export default function DashboardPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setIsAuthenticated(true)
-        const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', session.user.id).single()
-        if (perfil) setUserRole(perfil.rol)
+        const { data: perfil } = await supabase.from('perfiles').select('rol', 'nombre').eq('id', session.user.id).single()
+        if (perfil) 
+          setUserRole(perfil.rol)
+          setUserName(perfil.nombre) 
       } else {
         setIsAuthenticated(false)
         setUserRole(null)
@@ -121,7 +124,8 @@ export default function DashboardPage() {
               }}
               onNavigateToTurnos={() => setActiveSection("Turnos")}
               onNavigateToCaja={() => setActiveSection("Caja")}
-              userRole={userRole} 
+              userRole={userRole}
+              userName={userName}
             />
           </div>
         );
@@ -201,7 +205,8 @@ export default function DashboardPage() {
                 setVolverA(null);
               }
             }}
-            userRole={userRole} 
+            userRole={userRole}
+            userName={userName} 
           />
         );
       case "Stock/Repuestos":
@@ -274,8 +279,9 @@ export default function DashboardPage() {
         // 2. Buscamos la sesión fresca y su rol en silencio
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          const { data: perfil } = await supabase.from('perfiles').select('rol').eq('id', session.user.id).single();
+          const { data: perfil } = await supabase.from('perfiles').select('rol', 'nombre').eq('id', session.user.id).single();
           setUserRole(perfil?.rol || null);
+          setUserName(perfil?.nombre || null);
           // 3. Abrimos la puerta al sistema ya con los candados correctos
           setIsAuthenticated(true);
         }
@@ -297,6 +303,7 @@ export default function DashboardPage() {
             activeSection={activeSection} 
             onSectionChange={setActiveSection} 
             userRole={userRole}
+            userName={userName}
             onNavigateToPresupuesto={(id) => {
               setPresupuestoParaAbrir(id);
               setVolverA(activeSection);

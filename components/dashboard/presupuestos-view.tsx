@@ -60,14 +60,16 @@ export function PresupuestosView({
   presupuestoAbreDetalle, 
   onClearPresupuestoDetalle, 
   onVolver,
-  userRole 
+  userRole,
+  userName 
 }: { 
   onNavigateToTurnos?: (vehiculoInfo: any) => void, 
   onNavigateToTaller?: () => void, 
   presupuestoAbreDetalle?: string | null, 
   onClearPresupuestoDetalle?: () => void, 
   onVolver?: () => void,
-  userRole?: string | null 
+  userRole?: string | null,
+  userName?: string | null
 }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   const [isEditing, setIsEditing] = useState(false)
@@ -323,7 +325,7 @@ export function PresupuestosView({
     try {
       const { error } = await supabase.from('presupuestos').update({ 
         estado: nuevoEstado,
-        modificado_por_rol: userRole || 'admin' // <--- DEJAMOS NUESTRA FIRMA
+        modificado_por_rol: userRole || 'admin'
       }).eq('id', id);
       if (error) throw error;
       
@@ -356,7 +358,8 @@ export function PresupuestosView({
           estado: estado,
           observaciones_publicas: notasCliente,
           notas_internas: notasInternas,
-          modificado_por_rol: userRole || 'admin' // <--- FIRMA
+          modificado_por_rol: userRole || 'admin',
+          modificado_por_nombre: userName || 'Usuario'
         }).eq('id', editandoId)
 
         if (presError) throw new Error("Error al actualizar presupuesto: " + presError.message)
@@ -374,7 +377,8 @@ export function PresupuestosView({
           estado: estado,
           observaciones_publicas: notasCliente,
           notas_internas: notasInternas,
-          modificado_por_rol: userRole || 'admin' // <--- FIRMA
+          modificado_por_rol: userRole || 'admin',
+          modificado_por_nombre: userName || 'Usuario'
         }]).select()
 
         if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
