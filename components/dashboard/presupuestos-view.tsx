@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -97,10 +97,6 @@ export function PresupuestosView({
   const [notasCliente, setNotasCliente] = useState("Los repuestos pueden sufrir variaciones de precio sin previo aviso. Validez sujeta a stock.")
   const [notasInternas, setNotasInternas] = useState("")
   const [descuento, setDescuento] = useState<string | number>("0")
-  
-  // --- NUEVO ESTADO PARA DIFFING ---
-  const [itemsOriginales, setItemsOriginales] = useState<any[]>([])
-  
   const [filas, setFilas] = useState<any[]>([
     { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }
   ])
@@ -205,7 +201,7 @@ export function PresupuestosView({
 
   const vehiculosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado))
 
-  const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }])
+  const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: userRole === 'mecanico' ? 'nuevo' : null }])
 
   const actualizarFila = (id: string, campo: string, valor: any) => {
     if (!isEditing) return;
@@ -222,24 +218,26 @@ export function PresupuestosView({
     if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0" } : f))
   }
 
-  const eliminarFila = (id: string) => setFilas(filas.filter(f => f.id !== id))
+  const eliminarFila = (id: string) => {
+    const fila = filas.find(f => f.id === id);
+    if (userRole === 'mecanico' && fila?.estado_cambio !== 'nuevo') {
+      // El mecánico solo "sugiere" borrar. Lo marcamos y no lo sacamos del array.
+      setFilas(filas.map(f => f.id === id ? { ...f, estado_cambio: 'eliminado' } : f));
+    } else {
+      // Admin o Cajero lo borran directo (o el mecánico borra algo que acaba de agregar y se arrepintió)
+      setFilas(filas.filter(f => f.id !== id));
+    }
+  }
 
   const vehiculoActual = vehiculos.find(v => v.patente === vehiculoSeleccionado)
   const clienteActual = clientes.find(c => c.id === clienteSeleccionado)
 
-  // --- CALCULO ACTUALIZADO: IGNORA LOS ELIMINADOS ---
+  // Los subtotales ignoran lo que está sugerido como eliminado para dar el número real proyectado
   const filasParaCalculo = filas.filter(f => f.estado_cambio !== 'eliminado');
   const subtotalNeto = filasParaCalculo.reduce((acc, fila) => acc + ((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)), 0)
   const costoTotal = filasParaCalculo.reduce((acc, fila) => acc + ((parseFloat(fila.costo) || 0) * (parseFloat(fila.cant) || 1)), 0)
   const totalFinal = subtotalNeto - (parseFloat(descuento.toString()) || 0)
   const gananciaEstimada = totalFinal - costoTotal
-
-  // --- FUNCION PARA LIMPIAR LA GUÍA VISUAL ---
-  const limpiarAvisosVisuales = async (idPres: string) => {
-    await supabase.from('presupuesto_items').delete().eq('presupuesto_id', idPres).eq('estado_cambio', 'eliminado');
-    await supabase.from('presupuesto_items').update({ estado_cambio: null }).eq('presupuesto_id', idPres);
-    await supabase.from('presupuestos').update({ visto_admin: true }).eq('id', idPres);
-  }
 
   const handleAbrirPresupuesto = (p?: any) => {
     setPresupuestosAEliminar([]);
@@ -257,14 +255,8 @@ export function PresupuestosView({
       setNotasInternas(p.notas_internas || "")
       setIsEditing(false)
 
-      let itemsTraidos = p.presupuesto_items || [];
-      if (userRole === 'mecanico') {
-        itemsTraidos = itemsTraidos.filter((i: any) => i.estado_cambio !== 'eliminado');
-      }
-      setItemsOriginales(itemsTraidos);
-
-      if (itemsTraidos.length > 0) {
-        setFilas(itemsTraidos.map((item: any) => ({
+      if (p.presupuesto_items && p.presupuesto_items.length > 0) {
+        setFilas(p.presupuesto_items.map((item: any) => ({
           id: item.id || Date.now().toString() + Math.random(),
           tipo: item.tipo,
           detalle: item.detalle,
@@ -277,9 +269,10 @@ export function PresupuestosView({
         setFilas([])
       }
 
-      // Si lo abre alguien de la oficina y tiene cambios, limpiamos las etiquetas en la BD
+      // Si lo abre el mostrador, quitamos la alerta azul silenciosamente de la tabla, 
+      // pero MANTENEMOS los colores intactos para que decidan si guardan o borran.
       if (p.visto_admin === false && userRole !== 'mecanico') {
-        limpiarAvisosVisuales(p.id);
+        supabase.from('presupuestos').update({ visto_admin: true }).eq('id', p.id).then();
       }
 
     } else {
@@ -289,8 +282,7 @@ export function PresupuestosView({
       setVehiculoSeleccionado("")
       setFecha(new Date().toISOString().split('T')[0])
       setEstado("Borrador")
-      setItemsOriginales([])
-      setFilas([{ id: Date.now().toString(), tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }])
+      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }])
       setIsEditing(true)
     }
     
@@ -367,7 +359,9 @@ export function PresupuestosView({
     if (!clienteSeleccionado) return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
     if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
 
-    const filasValidas = filas.filter(f => f.detalle.trim() !== "")
+    // Filtramos las válidas. Si es administrador, ignoramos las marcadas como 'eliminado' para borrarlas de la base de datos definitivamente.
+    const filasValidas = filas.filter(f => f.detalle.trim() !== "" && (userRole === 'mecanico' || f.estado_cambio !== 'eliminado'));
+    
     if (filasValidas.length === 0) return alert("El presupuesto debe tener al menos un ítem con detalle.")
 
     setIsSaving(true)
@@ -393,7 +387,10 @@ export function PresupuestosView({
         }).eq('id', editandoId)
 
         if (presError) throw new Error("Error al actualizar presupuesto: " + presError.message)
-        // NOTA: Acá antes se hacía un delete() brutal de todos los ítems. Ahora usamos Diffing abajo.
+        
+        // Mantenemos la estructura de guardado original: borra todo e inserta lo nuevo para no causar bugs.
+        await supabase.from('presupuesto_items').delete().eq('presupuesto_id', editandoId);
+        
       } else {
         numAleatorio = Math.floor(1000 + Math.random() * 9000);
         const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
@@ -416,56 +413,18 @@ export function PresupuestosView({
         presId = presData[0].id;
       }
 
-      // --- DIFFING LOGIC (Control de Cambios) ---
-      const itemsOriginalesIds = itemsOriginales.map(i => String(i.id));
-      const filasValidasIds = filasValidas.map(f => String(f.id));
+      const itemsToInsert = filasValidas.map(f => ({
+        presupuesto_id: presId,
+        tipo: f.tipo,
+        detalle: f.detalle,
+        cantidad: parseFloat(f.cant) || 1,
+        costo_unitario: parseFloat(f.costo) || 0,
+        precio_unitario: parseFloat(f.precio) || 0,
+        estado_cambio: isMecanico ? (f.estado_cambio || null) : null // El admin blanquea los colores al guardar
+      }))
 
-      const toInsert: any[] = [];
-      const toUpdate: any[] = [];
-      const toDelete: any[] = [];
-
-      filasValidas.forEach(f => {
-        const isNew = !itemsOriginalesIds.includes(String(f.id));
-        const obj = {
-          presupuesto_id: presId,
-          tipo: f.tipo,
-          detalle: f.detalle,
-          cantidad: parseFloat(f.cant) || 1,
-          costo_unitario: parseFloat(f.costo) || 0,
-          precio_unitario: parseFloat(f.precio) || 0,
-          estado_cambio: (isMecanico && isNew) ? 'nuevo' : (!isMecanico ? null : f.estado_cambio)
-        };
-
-        if (isNew) {
-          toInsert.push(obj);
-        } else {
-          toUpdate.push({ id: f.id, ...obj });
-        }
-      });
-
-      itemsOriginales.forEach(orig => {
-        if (!filasValidasIds.includes(String(orig.id))) {
-          if (isMecanico) {
-            toUpdate.push({
-              id: orig.id,
-              presupuesto_id: presId,
-              tipo: orig.tipo,
-              detalle: orig.detalle,
-              cantidad: orig.cantidad,
-              costo_unitario: orig.costo_unitario,
-              precio_unitario: orig.precio_unitario,
-              estado_cambio: 'eliminado'
-            });
-          } else {
-            toDelete.push(orig.id);
-          }
-        }
-      });
-
-      if (toInsert.length > 0) await supabase.from('presupuesto_items').insert(toInsert);
-      if (toUpdate.length > 0) await supabase.from('presupuesto_items').upsert(toUpdate);
-      if (toDelete.length > 0) await supabase.from('presupuesto_items').delete().in('id', toDelete);
-      // -------------------------------------------
+      const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
+      if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
       if (presupuestosAEliminar.length > 0) {
         await supabase.from('presupuesto_items').delete().in('presupuesto_id', presupuestosAEliminar);
@@ -567,7 +526,6 @@ export function PresupuestosView({
     
     if (!v_cliente || !v_vehiculo) return alert("Faltan datos del cliente o vehículo para generar el documento.");
 
-    // --- CORRECCIÓN: IGNORA LOS ITEMS ELIMINADOS AL IMPRIMIR ---
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "" && f.estado_cambio !== 'eliminado');
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
 
@@ -866,15 +824,12 @@ export function PresupuestosView({
                     <TableBody>
                       {filas.map((fila) => {
                         const catalogoFiltrado = catalogo.filter(c => c.tipo === fila.tipo)
-                        
-                        // --- MAGIA VISUAL: COLORES EN LA TABLA ---
+
                         let colorFila = "hover:bg-transparent";
-                        if (!isEditing && userRole !== 'mecanico') {
-                          if (fila.estado_cambio === 'nuevo') {
-                            colorFila = "bg-green-100/50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30";
-                          } else if (fila.estado_cambio === 'eliminado') {
-                            colorFila = "bg-red-100/50 dark:bg-red-900/20 opacity-60 line-through hover:bg-red-100 dark:hover:bg-red-900/30 pointer-events-none";
-                          }
+                        if (fila.estado_cambio === 'nuevo') {
+                          colorFila = "bg-green-100/50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30";
+                        } else if (fila.estado_cambio === 'eliminado') {
+                          colorFila = "bg-red-100/50 dark:bg-red-900/20 opacity-60 line-through hover:bg-red-100 dark:hover:bg-red-900/30";
                         }
 
                         return (
@@ -931,7 +886,13 @@ export function PresupuestosView({
                             )}
 
                             {isEditing && (
-                              <TableCell className="print:hidden"><Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button></TableCell>
+                              <TableCell className="print:hidden">
+                                {fila.estado_cambio === 'eliminado' ? (
+                                  <Button variant="ghost" size="icon" onClick={() => actualizarFila(fila.id, 'estado_cambio', null)} title="Restaurar ítem" className="h-8 w-8 text-emerald-600 hover:bg-emerald-50"><RotateCcw className="w-4 h-4"/></Button>
+                                ) : (
+                                  <Button variant="ghost" size="icon" onClick={() => eliminarFila(fila.id)} className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"><Trash2 className="w-4 h-4"/></Button>
+                                )}
+                              </TableCell>
                             )}
                           </TableRow>
                         )
