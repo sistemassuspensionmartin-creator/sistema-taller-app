@@ -77,6 +77,10 @@ export function PresupuestosView({
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
+  const [kmIngreso, setKmIngreso] = useState("")
+  const [kmEgreso, setKmEgreso] = useState("")
+  const [demoraEstimada, setDemoraEstimada] = useState("")
+
   const [clientes, setClientes] = useState<any[]>([])
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
@@ -268,6 +272,9 @@ export function PresupuestosView({
       setDescuento(p.descuento || "0")
       setNotasCliente(p.observaciones_publicas || "")
       setNotasInternas(p.notas_internas || "")
+      setKmIngreso(p.km_ingreso?.toString() || "")
+      setKmEgreso(p.km_egreso?.toString() || "")
+      setDemoraEstimada(p.demora_estimada || "")
       setIsEditing(false)
 
       let itemsTraidos = p.presupuesto_items || [];
@@ -405,6 +412,9 @@ export function PresupuestosView({
           notas_internas: notasInternas,
           modificado_por_rol: userRole || 'admin',
           modificado_por_nombre: userName || 'Usuario',
+          km_ingreso: kmIngreso,
+          km_egreso: kmEgreso,
+          demora_estimada: demoraEstimada,
           visto_admin: !isMecanico
         }).eq('id', editandoId)
 
@@ -427,6 +437,9 @@ export function PresupuestosView({
           notas_internas: notasInternas,
           modificado_por_rol: userRole || 'admin',
           modificado_por_nombre: userName || 'Usuario',
+          km_ingreso: kmIngreso,
+          km_egreso: kmEgreso,
+          demora_estimada: demoraEstimada,
           visto_admin: !isMecanico
         }]).select()
 
