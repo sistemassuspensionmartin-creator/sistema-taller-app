@@ -550,6 +550,10 @@ export function PresupuestosView({
 
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "" && f.estado_cambio !== 'eliminado');
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
+    
+    // --- MAGIA NUEVA: CAPTURAMOS EL DESCUENTO Y EL SUBTOTAL ---
+    const v_descuento = esHistorico ? (datosHistoricos.descuento || 0) : (parseFloat(descuento.toString()) || 0);
+    const v_subtotal = esHistorico ? (Number(v_total) + Number(v_descuento)) : subtotalNeto;
 
     const datosFormateadosParaPlantilla = {
       cliente_nombre: v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`,
@@ -562,6 +566,8 @@ export function PresupuestosView({
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
       items: v_filas,
+      subtotal: v_subtotal, // <-- LO ENVIAMOS A LA IMPRESORA
+      descuento: v_descuento, // <-- LO ENVIAMOS A LA IMPRESORA
       total_final: v_total,
       validez_dias: validez,
       observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
