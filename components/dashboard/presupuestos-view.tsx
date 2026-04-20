@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw, Gauge, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -310,6 +310,9 @@ export function PresupuestosView({
       setVehiculoSeleccionado("")
       setFecha(new Date().toISOString().split('T')[0])
       setEstado("Borrador")
+      setKmIngreso("")
+      setKmEgreso("")
+      setDemoraEstimada("")
       setItemsOriginales([])
       setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }])
       setIsEditing(true)
@@ -844,6 +847,20 @@ export function PresupuestosView({
                       value={clienteActual?.telefono || ""}
                       className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none"
                     />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 mt-4 border-t border-border">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground flex items-center gap-1"><Gauge className="w-3 h-3"/> KM Ingreso</Label>
+                    <Input type="number" value={kmIngreso} onChange={(e: any) => setKmIngreso(e.target.value)} readOnly={!isEditing} className={`h-10 font-mono ${!isEditing ? 'bg-secondary/20 pointer-events-none font-bold text-foreground' : 'bg-white dark:bg-slate-950'}`} placeholder="Ej: 145000" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground flex items-center gap-1"><Gauge className="w-3 h-3"/> KM Egreso (Al entregar)</Label>
+                    <Input type="number" value={kmEgreso} onChange={(e: any) => setKmEgreso(e.target.value)} readOnly={!isEditing} className={`h-10 font-mono ${!isEditing ? 'bg-secondary/20 pointer-events-none font-bold text-foreground' : 'bg-white dark:bg-slate-950'}`} placeholder="Completar al retirar..." />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3"/> Demora Estimada</Label>
+                    <Input value={demoraEstimada} onChange={(e: any) => setDemoraEstimada(e.target.value)} readOnly={!isEditing} className={`h-10 ${!isEditing ? 'bg-secondary/20 pointer-events-none font-bold text-foreground' : 'bg-white dark:bg-slate-950'}`} placeholder="Ej: Jueves por la tarde..." />
                   </div>
                 </div>
               </CardContent>

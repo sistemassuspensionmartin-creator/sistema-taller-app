@@ -164,6 +164,7 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
       </div>
 
       {/* FICHA TÉCNICA */}
+      {/* FICHA TÉCNICA */}
       <div className="border-2 border-slate-800 rounded-xl mb-4 overflow-hidden">
         <div className="bg-white px-3 py-1.5 border-b-2 border-slate-800 flex justify-between items-center">
           {/* Azul Goodyear */}
@@ -177,24 +178,29 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
         </div>
         
         <div className="p-3 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-2">
+          {/* TRES COLUMNAS: MARCA - COLOR - CLIENTE */}
+          <div className="grid grid-cols-3 gap-2 border-b-2 border-slate-100 pb-2.5">
             <div>
               <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider block mb-0.5">Marca y Modelo</span>
-              <span className="font-black text-slate-900 text-sm">{datos.vehiculo_modelo || "________"}</span>
+              <span className="font-black text-slate-900 text-sm leading-tight">{datos.vehiculo_modelo || "________"}</span>
             </div>
-            <div>
-              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center gap-1"><User className="w-3 h-3"/> Cliente</span>
-              <span className="font-black text-slate-900 text-sm">{datos.cliente_nombre}</span>
+            <div className="text-center px-2 border-x-2 border-slate-100">
+              <span className="text-[9px] text-[#003087] font-black uppercase tracking-wider mb-0.5 flex items-center justify-center gap-1"><Palette className="w-3 h-3"/> Color</span>
+              <span className="font-black text-slate-900 text-sm uppercase">{datos.vehiculo_color || "________"}</span>
+            </div>
+            <div className="text-right">
+              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1"><User className="w-3 h-3"/> Cliente</span>
+              <span className="font-black text-slate-900 text-sm leading-tight">{datos.cliente_nombre}</span>
             </div>
           </div>
           
-          <div className="flex justify-between border-t-2 border-slate-100 pt-3">
+          <div className="flex justify-between">
             <div>
-               <p className="text-[9px] text-slate-600 font-black uppercase mb-1">Kilómetros Entrada</p>
+               <p className="text-[9px] text-slate-600 font-black uppercase mb-1 flex items-center gap-1"><Gauge className="w-3 h-3"/> Kilómetros Entrada</p>
                <p className="font-bold text-slate-900 font-mono">{datos.vehiculo_kilometros || datos.km_ingreso || "---"} KM</p>
             </div>
             <div className="text-right">
-               <p className="text-[9px] text-[#003087] font-black uppercase mb-1 flex items-center justify-end gap-1"><Clock className="w-2.5 h-2.5"/> Entrega Sugerida</p>
+               <p className="text-[9px] text-[#003087] font-black uppercase mb-1 flex items-center justify-end gap-1"><Clock className="w-3 h-3"/> Entrega Sugerida</p>
                <p className="font-black text-slate-900 uppercase">{datos.demora_estimada || "NO DEFINIDA"}</p>
             </div>
           </div>
