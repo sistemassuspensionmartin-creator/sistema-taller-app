@@ -134,8 +134,7 @@ export function TurnosView({
           .from('presupuestos')
           .select('id, numero_correlativo, total_final, detalle, estado')
           .eq('vehiculo_patente', auto.patente)
-          .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
-
+          
         const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
         const telefonoCliente = auto.clientes?.telefono || '';
 
@@ -248,7 +247,7 @@ export function TurnosView({
         .from('presupuestos')
         .select('id, numero_correlativo, total_final, detalle, estado')
         .eq('vehiculo_patente', auto.patente)
-        .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
+        
 
       const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
       const telefonoCliente = auto.clientes?.telefono || '';
