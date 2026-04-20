@@ -139,6 +139,7 @@ export function TurnosView({
         const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
         const telefonoCliente = auto.clientes?.telefono || '';
 
+        // Guardamos todo lo que encontró
         setAutoEncontrado({
           ...auto,
           dueño: nombreCliente,
@@ -147,17 +148,24 @@ export function TurnosView({
         });
 
         const presIdASeleccionar = pres_id ? String(pres_id) : (presups && presups.length > 0 ? String(presups[0].id) : "");
-
-        setFormData(prev => ({ 
-          ...prev, 
-          patente: auto.patente, 
-          marcaModelo: `${auto.marca} ${auto.modelo}`, 
-          nombreDueño: nombreCliente, 
-          telefono: telefonoCliente, 
-          presupuesto_id: presIdASeleccionar
-        }));
-        
         setBusquedaPatente(auto.patente);
+
+        // --- LA MAGIA ACÁ ---
+        // 1. Abrimos el modal PRIMERO
+        setIsModalOpen(true);
+
+        // 2. Esperamos un parpadeo (100ms) para que el Select exista, y recién ahí le mandamos los datos.
+        setTimeout(() => {
+          setFormData(prev => ({ 
+            ...prev, 
+            patente: auto.patente, 
+            marcaModelo: `${auto.marca} ${auto.modelo}`, 
+            nombreDueño: nombreCliente, 
+            telefono: telefonoCliente, 
+            presupuesto_id: presIdASeleccionar
+          }));
+        }, 100);
+
       } catch (err) {
         console.error(err);
       } finally {
@@ -166,8 +174,9 @@ export function TurnosView({
     }
 
     if (turnoAgendarInfo) {
-      cargarAutoPredefinido(turnoAgendarInfo.patente, turnoAgendarInfo.presupuesto_id);
-      setIsModalOpen(true); // ¡Magia! Abrimos el modal automáticamente para que los datos no se pierdan.
+      // Por si acaso vino de otro lado y se llama distinto, atajamos las dos opciones
+      const idParaBuscar = turnoAgendarInfo.presupuesto_id || turnoAgendarInfo.id || "";
+      cargarAutoPredefinido(turnoAgendarInfo.patente, idParaBuscar);
     }
   }, [turnoAgendarInfo])
 
