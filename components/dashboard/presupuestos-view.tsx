@@ -392,7 +392,6 @@ export function PresupuestosView({
     if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
 
     // --- NUEVA VALIDACIÓN DE KILOMETRAJE ---
-    // Usamos || 0 para que si está vacío no devuelva "NaN" (Not a Number)
     const kmi = parseInt(kmIngreso) || 0;
     const kme = parseInt(kmEgreso) || 0;
 
@@ -470,14 +469,16 @@ export function PresupuestosView({
       }
 
       // --- SINCRONIZACIÓN CON LA FICHA DEL VEHÍCULO ---
-      // Si hay KM de salida, gana ese. Si no, actualizamos con el de entrada.
       const kmParaFicha = kme > 0 ? kme : kmi;
       if (kmParaFicha > 0) {
-        await supabase.from('vehiculos')
-          .update({ kilometros: kmParaFicha })
+        const { error: errVehiculo } = await supabase.from('vehiculos')
+          .update({ kilometraje: kmParaFicha.toString() }) 
           .eq('patente', vehiculoSeleccionado);
+          
+        if (errVehiculo) {
+          alert("El presupuesto se guardó, pero hubo un error al actualizar la ficha del vehículo: " + errVehiculo.message);
+        }
       }
-      // ------------------------------------------------
 
       alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
       
@@ -596,7 +597,10 @@ export function PresupuestosView({
       validez_dias: validez,
       observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
       notas_internas: esHistorico ? datosHistoricos.notas_internas : notasInternas,
-      config: configuracion
+      config: configuracion,
+      km_ingreso: esHistorico ? datosHistoricos.km_ingreso : kmIngreso,
+      km_egreso: esHistorico ? datosHistoricos.km_egreso : kmEgreso,
+      demora_estimada: esHistorico ? datosHistoricos.demora_estimada : demoraEstimada
     };
 
     setPrintType(tipo);
