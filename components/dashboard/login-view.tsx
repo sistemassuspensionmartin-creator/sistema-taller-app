@@ -46,18 +46,17 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   }
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Fondo con diseño sutil */}
-      <div className="absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]"></div>
-      <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[310px] w-[310px] rounded-full bg-emerald-500 opacity-20 blur-[100px]"></div>
+    <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[url('/login-bg.jpg')] bg-cover bg-center">
+      
+      {/* Capa oscura translúcida (El 'Patovica visual') */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-0"></div>
 
-      <div className="w-full max-w-md z-10 animate-in fade-in zoom-in-95 duration-500">
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+      <div className="w-full max-w-md z-10 relative animate-in fade-in zoom-in-95 duration-500">
+        <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
           
           {/* Cabecera del Login */}
           <div className="px-8 pt-10 pb-6 text-center">
             <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-sm">
-              {/* Cambiá esta ruta si tu logo está en otro lado */}
               <img src="/icon.png" alt="Logo" className="w-14 h-14 object-contain" />
             </div>
             <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Suspensión MARTIN</h1>
@@ -121,8 +120,8 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
 
         </div>
 
-        {/* Pie de página */}
-        <p className="text-center text-xs font-medium text-slate-400 mt-8">
+        {/* Pie de página (Letras blancas para que se lea sobre la foto) */}
+        <p className="text-center text-xs font-medium text-white/70 mt-8 drop-shadow-md">
           Sistema de Gestión Integral &copy; {new Date().getFullYear()}
         </p>
       </div>
