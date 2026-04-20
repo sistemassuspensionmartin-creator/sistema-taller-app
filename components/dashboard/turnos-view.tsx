@@ -130,10 +130,17 @@ export function TurnosView({
 
         if (error || !auto) return;
 
-        const { data: presups } = await supabase
+        // --- LA TRAMPA PARA EL ERROR ---
+        const { data: presups, error: errorPresup } = await supabase
           .from('presupuestos')
           .select('id, numero_correlativo, total_final, detalle, estado')
           .eq('vehiculo_patente', auto.patente)
+          .in('estado', ['Borrador', 'En Espera', 'Aprobado']); 
+
+        if (errorPresup) {
+          alert("🚨 Supabase se queja de esto: " + errorPresup.message);
+        }
+        // -------------------------------
           
         const nombreCliente = auto.clientes ? (auto.clientes.tipo_cliente === 'empresa' ? auto.clientes.razon_social : `${auto.clientes.nombre} ${auto.clientes.apellido || ''}`.trim()) : 'Sin dueño';
         const telefonoCliente = auto.clientes?.telefono || '';
