@@ -239,6 +239,17 @@ export function DashboardSidebar({ activeSection, onSectionChange, userRole }: D
             )}
           </Button>
         </div>
+          {/* --- FIRMA / MARCA DE AGUA --- */}
+        <div className="mt-auto p-4 border-t border-slate-200">
+          <div className="flex flex-col items-center justify-center opacity-40 hover:opacity-100 transition-opacity duration-300 cursor-default">
+            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+              Designed & Coded By
+            </span>
+            <span className="text-xs font-black text-slate-700 tracking-wide mt-0.5">
+              JUAN PABLO MARTIN
+            </span>
+          </div>
+        </div>
       </aside>
     </TooltipProvider>
   )

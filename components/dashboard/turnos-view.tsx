@@ -167,6 +167,7 @@ export function TurnosView({
 
     if (turnoAgendarInfo) {
       cargarAutoPredefinido(turnoAgendarInfo.patente, turnoAgendarInfo.presupuesto_id);
+      setIsModalOpen(true); // ¡Magia! Abrimos el modal automáticamente para que los datos no se pierdan.
     }
   }, [turnoAgendarInfo])
 

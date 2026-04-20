@@ -292,10 +292,14 @@ export function CuentasCorrientesView() {
 
   const proveedoresFiltrados = proveedores.filter(p => p.nombre.toLowerCase().includes(busquedaProveedor.toLowerCase()) || (p.cuit && p.cuit.includes(busquedaProveedor)))
   const clientesFiltrados = clientes.filter(c => 
-    (c.nombre && c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase())) || 
-    (c.apellido && c.apellido.toLowerCase().includes(busquedaCliente.toLowerCase())) || 
-    (c.razon_social && c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase())) || 
-    (c.documento && c.documento.includes(busquedaCliente))
+    // Magia: Solo mostrar si el saldo no es cero, O si estamos buscando alguien en particular
+    (Number(c.saldo) !== 0 || busquedaCliente !== "") && 
+    (
+      (c.nombre && c.nombre.toLowerCase().includes(busquedaCliente.toLowerCase())) || 
+      (c.apellido && c.apellido.toLowerCase().includes(busquedaCliente.toLowerCase())) || 
+      (c.razon_social && c.razon_social.toLowerCase().includes(busquedaCliente.toLowerCase())) || 
+      (c.documento && c.documento.includes(busquedaCliente))
+    )
   )
   const ledgerProvFiltrado = movimientosLedger.filter(mov => {
     if (!busquedaLedgerProv) return true;
