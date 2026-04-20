@@ -1,5 +1,5 @@
 import React from "react"
-import { Car, User, Palette, Gauge, Calendar, Tag } from "lucide-react"
+import { Car, User, Palette, Gauge, Calendar, Tag, Clock } from "lucide-react"
 
 // --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica de Descuento) ---
 export function PresupuestoImprimible({ datos }: { datos: any }) {
@@ -47,13 +47,25 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
         <div className="border border-slate-800 p-3 rounded-lg bg-white">
           <p className="text-[10px] font-black text-[#003087] uppercase tracking-wider mb-1">Vehículo Asignado</p>
-          <div className="flex items-center gap-2 mt-0.5">
-            <div className="border-2 border-slate-800 rounded text-center px-2 py-0.5 bg-white">
-              <span className="font-mono font-black text-slate-900 text-sm tracking-widest">{datos.vehiculo_patente}</span>
+          <div className="flex items-center justify-between gap-2 mt-0.5">
+            <div className="flex items-center gap-2">
+              <div className="border-2 border-slate-800 rounded text-center px-2 py-0.5 bg-white">
+                <span className="font-mono font-black text-slate-900 text-sm tracking-widest">{datos.vehiculo_patente}</span>
+              </div>
+              <div className="text-xs text-slate-800 font-bold">
+                {datos.vehiculo_modelo || "Modelo no especificado"}
+              </div>
             </div>
-            <div className="text-xs text-slate-800 font-bold">
-              {datos.vehiculo_modelo || "Modelo no especificado"}
+            
+            {/* KILOMETROS AMPLIADOS Y APILADOS */}
+            <div className="text-right pl-3 border-l-2 border-slate-200 flex flex-col justify-center">
+              <p className="text-[10px] font-black text-slate-500 uppercase leading-none mb-1">Kilómetros</p>
+              <div className="text-xs font-bold text-slate-700 leading-tight space-y-0.5">
+                <p>Ingreso: <span className="font-black text-slate-900">{datos.km_ingreso || datos.vehiculo_kilometros || "---"}</span></p>
+                <p>Egreso: <span className="font-black text-slate-900">{datos.km_egreso || "---"}</span></p>
+              </div>
             </div>
+            
           </div>
         </div>
       </div>
@@ -86,9 +98,19 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      <div className="mt-6 pt-4 flex justify-end">
+      <div className="mt-6 pt-4 flex justify-between items-end">
+        {/* LADO IZQUIERDO: DEMORA ESTIMADA */}
+        <div className="w-1/2">
+           {datos.demora_estimada && (
+             <div className="border-l-4 border-[#003087] pl-3 py-1 bg-[#003087]/5 rounded-r-lg">
+                <p className="text-[9px] font-black text-[#003087] uppercase tracking-widest mb-0.5">Demora Estimada del Trabajo</p>
+                <p className="text-slate-900 font-black text-sm uppercase">{datos.demora_estimada}</p>
+             </div>
+           )}
+        </div>
+
+        {/* LADO DERECHO: TOTALES */}
         <div className="w-[280px]">
-          
           {/* --- MAGIA COMERCIAL: SOLO SE MUESTRA SI HAY DESCUENTO MAYOR A 0 --- */}
           {Number(datos.descuento) > 0 && (
             <div className="space-y-1 mb-3 px-3">
@@ -137,6 +159,7 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
         <div className="text-right">
           <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Orden de Trabajo</h2>
           <p className="text-slate-800 font-mono text-sm font-bold mt-0.5">#OT-{datos.numero_correlativo || 'PENDIENTE'}</p>
+          <p className="text-[10px] font-black text-slate-400 uppercase">{new Date().toLocaleDateString('es-AR')}</p>
         </div>
       </div>
 
@@ -165,18 +188,14 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
             </div>
           </div>
           
-          <div className="flex justify-between border-t-2 border-slate-200 pt-2.5">
+          <div className="flex justify-between border-t-2 border-slate-100 pt-3">
             <div>
-              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center gap-1"><Calendar className="w-3 h-3"/> Año</span>
-              <span className="font-bold text-slate-800 text-sm">{datos.vehiculo_anio || "____"}</span>
-            </div>
-            <div>
-              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center gap-1"><Palette className="w-3 h-3"/> Color</span>
-              <span className="font-bold text-slate-800 text-sm">{datos.vehiculo_color || "________"}</span>
+               <p className="text-[9px] text-slate-600 font-black uppercase mb-1">Kilómetros Entrada</p>
+               <p className="font-bold text-slate-900 font-mono">{datos.vehiculo_kilometros || datos.km_ingreso || "---"} KM</p>
             </div>
             <div className="text-right">
-              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1"><Gauge className="w-3 h-3"/> Kilometraje</span>
-              <span className="font-bold text-slate-800 text-sm">{datos.vehiculo_kilometros ? `${datos.vehiculo_kilometros} km` : "________"}</span>
+               <p className="text-[9px] text-[#003087] font-black uppercase mb-1 flex items-center justify-end gap-1"><Clock className="w-2.5 h-2.5"/> Entrega Sugerida</p>
+               <p className="font-black text-slate-900 uppercase">{datos.demora_estimada || "NO DEFINIDA"}</p>
             </div>
           </div>
         </div>
@@ -220,7 +239,7 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
       {/* NOTAS INTERNAS */}
       {datos.notas_internas && (
         <div className="mt-8 border-l-[6px] border-slate-800 pl-3 py-2 bg-slate-100 rounded-r-lg">
-          <p className="text-[9px] font-black text-slate-800 uppercase tracking-widest mb-0.5">Notas Internas / Advertencias</p>
+          <p className="text-[9px] font-black text-slate-800 uppercase tracking-widest mb-0.5">Notas del Mecánico / Advertencias</p>
           <p className="text-slate-900 font-bold text-sm italic">"{datos.notas_internas}"</p>
         </div>
       )}
