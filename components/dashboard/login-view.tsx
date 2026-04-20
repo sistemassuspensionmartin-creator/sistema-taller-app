@@ -120,10 +120,15 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
 
         </div>
 
-        {/* Pie de página (Letras blancas para que se lea sobre la foto) */}
-        <p className="text-center text-xs font-medium text-white/70 mt-8 drop-shadow-md">
-          Sistema de Gestión Integral &copy; {new Date().getFullYear()}
-        </p>
+        {/* Pie de página */}
+        <div className="text-center mt-8 drop-shadow-md">
+          <p className="text-xs font-medium text-white/70">
+            Sistema de Gestión Integral &copy; {new Date().getFullYear()}
+          </p>
+          <p className="text-xs mt-1 text-white/60">
+            Designed by <span className="text-white/90 font-bold tracking-wide">Juan Pablo Martin</span>
+          </p>
+        </div>
       </div>
     </div>
   )
