@@ -497,7 +497,11 @@ export function PresupuestosView({
       .replace(/{{total}}/g, `$${totalFinal.toLocaleString()}`)
       .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
     
+    // 1. Abre la pestaña de WhatsApp
     window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank')
+
+    // 2. Automáticamente dispara la generación del PDF
+    generarDocumento('presupuesto');
   }
 
   const handleVerFactura = async (presupuestoId: string) => {
@@ -550,10 +554,6 @@ export function PresupuestosView({
 
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "" && f.estado_cambio !== 'eliminado');
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
-    
-    // --- MAGIA NUEVA: CAPTURAMOS EL DESCUENTO Y EL SUBTOTAL ---
-    const v_descuento = esHistorico ? (datosHistoricos.descuento || 0) : (parseFloat(descuento.toString()) || 0);
-    const v_subtotal = esHistorico ? (Number(v_total) + Number(v_descuento)) : subtotalNeto;
 
     const datosFormateadosParaPlantilla = {
       cliente_nombre: v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`,
@@ -566,8 +566,6 @@ export function PresupuestosView({
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
       items: v_filas,
-      subtotal: v_subtotal, // <-- LO ENVIAMOS A LA IMPRESORA
-      descuento: v_descuento, // <-- LO ENVIAMOS A LA IMPRESORA
       total_final: v_total,
       validez_dias: validez,
       observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
@@ -579,7 +577,19 @@ export function PresupuestosView({
     setPrintData(datosFormateadosParaPlantilla);
 
     setTimeout(() => {
+      // --- MAGIA PARA EL NOMBRE DEL ARCHIVO PDF ---
+      const tituloOriginal = document.title;
+      
+      if (tipo === 'presupuesto') {
+        document.title = `Presupuesto_${v_vehiculo.patente}`;
+      } else if (tipo === 'orden') {
+        document.title = `OrdenTrabajo_${v_vehiculo.patente}`;
+      }
+
       window.print();
+
+      // Restauramos el nombre original de la página para que no quede raro
+      document.title = tituloOriginal;
     }, 300);
   }
 
