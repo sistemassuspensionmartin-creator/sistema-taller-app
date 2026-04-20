@@ -1,11 +1,12 @@
 import React from "react"
-import { Car, User, Palette, Gauge, Calendar, Tag, Clock } from "lucide-react"
+import { Car, User, Palette, Gauge, Calendar, Tag } from "lucide-react"
 
-// --- PLANTILLA 1: EL PRESUPUESTO ---
+// --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica de Descuento) ---
 export function PresupuestoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
   return (
+    // Se cambió el borde verde de arriba por borde blanco para mantener el margen sin que se vea
     <div className="bg-white text-slate-800 p-6 font-sans max-w-[210mm] mx-auto border-t-[8px] border-white">
       <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-4 mt-2">
         <div className="flex items-center gap-3">
@@ -17,9 +18,11 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
             </div>
           )}
           <div>
+            {/* Azul Goodyear */}
             <h1 className="text-xl font-black tracking-tight text-[#003087]">{datos.config?.nombre_taller || "AUTO TALLER"}</h1>
             <p className="text-xs text-slate-800 font-bold">{datos.config?.direccion || "Dirección no configurada"}</p>
             <p className="text-xs text-slate-800 font-bold">Tel: {datos.config?.telefono || "No configurado"}</p>
+            {/* Azul Goodyear fondo clarito */}
             <p className="text-[10px] font-bold text-[#003087] mt-1 border border-[#003087] bg-[#003087]/5 inline-block px-1.5 py-0.5 rounded">
               Horarios: {datos.config?.horarios || "Lun a Vie 08:00 a 18:00"}
             </p>
@@ -27,6 +30,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
         <div className="text-right">
           <h2 className="text-xl font-black text-slate-900 tracking-tight">PRESUPUESTO</h2>
+          {/* Azul Goodyear */}
           <p className="text-[#003087] font-mono text-sm font-bold mt-0.5">#PRE-{datos.numero_correlativo}</p>
           <p className="text-xs text-slate-600 mt-0.5 font-bold">
             Fecha: {new Date(datos.fecha_emision || new Date()).toLocaleDateString('es-AR')}
@@ -35,6 +39,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-5">
+        {/* Bordes oscuros para máxima nitidez al imprimir */}
         <div className="border border-slate-800 p-3 rounded-lg bg-white">
           <p className="text-[10px] font-black text-[#003087] uppercase tracking-wider mb-1">Datos del Cliente</p>
           <p className="font-bold text-slate-900 text-base leading-tight">{datos.cliente_nombre}</p>
@@ -42,17 +47,12 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
         <div className="border border-slate-800 p-3 rounded-lg bg-white">
           <p className="text-[10px] font-black text-[#003087] uppercase tracking-wider mb-1">Vehículo Asignado</p>
-          <div className="flex items-center justify-between gap-2 mt-0.5">
-            <div className="flex items-center gap-2">
-              <div className="border-2 border-slate-800 rounded text-center px-2 py-0.5 bg-white">
-                <span className="font-mono font-black text-slate-900 text-sm tracking-widest">{datos.vehiculo_patente}</span>
-              </div>
-              <div className="text-xs text-slate-800 font-bold">{datos.vehiculo_modelo}</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="border-2 border-slate-800 rounded text-center px-2 py-0.5 bg-white">
+              <span className="font-mono font-black text-slate-900 text-sm tracking-widest">{datos.vehiculo_patente}</span>
             </div>
-            {/* KILOMETROS EN RECUADRO DE VEHICULO */}
-            <div className="text-right">
-               <p className="text-[8px] font-black text-slate-400 uppercase leading-none">Kilómetros</p>
-               <p className="text-[10px] font-black text-slate-900">Ent: {datos.vehiculo_kilometros || "---"} | Sal: {datos.km_egreso || "---"}</p>
+            <div className="text-xs text-slate-800 font-bold">
+              {datos.vehiculo_modelo || "Modelo no especificado"}
             </div>
           </div>
         </div>
@@ -70,31 +70,26 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
           {datos.items?.map((item: any, idx: number) => {
             const cantidad = parseFloat(item.cantidad || item.cant || 1);
             const precioUnitario = parseFloat(item.precio_unitario || item.precio || 0);
+            const subtotalItem = cantidad * precioUnitario;
+
             return (
+              // Borde sutil pero negro/oscuro para separar ítems nítidamente
               <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-300 py-1.5">
+                {/* Azul Goodyear */}
                 <div className="w-10 text-center font-mono font-black text-[#003087]">{cantidad}</div>
                 <div className="flex-1 font-bold text-slate-800 pl-2 pr-2">{item.detalle}</div>
                 <div className="w-24 text-right font-mono font-bold text-slate-600 pr-4">${precioUnitario.toLocaleString()}</div>
-                <div className="w-24 text-right font-mono font-black text-slate-900">${(cantidad * precioUnitario).toLocaleString()}</div>
+                <div className="w-24 text-right font-mono font-black text-slate-900">${subtotalItem.toLocaleString()}</div>
               </div>
             )
           })}
         </div>
       </div>
 
-      <div className="mt-6 pt-4 flex justify-between items-end">
-        {/* LADO IZQUIERDO: DEMORA ESTIMADA */}
-        <div className="w-1/2">
-           {datos.demora_estimada && (
-             <div className="border-l-4 border-[#003087] pl-3 py-1 bg-[#003087]/5 rounded-r-lg">
-                <p className="text-[9px] font-black text-[#003087] uppercase tracking-widest mb-0.5">Demora Estimada del Trabajo</p>
-                <p className="text-slate-900 font-black text-sm uppercase">{datos.demora_estimada}</p>
-             </div>
-           )}
-        </div>
-
-        {/* LADO DERECHO: TOTALES */}
+      <div className="mt-6 pt-4 flex justify-end">
         <div className="w-[280px]">
+          
+          {/* --- MAGIA COMERCIAL: SOLO SE MUESTRA SI HAY DESCUENTO MAYOR A 0 --- */}
           {Number(datos.descuento) > 0 && (
             <div className="space-y-1 mb-3 px-3">
               <div className="flex justify-between items-center text-sm">
@@ -107,8 +102,11 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
               </div>
             </div>
           )}
+
+          {/* Borde más grueso y oscuro */}
           <div className="flex justify-between items-center bg-white p-3 rounded-lg border-2 border-slate-800">
             <p className="font-black text-slate-900 text-sm uppercase tracking-wider">Total Final</p>
+            {/* Azul Goodyear */}
             <p className="font-mono font-black text-[#003087] text-xl">${Number(datos.total_final).toLocaleString()}</p>
           </div>
         </div>
@@ -120,25 +118,32 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
   )
 }
 
-// --- PLANTILLA 2: LA ORDEN DE TRABAJO ---
+// --- PLANTILLA 2: LA ORDEN DE TRABAJO (Colores Goodyear y Bordes Nítidos) ---
 export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
   return (
     <div className="bg-white text-slate-900 p-5 font-sans max-w-[210mm] mx-auto relative">
+      
+      {/* HEADER ULTRA COMPACTO */}
       <div className="flex justify-between items-center pb-3 mb-4 border-b-2 border-slate-800">
-        <div className="flex items-center gap-4">
-           <img src="/icon.png" alt="Logo" className="w-12 h-12 object-contain" />
-           <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Orden de Trabajo</h2>
-        </div>
+        {datos?.config?.logo_url ? (
+          <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
+        ) : (
+          <div className="w-52 h-auto bg-slate-50 rounded-xl flex items-center justify-center border-2 border-slate-800">
+            <span className="text-[10px] text-slate-500 font-bold text-center leading-tight">TU LOGO<br/>AQUÍ</span>
+          </div>
+        )}
         <div className="text-right">
-          <p className="text-slate-800 font-mono text-sm font-bold">#OT-{datos.numero_correlativo || 'PENDIENTE'}</p>
-          <p className="text-[10px] font-black text-slate-400 uppercase">{new Date().toLocaleDateString('es-AR')}</p>
+          <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Orden de Trabajo</h2>
+          <p className="text-slate-800 font-mono text-sm font-bold mt-0.5">#OT-{datos.numero_correlativo || 'PENDIENTE'}</p>
         </div>
       </div>
 
+      {/* FICHA TÉCNICA */}
       <div className="border-2 border-slate-800 rounded-xl mb-4 overflow-hidden">
         <div className="bg-white px-3 py-1.5 border-b-2 border-slate-800 flex justify-between items-center">
+          {/* Azul Goodyear */}
           <div className="flex items-center gap-1.5 text-[#003087] font-black text-[11px] uppercase tracking-wider">
             <Car className="w-3.5 h-3.5" />
             <span>Ficha Técnica y Cliente</span>
@@ -148,57 +153,81 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
           </div>
         </div>
         
-        <div className="p-3">
-          <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="p-3 flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider block">Marca y Modelo</span>
-              <span className="font-black text-slate-900 text-sm">{datos.vehiculo_modelo}</span>
+              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider block mb-0.5">Marca y Modelo</span>
+              <span className="font-black text-slate-900 text-sm">{datos.vehiculo_modelo || "________"}</span>
             </div>
             <div>
-              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider block">Cliente</span>
+              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center gap-1"><User className="w-3 h-3"/> Cliente</span>
               <span className="font-black text-slate-900 text-sm">{datos.cliente_nombre}</span>
             </div>
           </div>
           
-          <div className="flex justify-between border-t-2 border-slate-100 pt-3">
+          <div className="flex justify-between border-t-2 border-slate-200 pt-2.5">
             <div>
-               <p className="text-[9px] text-slate-600 font-black uppercase mb-1">Kilómetros Entrada</p>
-               <p className="font-bold text-slate-900 font-mono">{datos.vehiculo_kilometros || "---"} KM</p>
+              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center gap-1"><Calendar className="w-3 h-3"/> Año</span>
+              <span className="font-bold text-slate-800 text-sm">{datos.vehiculo_anio || "____"}</span>
+            </div>
+            <div>
+              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center gap-1"><Palette className="w-3 h-3"/> Color</span>
+              <span className="font-bold text-slate-800 text-sm">{datos.vehiculo_color || "________"}</span>
             </div>
             <div className="text-right">
-               <p className="text-[9px] text-[#003087] font-black uppercase mb-1 flex items-center justify-end gap-1"><Clock className="w-2.5 h-2.5"/> Entrega Sugerida</p>
-               <p className="font-black text-slate-900 uppercase">{datos.demora_estimada || "NO DEFINIDA"}</p>
+              <span className="text-[9px] text-slate-600 font-black uppercase tracking-wider mb-0.5 flex items-center justify-end gap-1"><Gauge className="w-3 h-3"/> Kilometraje</span>
+              <span className="font-bold text-slate-800 text-sm">{datos.vehiculo_kilometros ? `${datos.vehiculo_kilometros} km` : "________"}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mb-6">
-        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-800 pb-1 mb-2">Tareas y Repuestos</h3>
-        <div className="space-y-1.5">
-          {datos.items?.map((item: any, idx: number) => (
+      {/* TAREAS A REALIZAR */}
+      <div className="mb-4">
+        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-800 pb-1 mb-2">Tareas a Realizar</h3>
+        <div className="space-y-1.5 px-1">
+          {datos.items?.filter((i:any) => i.tipo !== 'Repuesto' && i.tipo !== 'Neumático').map((srv: any, idx: number) => (
             <div key={idx} className="flex justify-between items-start border-b border-slate-300 pb-1">
               <div className="flex items-start gap-2.5">
-                <div className="w-3.5 h-3.5 border-2 border-slate-800 rounded-sm mt-0.5"></div>
-                <p className="font-bold text-slate-900 text-sm uppercase">{item.detalle}</p>
+                {/* Cuadrito check más grueso */}
+                <div className="w-3.5 h-3.5 border-2 border-slate-800 rounded-sm mt-0.5 shrink-0"></div>
+                <p className="font-bold text-slate-900 text-sm leading-tight">{srv.detalle}</p>
               </div>
-              <div className="font-black text-slate-600 text-sm">{item.cantidad || 1}x</div>
+              <div className="font-black text-slate-600 text-sm shrink-0">{srv.cantidad || srv.cant || 1}x</div>
             </div>
           ))}
         </div>
       </div>
 
+      {/* REPUESTOS */}
+      <div className="mb-4 mt-6">
+        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-800 pb-1 mb-2">Repuestos Requeridos</h3>
+        <div className="space-y-1.5 px-1">
+          {datos.items?.filter((i:any) => i.tipo === 'Repuesto' || i.tipo === 'Neumático').map((rep: any, idx: number) => (
+            <div key={idx} className="flex justify-between items-start border-b border-slate-300 pb-1">
+              <div className="flex items-start gap-2.5">
+                <div className="w-3.5 h-3.5 border-2 border-slate-800 rounded-sm mt-0.5 shrink-0"></div>
+                <p className="font-bold text-slate-800 text-sm leading-tight">{rep.detalle}</p>
+              </div>
+              <div className="font-black text-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-xs shrink-0">
+                {rep.cantidad || rep.cant || 1}x
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* NOTAS INTERNAS */}
       {datos.notas_internas && (
         <div className="mt-8 border-l-[6px] border-slate-800 pl-3 py-2 bg-slate-100 rounded-r-lg">
-          <p className="text-[9px] font-black text-slate-800 uppercase tracking-widest mb-0.5">Notas del Mecánico</p>
+          <p className="text-[9px] font-black text-slate-800 uppercase tracking-widest mb-0.5">Notas Internas / Advertencias</p>
           <p className="text-slate-900 font-bold text-sm italic">"{datos.notas_internas}"</p>
         </div>
       )}
+
     </div>
   )
 }
-
-// ... Mantener CierreCaja y Factura como estaban con bordes negros ...
 
 export function CierreCajaImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
