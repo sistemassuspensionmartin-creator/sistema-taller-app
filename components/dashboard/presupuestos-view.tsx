@@ -391,6 +391,16 @@ export function PresupuestosView({
     if (!clienteSeleccionado) return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
     if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
 
+    // --- NUEVA VALIDACIÓN DE KILOMETRAJE ---
+    // Usamos || 0 para que si está vacío no devuelva "NaN" (Not a Number)
+    const kmi = parseInt(kmIngreso) || 0;
+    const kme = parseInt(kmEgreso) || 0;
+
+    // Validamos solo si se ingresó un valor de egreso
+    if (kmEgreso && kme < kmi) {
+      return alert(`❌ Error de Kilometraje: El vehículo no puede salir con menos kilómetros (${kme}) de los que ingresó (${kmi}).`);
+    }
+
     // Filtramos las válidas. Si es administrador, ignoramos las marcadas como 'eliminado' para borrarlas de la base de datos definitivamente.
     const filasValidas = filas.filter(f => f.detalle.trim() !== "" && (userRole === 'mecanico' || f.estado_cambio !== 'eliminado'));
     
@@ -403,23 +413,26 @@ export function PresupuestosView({
       let numAleatorio = 0;
       const isMecanico = userRole === 'mecanico';
 
+      // Agrupamos los datos para no repetir código y asegurar que los vacíos vayan como 'null' (para evitar errores int4)
+      const datosPresupuesto = {
+        vehiculo_patente: vehiculoSeleccionado,
+        fecha_emision: fecha,
+        validez_dias: parseInt(validez) || 15,
+        descuento: descParsed,
+        total_final: totalFinal,
+        estado: estado,
+        observaciones_publicas: notasCliente,
+        notas_internas: notasInternas,
+        modificado_por_rol: userRole || 'admin',
+        modificado_por_nombre: userName || 'Usuario',
+        km_ingreso: kmi > 0 ? kmi : null,
+        km_egreso: kme > 0 ? kme : null,
+        demora_estimada: demoraEstimada || null,
+        visto_admin: !isMecanico
+      };
+
       if (editandoId) {
-        const { error: presError } = await supabase.from('presupuestos').update({
-          vehiculo_patente: vehiculoSeleccionado,
-          fecha_emision: fecha,
-          validez_dias: parseInt(validez) || 15,
-          descuento: descParsed,
-          total_final: totalFinal,
-          estado: estado,
-          observaciones_publicas: notasCliente,
-          notas_internas: notasInternas,
-          modificado_por_rol: userRole || 'admin',
-          modificado_por_nombre: userName || 'Usuario',
-          km_ingreso: kmIngreso,
-          km_egreso: kmEgreso,
-          demora_estimada: demoraEstimada,
-          visto_admin: !isMecanico
-        }).eq('id', editandoId)
+        const { error: presError } = await supabase.from('presupuestos').update(datosPresupuesto).eq('id', editandoId)
 
         if (presError) throw new Error("Error al actualizar presupuesto: " + presError.message)
         
@@ -430,20 +443,7 @@ export function PresupuestosView({
         numAleatorio = Math.floor(1000 + Math.random() * 9000);
         const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
           numero_correlativo: numAleatorio,
-          vehiculo_patente: vehiculoSeleccionado,
-          fecha_emision: fecha,
-          validez_dias: parseInt(validez) || 15,
-          descuento: descParsed,
-          total_final: totalFinal,
-          estado: estado,
-          observaciones_publicas: notasCliente,
-          notas_internas: notasInternas,
-          modificado_por_rol: userRole || 'admin',
-          modificado_por_nombre: userName || 'Usuario',
-          km_ingreso: kmIngreso,
-          km_egreso: kmEgreso,
-          demora_estimada: demoraEstimada,
-          visto_admin: !isMecanico
+          ...datosPresupuesto
         }]).select()
 
         if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
@@ -468,6 +468,16 @@ export function PresupuestosView({
         await supabase.from('presupuesto_items').delete().in('presupuesto_id', presupuestosAEliminar);
         await supabase.from('presupuestos').delete().in('id', presupuestosAEliminar);
       }
+
+      // --- SINCRONIZACIÓN CON LA FICHA DEL VEHÍCULO ---
+      // Si hay KM de salida, gana ese. Si no, actualizamos con el de entrada.
+      const kmParaFicha = kme > 0 ? kme : kmi;
+      if (kmParaFicha > 0) {
+        await supabase.from('vehiculos')
+          .update({ kilometros: kmParaFicha })
+          .eq('patente', vehiculoSeleccionado);
+      }
+      // ------------------------------------------------
 
       alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
       
