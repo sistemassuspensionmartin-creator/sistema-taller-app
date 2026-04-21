@@ -683,39 +683,53 @@ export function PresupuestosView({
   }
 
   const handleRegistrarCobro = async () => {
-    const montoNum = parseFloat(datosCobro.monto)
-    if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido.")
-    if (!datosCobro.caja_destino_id) return alert("Seleccione a qué caja entra el dinero.")
+    const montoNum = parseFloat(datosCobro.monto);
+    if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido.");
+    if (!datosCobro.caja_destino_id) return alert("Seleccione a qué caja entra el dinero.");
+    
+    // Validamos que no cobre de más
+    if (montoNum > totalFinal) return alert("El monto no puede superar el total del presupuesto.");
 
-    setIsSaving(true)
+    setIsSaving(true);
     try {
-      // 1. Sumamos la plata a la caja elegida
-      const cajaSeleccionada = cajas.find(c => c.id === datosCobro.caja_destino_id)
-      const nuevoSaldoCaja = Number(cajaSeleccionada.saldo || 0) + montoNum
-      await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosCobro.caja_destino_id)
+      // 1. Sumamos la plata a la caja elegida (Respetando tus cajas)
+      const cajaSeleccionada = cajas.find(c => c.id === datosCobro.caja_destino_id);
+      const nuevoSaldoCaja = Number(cajaSeleccionada.saldo || 0) + montoNum;
+      await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosCobro.caja_destino_id);
 
-      // 2. Anotamos el movimiento para el resumen diario
+      let detalleMetodo = "";
+      // Si quisieras agregar Banco Origen o Tarjeta como en la Caja, los podrías sacar del estado, 
+      // pero para el cobro rápido desde el presupuesto lo dejamos simplificado en las notas.
+
+      // 2. Anotamos el movimiento para el resumen diario de la cinta auditora de la Caja
       await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
         caja_destino_id: datosCobro.caja_destino_id,
         monto: montoNum,
         metodo_pago: datosCobro.metodo_pago,
-        detalle: `Cobro PRE-${numeroCorrelativo} | Cliente: ${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`,
+        presupuesto_id: editandoId, // Es vital pasar este ID para que la Caja sepa de dónde viene
+        detalle: `Cobro PRE-${numeroCorrelativo} (${vehiculoSeleccionado})${detalleMetodo}`,
         notas: datosCobro.notas || ''
-      }])
+      }]);
 
-      // 3. Lógica inteligente: Si pagó todo es "Cobrado", si pagó una seña es "Aprobado"
-      const nuevoEstado = montoNum >= totalFinal ? "Cobrado" : "Aprobado"
-      await supabase.from('presupuestos').update({ estado: nuevoEstado, modificado_por_rol: userRole || 'admin' }).eq('id', editandoId)
+      // 3. Lógica inteligente de estado (Sincronizada con tu Caja)
+      // En tu caja actualizas 'estado_pago'. Acá también actualizamos 'estado' principal.
+      const nuevoEstado = montoNum >= totalFinal ? "Cobrado" : "Aprobado";
+      
+      await supabase.from('presupuestos').update({ 
+        estado: nuevoEstado, 
+        estado_pago: nuevoEstado === "Cobrado" ? "Cobrado" : "Parcial",
+        modificado_por_rol: userRole || 'admin' 
+      }).eq('id', editandoId);
 
-      setEstado(nuevoEstado)
-      setIsCobroModalOpen(false)
-      alert(`Cobro registrado con éxito. El presupuesto pasó a estado: ${nuevoEstado}`)
-      cargarDatos()
-    } catch (error: any) {
-      alert("Error al registrar el cobro: " + error.message)
+      setEstado(nuevoEstado);
+      setIsCobroModalOpen(false);
+      alert(`Cobro registrado con éxito. El dinero ya figura en caja.`);
+      cargarDatos();
+    } catch (err: any) {
+      alert("Error al registrar el cobro: " + err.message);
     } finally {
-      setIsSaving(false)
+      setIsSaving(false);
     }
   }
 
@@ -746,9 +760,10 @@ export function PresupuestosView({
                         <Banknote className="w-4 h-4 mr-2"/> Registrar Cobro
                       </Button>
                     )}
-                    {estado !== "Aprobado" && estado !== "Facturado" && estado !== "Cobrado" && userRole !== 'mecanico' && (
+                    {/* El botón de Aprobar ahora SI aparece aunque esté Cobrado */}
+                    {estado !== "Aprobado" && estado !== "Facturado" && userRole !== 'mecanico' && (
                       <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
-                        <CheckCircle className="w-4 h-4 mr-2"/> Aprobar sin Cobrar
+                        <CheckCircle className="w-4 h-4 mr-2"/> {estado === "Cobrado" ? "Ingresar Vehículo al Taller" : "Aprobar Presupuesto"}
                       </Button>
                     )}
                     {userRole !== 'mecanico' && (
