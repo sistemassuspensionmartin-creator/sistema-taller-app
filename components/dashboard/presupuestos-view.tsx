@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw, Gauge, Clock, Banknote } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw, Gauge, Clock, Banknote, DollarSign } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -81,7 +81,13 @@ export function PresupuestosView({
   // --- ESTADOS PARA COBRO ---
   const [cajas, setCajas] = useState<any[]>([])
   const [isCobroModalOpen, setIsCobroModalOpen] = useState(false)
-  const [datosCobro, setDatosCobro] = useState({ monto: "", caja_destino_id: "", metodo_pago: "Efectivo", notas: "" })
+  const [montoCobro, setMontoCobro] = useState("")
+  const [metodoPago, setMetodoPago] = useState("Efectivo")
+  const [notasCobro, setNotasCobro] = useState("")
+  const [bancoOrigen, setBancoOrigen] = useState("")
+  const [tipoTarjeta, setTipoTarjeta] = useState("Crédito")
+  const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
+  const [bancoTarjeta, setBancoTarjeta] = useState("")
 
   const [kmIngreso, setKmIngreso] = useState("")
   const [kmEgreso, setKmEgreso] = useState("")
@@ -134,7 +140,7 @@ export function PresupuestosView({
         supabase.from('configuracion').select('*').eq('id', 1).single(),
         supabase.from('cajas').select('*').order('nombre')
       ])
-
+      
       setClientes(resClientes.data || [])
       setVehiculos(resVehiculos.data || [])
       setCatalogo(resCatalogo.data || [])
@@ -633,19 +639,6 @@ export function PresupuestosView({
 
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     try {
-      const { data: tallerExistente, error: errExistente } = await supabase
-        .from('ordenes_trabajo')
-        .select('id')
-        .eq('presupuesto_id', editandoId);
-        
-      if (errExistente) throw errExistente;
-
-      if (tallerExistente && tallerExistente.length > 0) {
-        alert("⚠️ ATENCIÓN: Este presupuesto ya tiene una Orden de Trabajo ingresada en el Taller. No se puede volver a ingresar.");
-        setIsAprobarModalOpen(false);
-        return;
-      }
-
       if (opcion === "turnos") {
         setIsAprobarModalOpen(false);
         if (onNavigateToTurnos) {
@@ -655,8 +648,10 @@ export function PresupuestosView({
           });
         }
       } else if (opcion === "inmediato") {
+        // 1. Actualizamos el estado y encendemos la bandera de INGRESO
         await supabase.from('presupuestos').update({
           estado: "Aprobado",
+          ingresado_al_taller: true, // <-- Acá se enciende la nueva columna
           modificado_por_rol: userRole || 'admin'
         }).eq('id', editandoId);
         
@@ -665,6 +660,7 @@ export function PresupuestosView({
 
         const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre} ${clienteActual?.apellido || ''}`.trim();
         
+        // 2. Creamos la Orden de Trabajo para el mecánico
         const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
           presupuesto_id: editandoId,
           vehiculo_patente: vehiculoSeleccionado,
@@ -674,6 +670,7 @@ export function PresupuestosView({
 
         if (tallerError) throw tallerError;
         
+        alert("¡Ingreso exitoso! El vehículo ya está en el tablero del taller.");
         setVista("lista");
         if (onNavigateToTaller) onNavigateToTaller();
       }
@@ -683,51 +680,62 @@ export function PresupuestosView({
   }
 
   const handleRegistrarCobro = async () => {
-    const montoNum = parseFloat(datosCobro.monto);
+    const montoNum = parseFloat(montoCobro);
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido.");
-    if (!datosCobro.caja_destino_id) return alert("Seleccione a qué caja entra el dinero.");
-    
-    // Validamos que no cobre de más
-    if (montoNum > totalFinal) return alert("El monto no puede superar el total del presupuesto.");
+    if (montoNum > totalFinal) return alert("El monto no puede superar el total.");
 
     setIsSaving(true);
     try {
-      // 1. Sumamos la plata a la caja elegida (Respetando tus cajas)
-      const cajaSeleccionada = cajas.find(c => c.id === datosCobro.caja_destino_id);
-      const nuevoSaldoCaja = Number(cajaSeleccionada.saldo || 0) + montoNum;
-      await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosCobro.caja_destino_id);
+      // 1. Ruteo automático de Cajas
+      const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
+      let cajaDestinoId = null;
+      if (metodoPago === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
+      if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.includes('Transferencia'))?.id;
+      if (metodoPago === 'Tarjeta') cajaDestinoId = cajas.find(c => c.nombre.includes('Tarjeta'))?.id;
+      if (metodoPago === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.includes('Cheque'))?.id;
 
-      let detalleMetodo = "";
-      // Si quisieras agregar Banco Origen o Tarjeta como en la Caja, los podrías sacar del estado, 
-      // pero para el cobro rápido desde el presupuesto lo dejamos simplificado en las notas.
+      if (!cajaDestinoId && metodoPago !== 'Cuenta Corriente') {
+        throw new Error("Caja destino no encontrada. Verifique los nombres de las cajas.");
+      }
 
-      // 2. Anotamos el movimiento para el resumen diario de la cinta auditora de la Caja
+      if (cajaDestinoId) {
+        const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
+        await supabase.from('cajas').update({ saldo: Number(cajaAfectada.saldo || 0) + montoNum }).eq('id', cajaDestinoId);
+      }
+
+      // 2. Activar Cuenta Corriente si corresponde
+      if (metodoPago === 'Cuenta Corriente' && clienteSeleccionado) {
+        await supabase.from('clientes').update({ tiene_cuenta_corriente: true }).eq('id', clienteSeleccionado);
+      }
+
+      // 3. Registro de movimiento
+      let detalleExtra = "";
+      if (metodoPago === 'Transferencia' && bancoOrigen) detalleExtra = ` [${bancoOrigen}]`;
+      if (metodoPago === 'Tarjeta') detalleExtra = ` [${marcaTarjeta} ${tipoTarjeta}]`;
+
       await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro',
-        caja_destino_id: datosCobro.caja_destino_id,
+        caja_destino_id: cajaDestinoId,
         monto: montoNum,
-        metodo_pago: datosCobro.metodo_pago,
-        presupuesto_id: editandoId, // Es vital pasar este ID para que la Caja sepa de dónde viene
-        detalle: `Cobro PRE-${numeroCorrelativo} (${vehiculoSeleccionado})${detalleMetodo}`,
-        notas: datosCobro.notas || ''
+        metodo_pago: metodoPago,
+        presupuesto_id: editandoId,
+        detalle: `Cobro PRE-${numeroCorrelativo} (${vehiculoSeleccionado})${detalleExtra}`,
+        notas: notasCobro
       }]);
 
-      // 3. Lógica inteligente de estado (Sincronizada con tu Caja)
-      // En tu caja actualizas 'estado_pago'. Acá también actualizamos 'estado' principal.
+      // 4. Actualizar presupuesto
       const nuevoEstado = montoNum >= totalFinal ? "Cobrado" : "Aprobado";
-      
       await supabase.from('presupuestos').update({ 
         estado: nuevoEstado, 
-        estado_pago: nuevoEstado === "Cobrado" ? "Cobrado" : "Parcial",
-        modificado_por_rol: userRole || 'admin' 
+        estado_pago: nuevoEstado === "Cobrado" ? "Cobrado" : "Parcial" 
       }).eq('id', editandoId);
 
       setEstado(nuevoEstado);
       setIsCobroModalOpen(false);
-      alert(`Cobro registrado con éxito. El dinero ya figura en caja.`);
+      alert("¡Cobro registrado! El dinero ya impactó en la caja correspondiente.");
       cargarDatos();
     } catch (err: any) {
-      alert("Error al registrar el cobro: " + err.message);
+      alert(err.message);
     } finally {
       setIsSaving(false);
     }
@@ -752,12 +760,21 @@ export function PresupuestosView({
               <div className="flex flex-wrap items-center gap-2">
                 {!isEditing && editandoId && (
                   <>
+                    {/* Botón Cobrar: Solo si no está cobrado ni facturado */}
                     {estado !== "Facturado" && estado !== "Cobrado" && userRole !== 'mecanico' && (
                       <Button variant="default" onClick={() => {
-                        setDatosCobro({ monto: totalFinal.toString(), caja_destino_id: "", metodo_pago: "Efectivo", notas: "" })
-                        setIsCobroModalOpen(true)
+                        setMontoCobro(totalFinal.toString());
+                        setMetodoPago("Efectivo");
+                        setIsCobroModalOpen(true);
                       }} className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm border-none mr-2">
                         <Banknote className="w-4 h-4 mr-2"/> Registrar Cobro
+                      </Button>
+                    )}
+
+                    {/* Botón Ingresar: Desaparece si 'ingresado_al_taller' es TRUE */}
+                    {estado !== "Facturado" && userRole !== 'mecanico' && !presupuestos.find(p => p.id === editandoId)?.ingresado_al_taller && (
+                      <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
+                        <CheckCircle className="w-4 h-4 mr-2"/> {estado === "Cobrado" ? "Ingresar Vehículo al Taller" : "Aprobar sin Cobrar"}
                       </Button>
                     )}
                     {/* El botón de Aprobar ahora SI aparece aunque esté Cobrado */}
@@ -1322,49 +1339,94 @@ export function PresupuestosView({
         {printType === 'orden' && <OrdenTrabajoImprimible datos={printData} />}
         {printType === 'factura' && <FacturaImprimible datos={printData} />} 
       </div>
-    <Dialog open={isCobroModalOpen} onOpenChange={setIsCobroModalOpen}>
-                <DialogContent className="border-border bg-card max-w-md">
+    {/* --- MODAL DE COBRO --- */}
+              <Dialog open={isCobroModalOpen} onOpenChange={setIsCobroModalOpen}>
+                <DialogContent className="max-w-md border-border bg-card">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-purple-600">
-                      <Banknote className="w-6 h-6" /> Ingresar Pago
+                    <DialogTitle className="text-xl flex items-center gap-2 text-purple-700 dark:text-purple-500">
+                      <DollarSign className="w-6 h-6" /> Registrar Pago
                     </DialogTitle>
-                    <DialogDescription>Registrá el pago total o parcial de este presupuesto. El dinero irá directo a la Caja.</DialogDescription>
                   </DialogHeader>
+
                   <div className="space-y-4 py-4">
-                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg flex justify-between items-center border border-purple-100 dark:border-purple-800">
-                      <span className="font-bold text-purple-800 dark:text-purple-300">Total a Cobrar:</span>
-                      <span className="text-2xl font-mono font-black text-purple-700 dark:text-purple-400">${totalFinal.toLocaleString()}</span>
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 flex justify-between items-center">
+                      <div>
+                        <p className="text-xs text-purple-600/70 uppercase tracking-wider font-bold">Patente</p>
+                        <p className="font-mono font-bold text-lg text-purple-900 dark:text-purple-100">{vehiculoSeleccionado}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-purple-600/70 uppercase tracking-wider font-bold">Total a Cobrar</p>
+                        <p className="font-mono font-bold text-xl text-purple-600 dark:text-purple-400">${totalFinal.toLocaleString()}</p>
+                      </div>
                     </div>
+
                     <div className="space-y-2">
-                      <Label>Monto que entrega el cliente ($)</Label>
-                      <Input type="number" className="text-lg font-mono font-bold h-12" value={datosCobro.monto} onChange={e => setDatosCobro({...datosCobro, monto: e.target.value})} />
-                      <p className="text-xs text-muted-foreground">Si es una seña, podés editar el monto. El sistema lo marcará como "Aprobado" hasta que cancele el resto.</p>
+                      <Label>Monto a Cobrar ($)</Label>
+                      <Input type="number" className="text-lg font-mono font-bold h-12 border-purple-300 ring-purple-500 focus-visible:ring-purple-500" value={montoCobro} onChange={(e) => setMontoCobro(e.target.value)} autoFocus />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label>Caja de Destino</Label>
-                        <Select value={datosCobro.caja_destino_id} onValueChange={(val) => setDatosCobro({...datosCobro, caja_destino_id: val})}>
-                          <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                          <SelectContent>{cajas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre} (${Number(c.saldo).toLocaleString()})</SelectItem>)}</SelectContent>
-                        </Select>
+
+                    <div className="space-y-2">
+                      <Label>Método de Pago</Label>
+                      <Select value={metodoPago} onValueChange={setMetodoPago}>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Efectivo">Efectivo (Va a Mostrador)</SelectItem>
+                          <SelectItem value="Transferencia">Transferencia Bancaria</SelectItem>
+                          <SelectItem value="Tarjeta">Tarjeta Débito/Crédito</SelectItem>
+                          <SelectItem value="Cheque">Cheque</SelectItem>
+                          <SelectItem value="Cuenta Corriente">Cuenta Corriente (Deuda)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {metodoPago === 'Transferencia' && (
+                      <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                        <Label className="text-xs font-bold uppercase text-purple-600">Banco de Origen (Cliente)</Label>
+                        <Input placeholder="Ej: Banco Galicia, MercadoPago..." value={bancoOrigen} onChange={(e) => setBancoOrigen(e.target.value)} />
                       </div>
-                      <div className="space-y-2">
-                        <Label>Método de Pago</Label>
-                        <Select value={datosCobro.metodo_pago} onValueChange={(val) => setDatosCobro({...datosCobro, metodo_pago: val})}>
-                          <SelectTrigger><SelectValue/></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Efectivo">Efectivo</SelectItem>
-                            <SelectItem value="Transferencia">Transferencia</SelectItem>
-                            <SelectItem value="Tarjeta/Posnet">Tarjeta/Posnet</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    )}
+
+                    {metodoPago === 'Tarjeta' && (
+                      <div className="grid grid-cols-2 gap-4 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold uppercase text-purple-600">Tipo</Label>
+                          <Select value={tipoTarjeta} onValueChange={setTipoTarjeta}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Crédito">Crédito</SelectItem>
+                              <SelectItem value="Débito">Débito</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs font-bold uppercase text-purple-600">Marca</Label>
+                          <Select value={marcaTarjeta} onValueChange={setMarcaTarjeta}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Visa">Visa</SelectItem>
+                              <SelectItem value="Mastercard">Mastercard</SelectItem>
+                              <SelectItem value="Amex">Amex</SelectItem>
+                              <SelectItem value="Otra">Otra</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-2 space-y-2">
+                          <Label className="text-xs font-bold uppercase text-purple-600">Banco Emisor</Label>
+                          <Input placeholder="Ej: Santander, BBVA..." value={bancoTarjeta} onChange={(e) => setBancoTarjeta(e.target.value)} />
+                        </div>
                       </div>
+                    )}
+
+                    <div className="space-y-2 pt-2 border-t border-border">
+                      <Label>Notas Adicionales (Opcional)</Label>
+                      <Input placeholder="Ej: Seña del 50%..." value={notasCobro} onChange={(e) => setNotasCobro(e.target.value)} />
                     </div>
                   </div>
+
                   <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsCobroModalOpen(false)}>Cancelar</Button>
+                    <Button variant="ghost" onClick={() => setIsCobroModalOpen(false)} disabled={isSaving}>Cancelar</Button>
                     <Button onClick={handleRegistrarCobro} disabled={isSaving} className="bg-purple-600 hover:bg-purple-700 text-white">
-                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Confirmar Ingreso
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : null} Confirmar Cobro
                     </Button>
                   </DialogFooter>
                 </DialogContent>
