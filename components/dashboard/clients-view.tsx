@@ -160,9 +160,26 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
   }
 
   const handleGuardarCliente = async () => {
-    if (formData.tipo_cliente === "persona" && (!formData.nombre.trim() || !formData.documento.trim() || !formData.telefono.trim())) return alert("Nombre, Documento y Teléfono son obligatorios para Personas.")
-    if (formData.tipo_cliente === "empresa" && (!formData.razon_social.trim() || !formData.documento.trim() || !formData.telefono.trim())) return alert("Razón Social, CUIT y Teléfono son obligatorios para Empresas.")
+  
+    const esConsumidorFinal = formData.condicion_iva === "Consumidor Final";
     
+    // 1. Validaciones para Persona
+    if (formData.tipo_cliente === "persona") {
+      if (!formData.nombre.trim()) return alert("El nombre es obligatorio.");
+      if (!formData.telefono.trim()) return alert("El teléfono es obligatorio.");
+      // Solo obligatorio si no es Consumidor Final
+      if (!esConsumidorFinal && !formData.documento.trim()) {
+        return alert("El DNI es obligatorio para esta condición de IVA.");
+      }
+    }
+
+    // 2. Validaciones para Empresa
+    if (formData.tipo_cliente === "empresa") {
+      if (!formData.razon_social.trim()) return alert("La Razón Social es obligatoria.");
+      if (!formData.telefono.trim()) return alert("El teléfono es obligatorio.");
+      if (!formData.documento.trim()) return alert("El CUIT es obligatorio para empresas.");
+    }
+      
     setIsSaving(true)
     try {
       const payload = {
