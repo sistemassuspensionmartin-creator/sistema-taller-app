@@ -639,28 +639,46 @@ export function PresupuestosView({
 
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     try {
+      // 1. EL CANDADO: Revisamos en la base de datos si ya existe para evitar duplicados
+      const { data: tallerExistente, error: errExistente } = await supabase
+        .from('ordenes_trabajo')
+        .select('id')
+        .eq('presupuesto_id', editandoId);
+        
+      if (errExistente) throw errExistente;
+
+      if (tallerExistente && tallerExistente.length > 0) {
+        alert("⚠️ ATENCIÓN: Este presupuesto ya fue ingresado al Taller. No se puede duplicar.");
+        setIsAprobarModalOpen(false);
+        // Si por algún motivo el botón no había desaparecido, forzamos a que lo haga ahora
+        await supabase.from('presupuestos').update({ ingresado_al_taller: true }).eq('id', editandoId);
+        cargarDatos();
+        return;
+      }
+
       if (opcion === "turnos") {
         setIsAprobarModalOpen(false);
         if (onNavigateToTurnos) {
-          onNavigateToTurnos({
-            patente: vehiculoSeleccionado,
-            presupuesto_id: editandoId
-          });
+          onNavigateToTurnos({ patente: vehiculoSeleccionado, presupuesto_id: editandoId });
         }
       } else if (opcion === "inmediato") {
-        // 1. Actualizamos el estado y encendemos la bandera de INGRESO
+        // 2. MAGIA INTELIGENTE: Respetamos el estado si ya te pagaron
+        const presuActual = presupuestos.find(p => p.id === editandoId);
+        const estadoFinal = (presuActual?.estado === "Cobrado" || presuActual?.estado === "Facturado") ? presuActual.estado : "Aprobado";
+
+        // 3. Actualizamos y encendemos la bandera
         await supabase.from('presupuestos').update({
-          estado: "Aprobado",
-          ingresado_al_taller: true, // <-- Acá se enciende la nueva columna
+          estado: estadoFinal,
+          ingresado_al_taller: true,
           modificado_por_rol: userRole || 'admin'
         }).eq('id', editandoId);
         
-        setEstado("Aprobado");
+        setEstado(estadoFinal);
         setIsAprobarModalOpen(false);
 
         const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre} ${clienteActual?.apellido || ''}`.trim();
         
-        // 2. Creamos la Orden de Trabajo para el mecánico
+        // 4. Creamos la Orden de Trabajo
         const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
           presupuesto_id: editandoId,
           vehiculo_patente: vehiculoSeleccionado,
@@ -671,6 +689,7 @@ export function PresupuestosView({
         if (tallerError) throw tallerError;
         
         alert("¡Ingreso exitoso! El vehículo ya está en el tablero del taller.");
+        cargarDatos(); // Recargamos los datos para que el botón desaparezca YA
         setVista("lista");
         if (onNavigateToTaller) onNavigateToTaller();
       }
@@ -775,12 +794,6 @@ export function PresupuestosView({
                     {estado !== "Facturado" && userRole !== 'mecanico' && !presupuestos.find(p => p.id === editandoId)?.ingresado_al_taller && (
                       <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
                         <CheckCircle className="w-4 h-4 mr-2"/> {estado === "Cobrado" ? "Ingresar Vehículo al Taller" : "Aprobar sin Cobrar"}
-                      </Button>
-                    )}
-                    {/* El botón de Aprobar ahora SI aparece aunque esté Cobrado */}
-                    {estado !== "Aprobado" && estado !== "Facturado" && userRole !== 'mecanico' && (
-                      <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
-                        <CheckCircle className="w-4 h-4 mr-2"/> {estado === "Cobrado" ? "Ingresar Vehículo al Taller" : "Aprobar Presupuesto"}
                       </Button>
                     )}
                     {userRole !== 'mecanico' && (
