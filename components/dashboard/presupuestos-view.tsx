@@ -88,6 +88,7 @@ export function PresupuestosView({
   const [tipoTarjeta, setTipoTarjeta] = useState("Crédito")
   const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
   const [bancoTarjeta, setBancoTarjeta] = useState("")
+  const [infoPago, setInfoPago] = useState({ pagado: 0, restante: 0 })
 
   const [kmIngreso, setKmIngreso] = useState("")
   const [kmEgreso, setKmEgreso] = useState("")
@@ -701,11 +702,13 @@ export function PresupuestosView({
   const handleRegistrarCobro = async () => {
     const montoNum = parseFloat(montoCobro);
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido.");
-    if (montoNum > totalFinal) return alert("El monto no puede superar el total.");
+    
+    // --- CAMBIO 1: Validamos contra lo que RESTA cobrar, no contra el total histórico ---
+    if (montoNum > infoPago.restante) return alert("El monto no puede superar lo que resta cobrar.");
 
     setIsSaving(true);
     try {
-      // 1. Ruteo automático de Cajas
+      // 1. Ruteo automático de Cajas (INTACTO)
       const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
       let cajaDestinoId = null;
       if (metodoPago === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
@@ -722,12 +725,12 @@ export function PresupuestosView({
         await supabase.from('cajas').update({ saldo: Number(cajaAfectada.saldo || 0) + montoNum }).eq('id', cajaDestinoId);
       }
 
-      // 2. Activar Cuenta Corriente si corresponde
+      // 2. Activar Cuenta Corriente si corresponde (INTACTO)
       if (metodoPago === 'Cuenta Corriente' && clienteSeleccionado) {
         await supabase.from('clientes').update({ tiene_cuenta_corriente: true }).eq('id', clienteSeleccionado);
       }
 
-      // 3. Registro de movimiento
+      // 3. Registro de movimiento (INTACTO)
       let detalleExtra = "";
       if (metodoPago === 'Transferencia' && bancoOrigen) detalleExtra = ` [${bancoOrigen}]`;
       if (metodoPago === 'Tarjeta') detalleExtra = ` [${marcaTarjeta} ${tipoTarjeta}]`;
@@ -742,11 +745,16 @@ export function PresupuestosView({
         notas: notasCobro
       }]);
 
-      // 4. Actualizar presupuesto
-      const nuevoEstado = montoNum >= totalFinal ? "Cobrado" : "Aprobado";
+      // --- CAMBIO 2: Actualizar presupuesto sumando pagos históricos ---
+      const nuevoPagado = infoPago.pagado + montoNum;
+      
+      // Si lo que pagó antes + lo que paga ahora llega al Total, se marca como Cobrado
+      const nuevoEstado = nuevoPagado >= totalFinal ? "Cobrado" : "Aprobado";
+      
       await supabase.from('presupuestos').update({ 
         estado: nuevoEstado, 
-        estado_pago: nuevoEstado === "Cobrado" ? "Cobrado" : "Parcial" 
+        estado_pago: nuevoEstado === "Cobrado" ? "Cobrado" : "Parcial",
+        modificado_por_rol: userRole || 'admin'
       }).eq('id', editandoId);
 
       setEstado(nuevoEstado);
@@ -779,14 +787,28 @@ export function PresupuestosView({
               <div className="flex flex-wrap items-center gap-2">
                 {!isEditing && editandoId && (
                   <>
-                    {/* Botón Cobrar: Solo si no está cobrado ni facturado */}
+                    {/* Botón Cobrar: Inteligente, busca pagos anteriores antes de abrir */}
                     {estado !== "Facturado" && estado !== "Cobrado" && userRole !== 'mecanico' && (
-                      <Button variant="default" onClick={() => {
-                        setMontoCobro(totalFinal.toString());
-                        setMetodoPago("Efectivo");
-                        setIsCobroModalOpen(true);
+                      <Button variant="default" onClick={async () => {
+                        setIsSaving(true);
+                        try {
+                          // Buscamos si ya tiene pagos parciales registrados en la caja
+                          const { data: pagos } = await supabase.from('movimientos_caja').select('monto').eq('presupuesto_id', editandoId).eq('tipo_movimiento', 'ingreso_cobro');
+                          const pagadoTotal = pagos?.reduce((acc, mov) => acc + Number(mov.monto), 0) || 0;
+                          const restante = totalFinal - pagadoTotal;
+                          
+                          setInfoPago({ pagado: pagadoTotal, restante: restante });
+                          setMontoCobro(restante > 0 ? restante.toString() : "0");
+                          setMetodoPago("Efectivo");
+                          setNotasCobro("");
+                          setIsCobroModalOpen(true);
+                        } catch (e) {
+                          alert("Error al verificar cobros previos.");
+                        } finally {
+                          setIsSaving(false);
+                        }
                       }} className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm border-none mr-2">
-                        <Banknote className="w-4 h-4 mr-2"/> Registrar Cobro
+                        {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Banknote className="w-4 h-4 mr-2"/>} Registrar Cobro
                       </Button>
                     )}
 
@@ -1364,12 +1386,21 @@ export function PresupuestosView({
                   <div className="space-y-4 py-4">
                     <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-200 flex justify-between items-center">
                       <div>
-                        <p className="text-xs text-purple-600/70 uppercase tracking-wider font-bold">Patente</p>
-                        <p className="font-mono font-bold text-lg text-purple-900 dark:text-purple-100">{vehiculoSeleccionado}</p>
+                        <p className="text-xs text-purple-600/70 uppercase tracking-wider font-bold">Total</p>
+                        <p className="font-mono font-bold text-lg text-purple-900 dark:text-purple-100">${totalFinal.toLocaleString()}</p>
                       </div>
+                      
+                      {/* Esta cajita del medio SOLO aparece si el cliente ya había pagado algo antes */}
+                      {infoPago.pagado > 0 && (
+                        <div className="text-center border-l border-r border-purple-200 px-4 mx-2">
+                          <p className="text-xs text-emerald-600 uppercase tracking-wider font-bold">Ya Pagado</p>
+                          <p className="font-mono font-bold text-lg text-emerald-600">${infoPago.pagado.toLocaleString()}</p>
+                        </div>
+                      )}
+                      
                       <div className="text-right">
-                        <p className="text-xs text-purple-600/70 uppercase tracking-wider font-bold">Total a Cobrar</p>
-                        <p className="font-mono font-bold text-xl text-purple-600 dark:text-purple-400">${totalFinal.toLocaleString()}</p>
+                        <p className="text-xs text-red-600/70 uppercase tracking-wider font-bold">Resta Cobrar</p>
+                        <p className="font-mono font-bold text-xl text-red-500">${infoPago.restante.toLocaleString()}</p>
                       </div>
                     </div>
 

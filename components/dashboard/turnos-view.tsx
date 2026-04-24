@@ -344,7 +344,11 @@ export function TurnosView({
       if (error) throw error;
 
       if (payload.presupuesto_id) {
-        await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', payload.presupuesto_id);
+        // Consultamos el estado actual para no pisar si ya está Cobrado o Facturado
+        const { data: presActual } = await supabase.from('presupuestos').select('estado').eq('id', payload.presupuesto_id).single();
+        if (presActual && presActual.estado !== "Cobrado" && presActual.estado !== "Facturado") {
+          await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', payload.presupuesto_id);
+        }
       }
 
       setIsModalOpen(false)
