@@ -866,8 +866,8 @@ export function PresupuestosView({
               <div className="flex flex-wrap items-center gap-2">
                 {!isEditing && editandoId && (
                   <>
-                    {/* Botón Cobrar: Siempre visible para poder cobrar diferencias si se agregan cosas */}
-                    {estado !== "Facturado" && userRole !== 'mecanico' && (
+                    {/* Botón Cobrar: Se oculta si ya está 100% Cobrado o Facturado */}
+                    {estado !== "Facturado" && estado !== "Cobrado" && userRole !== 'mecanico' && (
                       <Button variant="default" onClick={async () => {
                         setIsSaving(true);
                         try {
