@@ -240,7 +240,7 @@ export function CajaView({
       if (metodoPago === 'Transferencia' && bancoOrigen) detalleMetodo = ` [Banco: ${bancoOrigen}]`;
       if (metodoPago === 'Tarjeta') detalleMetodo = ` [${marcaTarjeta} ${tipoTarjeta}${bancoTarjeta ? ' - ' + bancoTarjeta : ''}]`;
 
-      // --- MAGIA: SI PASA A CUENTA CORRIENTE, ACTIVAMOS EL INTERRUPTOR DEL CLIENTE ---
+      // --- MAGIA: SI PASA A CUENTA CORRIENTE, ACTIVAMOS EL INTERRUPTOR Y CREAMOS LA DEUDA ---
       if (metodoPago === 'Cuenta Corriente') {
         // 1. Buscamos a quién pertenece este presupuesto
         const { data: pData } = await supabase
@@ -255,9 +255,19 @@ export function CajaView({
           : (pData?.vehiculos as any)?.cliente_id;
 
         if (clienteId) {
+          // A) Encendemos la cuenta
           await supabase.from('clientes')
             .update({ tiene_cuenta_corriente: true })
             .eq('id', clienteId);
+            
+          // B) ¡NUEVO! Registramos la deuda real en su historial
+          await supabase.from('movimientos_cuenta_corriente').insert([{
+            cliente_id: clienteId,
+            monto: monto,
+            tipo_movimiento: 'deuda', // (Asegurate de que en tu BD uses 'deuda' o 'cargo')
+            detalle: `Deuda por Presupuesto PRE-${presupuestoACobrar.numero}`,
+            presupuesto_id: presupuestoACobrar.id
+          }]);
         }
       }
       // ---------------------------------------------------------------------------------
@@ -276,6 +286,8 @@ export function CajaView({
       const nuevoEstado = nuevoRestante <= 0 ? 'Cobrado' : 'Parcial';
       
       await supabase.from('presupuestos').update({ estado_pago: nuevoEstado }).eq('id', presupuestoACobrar.id);
+      
+      // Mantenida tu lógica intacta
       if(nuevoEstado === 'Cobrado') {
           await supabase.from('presupuestos').update({ estado: 'Facturado' }).eq('id', presupuestoACobrar.id);
       }
