@@ -468,6 +468,27 @@ export function PresupuestosView({
       let numAleatorio = 0;
       const isMecanico = userRole === 'mecanico';
 
+      // --- MAGIA: VALIDACIÓN INTELIGENTE DE ESTADO ---
+      let estadoCalculado = estado;
+
+      // Si estamos editando un presupuesto que figuraba como Cobrado o Facturado...
+      if (editandoId && (estado === 'Cobrado' || estado === 'Facturado')) {
+        // Vamos a la caja a ver cuánta plata real entró por este trabajo
+        const { data: pagos } = await supabase.from('movimientos_caja')
+          .select('monto')
+          .eq('presupuesto_id', editandoId)
+          .eq('tipo_movimiento', 'ingreso_cobro');
+          
+        const pagadoTotal = pagos?.reduce((acc, mov) => acc + Number(mov.monto), 0) || 0;
+
+        // Si el total final nuevo NO coincide con lo que pagó (se sumaron o restaron cosas)
+        if (totalFinal !== pagadoTotal) {
+          estadoCalculado = 'Aprobado'; // Lo bajamos de categoría
+          setEstado('Aprobado'); // Actualizamos la vista visualmente
+        }
+      }
+      // ------------------------------------------------
+
       // Agrupamos los datos para no repetir código y asegurar que los vacíos vayan como 'null' (para evitar errores int4)
       const datosPresupuesto = {
         vehiculo_patente: patenteParaDB,
@@ -475,7 +496,7 @@ export function PresupuestosView({
         validez_dias: parseInt(validez) || 15,
         descuento: descParsed,
         total_final: totalFinal,
-        estado: estado,
+        estado: estadoCalculado, // <-- ACÁ INYECTAMOS EL ESTADO INTELIGENTE
         observaciones_publicas: notasCliente,
         notas_internas: notasInternas,
         modificado_por_rol: userRole || 'admin',
@@ -526,10 +547,10 @@ export function PresupuestosView({
 
       // --- SINCRONIZACIÓN CON LA FICHA DEL VEHÍCULO ---
       const kmParaFicha = kme > 0 ? kme : kmi;
-      if (kmParaFicha > 0) {
+      if (kmParaFicha > 0 && patenteParaDB) { // Validamos que exista la patente
         const { error: errVehiculo } = await supabase.from('vehiculos')
           .update({ kilometraje: kmParaFicha.toString() }) 
-          .eq('patente', vehiculoSeleccionado);
+          .eq('patente', patenteParaDB); // Usamos patenteParaDB que es segura
           
         if (errVehiculo) {
           alert("El presupuesto se guardó, pero hubo un error al actualizar la ficha del vehículo: " + errVehiculo.message);
