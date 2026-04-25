@@ -132,13 +132,13 @@ export function WorkOrdersTable({
         // Consultamos la base de datos EN VIVO para no depender de la memoria vieja
         const { data: presEnVivo } = await supabase
           .from('presupuestos')
-          .select('estado_pago')
+          .select('estado') 
           .eq('id', orden.presupuesto_id)
           .single();
 
-        if (presEnVivo && presEnVivo.estado_pago !== 'Cobrado') {
-          alert("⛔ ALERTA DE CAJA: No se puede entregar el vehículo.\n\nEl presupuesto asociado aún tiene saldo pendiente. Diríjase a Tesorería para registrar el cobro antes de liberar la unidad.");
-          return; // Corta la ejecución y rebota la acción
+        if (presEnVivo && presEnVivo.estado !== 'Cobrado' && presEnVivo.estado !== 'Facturado') {
+          alert("⛔ ALERTA DE CAJA: No se puede entregar el vehículo.\n\nEl presupuesto asociado aún tiene saldo pendiente (Estado: " + presEnVivo.estado + "). Diríjase a Tesorería para registrar el cobro exacto antes de liberar la unidad.");
+          return; 
         }
       }
     }
