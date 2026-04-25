@@ -62,15 +62,17 @@ export function PresupuestosView({
   onClearPresupuestoDetalle,
   onVolver,
   userRole,
-  userName
+  userName,
+  vehiculoPreseleccionado 
 }: {
   onNavigateToTurnos?: (vehiculoInfo: any) => void,
   onNavigateToTaller?: () => void,
-  presupuestoAbreDetalle?: string | null,
+  presupuestoAbreDetalle?: any,
   onClearPresupuestoDetalle?: () => void,
   onVolver?: () => void,
   userRole?: string | null,
-  userName?: string | null
+  userName?: string | null,
+  vehiculoPreseleccionado?: any 
 }) {
   const [vista, setVista] = useState<"lista" | "detalle">("lista")
   const [isEditing, setIsEditing] = useState(false)
@@ -181,6 +183,46 @@ export function PresupuestosView({
       }
     }
   }, [clienteSeleccionado, vehiculos, vehiculoSeleccionado, editandoId, isEditing]);
+
+  useEffect(() => {
+    if (clienteSeleccionado && !editandoId && isEditing) {
+      const autosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado));
+      if (autosDelCliente.length === 1 && vehiculoSeleccionado !== autosDelCliente[0].patente) {
+        setVehiculoSeleccionado(autosDelCliente[0].patente);
+      }
+    }
+  }, [clienteSeleccionado, vehiculos, vehiculoSeleccionado, editandoId, isEditing]);
+
+  useEffect(() => {
+    const esNuevo = presupuestoAbreDetalle === "nuevo" || (presupuestoAbreDetalle && presupuestoAbreDetalle.id === "nuevo");
+    
+    if (esNuevo) {
+      setVista("detalle");
+      setIsEditing(true);
+      
+      setEditandoId(null);
+      setFilas([{ id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }]);
+      setEstado("Borrador");
+      setDescuento("0");
+      setNotasInternas("");
+      setKmIngreso("");
+      setKmEgreso("");
+      setDemoraEstimada("");
+      
+      const vehiculo = vehiculoPreseleccionado || (presupuestoAbreDetalle.vehiculo ? presupuestoAbreDetalle.vehiculo : null);
+      
+      if (vehiculo) {
+        setVehiculoSeleccionado(vehiculo.patente);
+        setClienteSeleccionado(vehiculo.cliente_id);
+        if (vehiculo.kilometraje) setKmIngreso(vehiculo.kilometraje.toString());
+      } else {
+        setVehiculoSeleccionado("");
+        setClienteSeleccionado("");
+      }
+
+      if (onClearPresupuestoDetalle) onClearPresupuestoDetalle();
+    }
+  }, [presupuestoAbreDetalle, vehiculoPreseleccionado]);
 
   const presupuestosFiltrados = presupuestos.filter(p => {
     if (!busquedaLista) return true;
