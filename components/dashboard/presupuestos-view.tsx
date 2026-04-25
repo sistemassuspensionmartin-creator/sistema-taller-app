@@ -445,8 +445,7 @@ export function PresupuestosView({
   }
 
   const handleGuardarPresupuesto = async () => {
-    if (!clienteSeleccionado) return alert("Falta seleccionar el cliente. Por favor, búsquelo en la lista.");
-    if (!vehiculoSeleccionado) return alert("Falta seleccionar el vehículo. Elija uno del menú desplegable.");
+    const patenteParaDB = vehiculoSeleccionado && vehiculoSeleccionado.trim() !== "" ? vehiculoSeleccionado : null;
 
     // --- NUEVA VALIDACIÓN DE KILOMETRAJE ---
     const kmi = parseInt(kmIngreso) || 0;
@@ -471,7 +470,7 @@ export function PresupuestosView({
 
       // Agrupamos los datos para no repetir código y asegurar que los vacíos vayan como 'null' (para evitar errores int4)
       const datosPresupuesto = {
-        vehiculo_patente: vehiculoSeleccionado,
+        vehiculo_patente: patenteParaDB,
         fecha_emision: fecha,
         validez_dias: parseInt(validez) || 15,
         descuento: descParsed,
@@ -634,19 +633,23 @@ export function PresupuestosView({
     const v_cliente = esHistorico ? datosHistoricos.vehiculos?.clientes : clienteActual;
     const v_vehiculo = esHistorico ? datosHistoricos.vehiculos : vehiculoActual;
     
-    if (!v_cliente || !v_vehiculo) return alert("Faltan datos del cliente o vehículo para generar el documento.");
+    // --- MAGIA: DATOS DE CONTINGENCIA SI ES RÁPIDO ---
+    const c_doc = v_cliente || { tipo_cliente: 'fisica', nombre: 'Consumidor Final', apellido: '', telefono: '-' };
+    const v_doc = v_vehiculo || { patente: 'S/N', marca: 'A Confirmar', modelo: '' };
 
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "" && f.estado_cambio !== 'eliminado');
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
 
     const datosFormateadosParaPlantilla = {
-      cliente_nombre: v_cliente.tipo_cliente === 'empresa' ? v_cliente.razon_social : `${v_cliente.nombre} ${v_cliente.apellido || ''}`,
-      cliente_telefono: v_cliente.telefono,
-      vehiculo_patente: v_vehiculo.patente,
-      vehiculo_modelo: `${v_vehiculo.marca || ''} ${v_vehiculo.modelo || ''}`.trim(),
-      vehiculo_anio: v_vehiculo.año || v_vehiculo.anio || v_vehiculo.year || '',
-      vehiculo_color: v_vehiculo.color || '',
-      vehiculo_kilometros: v_vehiculo.kilometros || v_vehiculo.km || v_vehiculo.kilometraje || '',
+      // --- CAMBIAMOS v_cliente POR c_doc Y v_vehiculo POR v_doc ---
+      cliente_nombre: c_doc.tipo_cliente === 'empresa' ? c_doc.razon_social : `${c_doc.nombre} ${c_doc.apellido || ''}`.trim(),
+      cliente_telefono: c_doc.telefono,
+      vehiculo_patente: v_doc.patente,
+      vehiculo_modelo: `${v_doc.marca || ''} ${v_doc.modelo || ''}`.trim(),
+      vehiculo_anio: v_doc.año || v_doc.anio || v_doc.year || '',
+      vehiculo_color: v_doc.color || '',
+      vehiculo_kilometros: v_doc.kilometros || v_doc.km || v_doc.kilometraje || '',
+      // -------------------------------------------------------------
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
       items: v_filas,
@@ -1389,12 +1392,22 @@ export function PresupuestosView({
                           </TableCell>
                           <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
                           <TableCell>
-                            <div className="font-medium text-foreground group-hover:text-emerald-600 transition-colors">
-                              {p.vehiculos?.clientes?.tipo_cliente === 'empresa' 
-                                ? p.vehiculos?.clientes?.razon_social 
-                                : `${p.vehiculos?.clientes?.nombre || ''} ${p.vehiculos?.clientes?.apellido || ''}`}
-                            </div>
-                            <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
+                            {p.vehiculo_patente ? (
+                              <>
+                                <div className="font-medium text-foreground group-hover:text-emerald-600 transition-colors">
+                                  {p.vehiculos?.clientes?.tipo_cliente === 'empresa' 
+                                    ? p.vehiculos?.clientes?.razon_social 
+                                    : `${p.vehiculos?.clientes?.nombre || ''} ${p.vehiculos?.clientes?.apellido || ''}`}
+                                </div>
+                                <div className="text-xs text-muted-foreground">{p.vehiculos?.marca} {p.vehiculos?.modelo} ({p.vehiculo_patente})</div>
+                              </>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider flex items-center">
+                                  ⚡ Rápido (Mostrador)
+                                </span>
+                              </div>
+                            )}
                           </TableCell>
                           
                           {/* Ocultamos el precio en la fila al mecánico */}

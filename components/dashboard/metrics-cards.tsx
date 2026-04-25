@@ -16,7 +16,7 @@ export function MetricsCards({
   onNavigateToCaja,
   userRole // <-- RECIBIMOS EL ROL ACÁ
 }: { 
-  onNavigateToPresupuestos?: () => void,
+  onNavigateToPresupuestos?: (id?: string) => void,
   onNavigateToTurnos?: () => void,
   onNavigateToCaja?: () => void,
   userRole?: string | null // <-- LO DEFINIMOS ACÁ
@@ -177,10 +177,10 @@ export function MetricsCards({
           <h3 className="text-lg font-bold text-foreground">Acciones Rápidas</h3>
           <div className="grid grid-cols-1 gap-3">
             
-            {/* BOTÓN PRESUPUESTO: Solo si NO es mecánico */}
+            {/* BOTÓN PRESUPUESTO RÁPIDO: Solo si NO es mecánico */}
             {userRole !== 'mecanico' && (
-              <Button onClick={onNavigateToPresupuestos} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
-                <Plus className="mr-3 h-5 w-5 text-blue-600" /> Nuevo Presupuesto
+              <Button onClick={() => onNavigateToPresupuestos && onNavigateToPresupuestos("nuevo")} className="h-14 justify-start text-base bg-emerald-600 text-white hover:bg-emerald-700 border-none shadow-sm dark:bg-emerald-600 dark:text-white">
+                <span className="mr-3 text-xl">⚡</span> Presupuesto Rápido
               </Button>
             )}
 

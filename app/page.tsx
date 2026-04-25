@@ -121,8 +121,8 @@ export default function DashboardPage() {
           <div className="space-y-8">
             <MetricsCards 
               onNavigateToAdmin={() => setActiveSection("Estadísticas")}
-              onNavigateToPresupuestos={() => {
-                setPresupuestoParaAbrir(null); 
+              onNavigateToPresupuestos={(id = "nuevo") => {
+                setPresupuestoParaAbrir(id); 
                 setActiveSection("Presupuestos");
               }}
               onNavigateToTurnos={() => setActiveSection("Turnos")}
