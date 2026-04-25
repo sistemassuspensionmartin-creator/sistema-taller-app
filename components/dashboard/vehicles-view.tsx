@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Car, User, Edit, Loader2, Save, Gauge, Palette, Calendar, X, CheckCircle2, ArrowLeft, Phone, UserCheck, UserMinus, FileText, Pencil } from "lucide-react"
+import { Plus, Search, Car, User, Edit, Loader2, Save, Gauge, Palette, Calendar, X, CheckCircle2, ArrowLeft, Phone, UserCheck, UserMinus, FileText, Pencil, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -106,7 +106,7 @@ export function VehiclesView({
   const fetchVehiculos = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas )`)
+      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo )`)
       if (error) throw error
       setVehiculos(data || [])
     } catch (error) {
@@ -118,7 +118,7 @@ export function VehiclesView({
 
   const fetchClientesParaSelect = async () => {
     try {
-      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas').order('nombre')
+      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo').order('nombre')
       if (error) throw error
       setClientes(data || [])
     } catch (error) {
@@ -616,7 +616,22 @@ export function VehiclesView({
                   <>
                     {vehiculoSeleccionado.clientes ? (
                       <div className="grid grid-cols-2 gap-y-6 gap-x-6 text-sm">
-                        <div className="col-span-2"><span className="text-muted-foreground block mb-1">Nombre / Razón Social</span><p className="font-bold text-lg">{vehiculoSeleccionado.clientes.tipo_cliente === 'empresa' ? vehiculoSeleccionado.clientes.razon_social : `${vehiculoSeleccionado.clientes.nombre} ${vehiculoSeleccionado.clientes.apellido || ''}`}</p></div>
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground block mb-1">Nombre / Razón Social</span>
+                          <div className="flex items-center gap-2">
+                            <p className="font-bold text-lg">
+                              {vehiculoSeleccionado.clientes.tipo_cliente === 'empresa' ? vehiculoSeleccionado.clientes.razon_social : `${vehiculoSeleccionado.clientes.nombre} ${vehiculoSeleccionado.clientes.apellido || ''}`}
+                            </p>
+                            {Number(vehiculoSeleccionado.clientes.saldo) > 0 && (
+                              <span 
+                                title={`Deuda pendiente: $${Number(vehiculoSeleccionado.clientes.saldo).toLocaleString()}`} 
+                                className="inline-flex items-center text-[10px] uppercase tracking-wider font-bold text-rose-600 bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-full shrink-0"
+                              >
+                                <AlertTriangle className="w-3 h-3 mr-1" /> Con Deuda
+                              </span>
+                            )}
+                          </div>
+                        </div>
                         <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</span><p className="font-medium font-mono">{vehiculoSeleccionado.clientes.telefono || '-'}</p></div>
                         <div><span className="text-muted-foreground block mb-1">DNI / CUIT</span><p className="font-medium">{vehiculoSeleccionado.clientes.documento || '-'}</p></div>
                         <div className="col-span-2"><span className="text-muted-foreground block mb-1">Email</span><p className="font-medium">{vehiculoSeleccionado.clientes.email || '-'}</p></div>
@@ -637,9 +652,20 @@ export function VehiclesView({
           </div>
 
           <div className="pt-4">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-foreground">
-              <FileText className="w-5 h-5 text-emerald-600"/> Historial de Presupuestos y Órdenes
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold flex items-center gap-2 text-foreground">
+                <FileText className="w-5 h-5 text-emerald-600"/> Historial de Presupuestos y Órdenes
+              </h3>
+              {userRole !== 'mecanico' && (
+                <Button 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                  onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto("nuevo", vehiculoSeleccionado)}
+                >
+                  <Plus className="w-4 h-4 mr-2" /> Nuevo Presupuesto
+                </Button>
+              )}
+            </div>
+            
             <Card className="border-border bg-card overflow-hidden">
               <Table>
                 <TableHeader className="bg-secondary/20">
