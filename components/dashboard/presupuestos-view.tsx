@@ -635,21 +635,19 @@ export function PresupuestosView({
     
     // --- MAGIA: DATOS DE CONTINGENCIA SI ES RÁPIDO ---
     const c_doc = v_cliente || { tipo_cliente: 'fisica', nombre: 'Consumidor Final', apellido: '', telefono: '-' };
-    const v_doc = v_vehiculo || { patente: 'S/N', marca: 'A Confirmar', modelo: '' };
+    const v_doc = v_vehiculo || { patente: 'SIN-PATENTE', marca: 'Mostrador', modelo: '' };
 
     const v_filas = esHistorico ? (datosHistoricos.presupuesto_items || []) : filas.filter(f => f.detalle.trim() !== "" && f.estado_cambio !== 'eliminado');
     const v_total = esHistorico ? datosHistoricos.total_final : totalFinal;
 
     const datosFormateadosParaPlantilla = {
-      // --- CAMBIAMOS v_cliente POR c_doc Y v_vehiculo POR v_doc ---
-      cliente_nombre: c_doc.tipo_cliente === 'empresa' ? c_doc.razon_social : `${c_doc.nombre} ${c_doc.apellido || ''}`.trim(),
-      cliente_telefono: c_doc.telefono,
-      vehiculo_patente: v_doc.patente,
+      cliente_nombre: c_doc.tipo_cliente === 'empresa' ? c_doc.razon_social : `${c_doc.nombre || ''} ${c_doc.apellido || ''}`.trim(),
+      cliente_telefono: c_doc.telefono || '-',
+      vehiculo_patente: v_doc.patente || 'SIN-PATENTE',
       vehiculo_modelo: `${v_doc.marca || ''} ${v_doc.modelo || ''}`.trim(),
       vehiculo_anio: v_doc.año || v_doc.anio || v_doc.year || '',
       vehiculo_color: v_doc.color || '',
       vehiculo_kilometros: v_doc.kilometros || v_doc.km || v_doc.kilometraje || '',
-      // -------------------------------------------------------------
       numero_correlativo: esHistorico ? datosHistoricos.numero_correlativo : (numeroCorrelativo || "BORRADOR"),
       fecha_emision: esHistorico ? datosHistoricos.fecha_emision : fecha,
       items: v_filas,
@@ -667,18 +665,17 @@ export function PresupuestosView({
     setPrintData(datosFormateadosParaPlantilla);
 
     setTimeout(() => {
-      // --- MAGIA PARA EL NOMBRE DEL ARCHIVO PDF ---
       const tituloOriginal = document.title;
+      // Limpiamos la patente de caracteres raros que rompan el PDF
+      const patenteSegura = (v_doc.patente || "SIN-PATENTE").replace(/[^a-zA-Z0-9-]/g, "_");
       
       if (tipo === 'presupuesto') {
-        document.title = `Presupuesto_${v_vehiculo.patente}`;
+        document.title = `Presupuesto_${patenteSegura}`;
       } else if (tipo === 'orden') {
-        document.title = `OrdenTrabajo_${v_vehiculo.patente}`;
+        document.title = `OrdenTrabajo_${patenteSegura}`;
       }
 
       window.print();
-
-      // Restauramos el nombre original de la página para que no quede raro
       document.title = tituloOriginal;
     }, 300);
   }
@@ -848,8 +845,8 @@ export function PresupuestosView({
               <div className="flex flex-wrap items-center gap-2">
                 {!isEditing && editandoId && (
                   <>
-                    {/* Botón Cobrar: Inteligente, busca pagos anteriores antes de abrir */}
-                    {estado !== "Facturado" && estado !== "Cobrado" && userRole !== 'mecanico' && (
+                    {/* Botón Cobrar: Siempre visible para poder cobrar diferencias si se agregan cosas */}
+                    {estado !== "Facturado" && userRole !== 'mecanico' && (
                       <Button variant="default" onClick={async () => {
                         setIsSaving(true);
                         try {
