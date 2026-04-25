@@ -37,6 +37,8 @@ export default function DashboardPage() {
   const [vehiculoParaAbrir, setVehiculoParaAbrir] = useState<any>(null)
   const [clienteParaAbrir, setClienteParaAbrir] = useState<any>(null)
   const [presupuestoParaAbrir, setPresupuestoParaAbrir] = useState<string | null>(null) 
+
+  const [vehiculoPreseleccionado, setVehiculoPreseleccionado] = useState<any>(null);
   
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
@@ -194,7 +196,11 @@ export default function DashboardPage() {
         return (
           <PresupuestosView 
             presupuestoAbreDetalle={presupuestoParaAbrir}
-            onClearPresupuestoDetalle={() => setPresupuestoParaAbrir(null)}
+            vehiculoPreseleccionado={vehiculoParaAbrir} // <--- ACÁ LE PASAMOS EL AUTO!
+            onClearPresupuestoDetalle={() => {
+              setPresupuestoParaAbrir(null);
+              setVehiculoParaAbrir(null); // <--- Y ACÁ LO LIMPIAMOS AL CERRAR
+            }}
             onNavigateToTaller={() => setActiveSection("Taller")}
             onNavigateToTurnos={(vehiculoInfo) => {
               setTurnoAgendarInfo(vehiculoInfo);
