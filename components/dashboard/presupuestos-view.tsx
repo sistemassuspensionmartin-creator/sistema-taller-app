@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw, Gauge, Clock, Banknote, DollarSign } from "lucide-react"
+import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw, Gauge, Clock, Banknote, DollarSign, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -961,14 +961,32 @@ export function PresupuestosView({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 border-t border-border">
+                  
+                  {/* --- CLIENTE VINCULADO CON ALERTA DE DEUDA --- */}
                   <div className="space-y-2">
-                    <Label className="text-muted-foreground flex items-center gap-1"><User className="w-3 h-3"/> Cliente Vinculado</Label>
-                    <Input
-                      readOnly
-                      placeholder={isEditing ? "Se completa al buscar arriba..." : "Sin registrar"}
-                      value={clienteActual ? (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) : ""}
-                      className="bg-secondary/20 text-foreground font-bold h-10 border-border pointer-events-none"
-                    />
+                    <Label className="text-muted-foreground flex items-center gap-1">
+                      <User className="w-3 h-3"/> Cliente Vinculado
+                    </Label>
+                    
+                    {/* Caja visual para el cliente, reemplaza al input readOnly aburrido */}
+                    <div className="flex h-10 w-full items-center justify-between rounded-md border border-border bg-secondary/20 px-3 py-2">
+                      <span className="text-sm font-bold truncate">
+                        {clienteActual ? 
+                          (clienteActual.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual.nombre} ${clienteActual.apellido}`) 
+                          : (isEditing ? "Se completa al buscar arriba..." : "Sin registrar")
+                        }
+                      </span>
+                      
+                      {/* LA MAGIA: Etiqueta de deuda que aparece solo si debe plata */}
+                      {clienteActual && Number(clienteActual.saldo) > 0 && (
+                        <span 
+                          title={`Deuda pendiente: $${Number(clienteActual.saldo).toLocaleString()}`} 
+                          className="inline-flex items-center text-[10px] uppercase tracking-wider font-bold text-rose-600 bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-full shrink-0 ml-2"
+                        >
+                          <AlertTriangle className="w-3 h-3 mr-1" /> Deuda
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-2">

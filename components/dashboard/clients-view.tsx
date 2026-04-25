@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, User, Phone, Mail, Edit, Loader2, Save, Building2, Copy, MapPin, FileText, Car, Calendar, Palette, Gauge, ArrowLeft } from "lucide-react"
+import { Plus, Search, User, Phone, Mail, Edit, Loader2, Save, Building2, Copy, MapPin, FileText, Car, Calendar, Palette, Gauge, ArrowLeft, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -318,10 +318,22 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                   <TableRow key={cliente.id} className="hover:bg-secondary/50 cursor-pointer" onClick={() => abrirDetalles(cliente)}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        <div className="bg-primary/10 p-2 rounded-full">
+                        <div className="bg-primary/10 p-2 rounded-full shrink-0">
                           {cliente.tipo_cliente === 'empresa' ? <Building2 className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-primary" />}
                         </div>
-                        {cliente.tipo_cliente === 'empresa' ? cliente.razon_social : `${cliente.nombre} ${cliente.apellido || ''}`}
+                        <span className="truncate">
+                          {cliente.tipo_cliente === 'empresa' ? cliente.razon_social : `${cliente.nombre} ${cliente.apellido || ''}`}
+                        </span>
+                        
+                        {/* ACÁ ESTÁ LA ETIQUETA DE DEUDA */}
+                        {Number(cliente.saldo) > 0 && (
+                          <span 
+                            title={`Deuda pendiente: $${Number(cliente.saldo).toLocaleString()}`} 
+                            className="inline-flex items-center text-[10px] uppercase tracking-wider font-bold text-rose-600 bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded-full shrink-0"
+                          >
+                            <AlertTriangle className="w-3 h-3 mr-1" /> Con Deuda
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
