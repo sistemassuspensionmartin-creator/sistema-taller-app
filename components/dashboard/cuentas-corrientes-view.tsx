@@ -55,6 +55,13 @@ export function CuentasCorrientesView() {
   const [datosCobroCliente, setDatosCobroCliente] = useState({ monto: "", caja_destino_id: "", comprobante: "", detalle: "" })
   const [isLedgerClienteOpen, setIsLedgerClienteOpen] = useState(false)
 
+  // ESTADOS EXTRA PARA COBRO AVANZADO
+  const [metodoPagoCliente, setMetodoPagoCliente] = useState("Efectivo")
+  const [bancoOrigenCliente, setBancoOrigenCliente] = useState("")
+  const [tipoTarjetaCliente, setTipoTarjetaCliente] = useState("Crédito")
+  const [marcaTarjetaCliente, setMarcaTarjetaCliente] = useState("Visa")
+  const [bancoTarjetaCliente, setBancoTarjetaCliente] = useState("")
+
   // ESTADO: MODAL CONFIRMAR BORRADO (REEMPLAZA AL WINDOW.CONFIRM)
   const [confirmDelete, setConfirmDelete] = useState<{isOpen: boolean, mov: any, entidad: 'cliente'|'proveedor'|null}>({
     isOpen: false, mov: null, entidad: null
@@ -241,42 +248,78 @@ export function CuentasCorrientesView() {
   const handleCobrarCliente = async () => {
     const montoNum = parseFloat(datosCobroCliente.monto)
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido")
-    if (!datosCobroCliente.caja_destino_id) return alert("Seleccione a qué caja entra el dinero")
 
-    const cajaSeleccionada = cajas.find(c => c.id === datosCobroCliente.caja_destino_id)
+    // 1. Ruteo Automático de Cajas (Sin perder tu lógica de búsqueda)
+    const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
+    let cajaDestinoId = null;
+    
+    if (metodoPagoCliente === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
+    if (metodoPagoCliente === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.includes('Transferencia'))?.id;
+    if (metodoPagoCliente === 'Tarjeta') cajaDestinoId = cajas.find(c => c.nombre.includes('Tarjeta'))?.id;
+    if (metodoPagoCliente === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.includes('Cheque'))?.id;
+
+    if (!cajaDestinoId) {
+      return alert(`No se encontró una caja específica para ${metodoPagoCliente}. Verificá los nombres de tus cajas.`);
+    }
+
+    const cajaSeleccionada = cajas.find(c => c.id === cajaDestinoId)
     setIsSaving(true)
+    
     try {
-      const nuevoSaldoCaja = Number(cajaSeleccionada.saldo) + montoNum
-      await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosCobroCliente.caja_destino_id)
+      // 2. Actualizar Saldo de Caja
+      const nuevoSaldoCaja = Number(cajaSeleccionada.saldo || 0) + montoNum
+      await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', cajaDestinoId)
 
+      // 3. Preparar detalles extra (Bancos/Tarjetas)
+      let detalleExtra = "";
+      if (metodoPagoCliente === 'Transferencia' && bancoOrigenCliente) detalleExtra = ` [${bancoOrigenCliente}]`;
+      if (metodoPagoCliente === 'Tarjeta') detalleExtra = ` [${marcaTarjetaCliente} ${tipoTarjetaCliente}]`;
+
+      // 4. Registro en Movimientos de Caja
       await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'ingreso_cobro', 
-        caja_destino_id: datosCobroCliente.caja_destino_id, 
+        caja_destino_id: cajaDestinoId, 
         monto: montoNum,
-        metodo_pago: cajaSeleccionada.nombre.includes('Efectivo') || cajaSeleccionada.nombre.includes('Mostrador') ? 'Efectivo' : 'Transferencia',
-        detalle: `Cobro a Cliente: ${getNombreCliente(clienteSeleccionado)}`, 
-        notas: `Ref: ${datosCobroCliente.comprobante}`
+        metodo_pago: metodoPagoCliente,
+        detalle: `Cobro a Cuenta Corriente: ${getNombreCliente(clienteSeleccionado)}${detalleExtra}`, 
+        notas: `Ref: ${datosCobroCliente.comprobante || 'S/N'}`
       }])
 
+      // 5. Registro en Movimientos de Clientes (Tu tabla de historial de cuenta)
       await supabase.from('movimientos_clientes').insert([{
         cliente_id: clienteSeleccionado.id, 
         tipo: 'pago_ingreso', 
         monto: montoNum, 
-        caja_destino_id: datosCobroCliente.caja_destino_id,
+        caja_destino_id: cajaDestinoId,
         comprobante: datosCobroCliente.comprobante, 
-        detalle: datosCobroCliente.detalle || 'Pago / Seña recibida'
+        detalle: datosCobroCliente.detalle || `Pago recibido en ${metodoPagoCliente}${detalleExtra}`
       }])
 
+      // 6. Actualizar Saldo del Cliente
       const nuevoSaldoCli = Number(clienteSeleccionado.saldo || 0) - montoNum
       await supabase.from('clientes').update({ saldo: nuevoSaldoCli }).eq('id', clienteSeleccionado.id)
 
+      // 7. Actualización de la "Foto" local para que el cambio sea instantáneo en pantalla
+      setClienteSeleccionado((prev: any) => ({...prev, saldo: nuevoSaldoCli}));
+
+      // 8. Limpieza y cierre
       setIsCobroClienteOpen(false)
       setDatosCobroCliente({ monto: "", caja_destino_id: "", comprobante: "", detalle: "" })
+      
+      // Limpiamos estados de banco/tarjeta
+      setBancoOrigenCliente("")
+      setBancoTarjetaCliente("")
+      
       cargarDatosBase()
-    } catch (error: any) { alert("Error al procesar el cobro: " + error.message) } 
-    finally { setIsSaving(false) }
+      alert("¡Cobro registrado! El saldo se actualizó y el dinero entró a la caja.")
+      
+    } catch (error: any) { 
+      alert("Error al procesar el cobro: " + error.message) 
+    } finally { 
+      setIsSaving(false) 
+    }
   }
-
+  
   const abrirLedgerCliente = async (cli: any) => {
     setClienteSeleccionado(cli)
     setIsLedgerClienteOpen(true)
@@ -539,18 +582,23 @@ export function CuentasCorrientesView() {
 
       <Dialog open={isCobroClienteOpen} onOpenChange={setIsCobroClienteOpen}>
         <DialogContent className="max-w-md border-border bg-card">
-          <DialogHeader><DialogTitle className="text-xl flex items-center gap-2 text-blue-600"><HandCoins className="w-5 h-5" /> Registrar Ingreso de Dinero</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-blue-600">
+              <HandCoins className="w-6 h-6" /> Registrar Ingreso de Dinero
+            </DialogTitle>
+          </DialogHeader>
+
           {clienteSeleccionado && (
             <div className="space-y-4 py-4">
-              <div className="flex justify-between items-center bg-secondary/30 p-3 rounded-lg border border-border">
+              <div className="flex justify-between items-center bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase font-bold">Cliente</p>
-                  <p className="font-bold text-foreground">{getNombreCliente(clienteSeleccionado)}</p>
+                  <p className="text-xs text-blue-600/70 uppercase tracking-wider font-bold">Cliente</p>
+                  <p className="font-bold text-lg text-blue-900 dark:text-blue-100">{getNombreCliente(clienteSeleccionado)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground uppercase font-bold">Saldo Actual</p>
-                  <p className={`font-mono font-bold ${Number(clienteSeleccionado.saldo) > 0 ? "text-rose-600" : "text-blue-600"}`}>
-                    {Number(clienteSeleccionado.saldo) < 0 ? `A Favor: $${Math.abs(Number(clienteSeleccionado.saldo)).toLocaleString()}` : `Debe: $${Number(clienteSeleccionado.saldo || 0).toLocaleString()}`}
+                  <p className="text-xs text-blue-600/70 uppercase tracking-wider font-bold">Deuda Actual</p>
+                  <p className="font-mono font-bold text-xl text-blue-600 dark:text-blue-400">
+                    ${Number(clienteSeleccionado.saldo || 0).toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -559,28 +607,75 @@ export function CuentasCorrientesView() {
                 <Label>Monto Entregado ($)</Label>
                 <Input type="number" className="text-lg font-mono font-bold h-12 border-blue-300 focus-visible:ring-blue-500" autoFocus value={datosCobroCliente.monto} onChange={e => setDatosCobroCliente({...datosCobroCliente, monto: e.target.value})} />
               </div>
+
               <div className="space-y-2">
-                <Label>¿A qué caja ingresa la plata?</Label>
-                <Select value={datosCobroCliente.caja_destino_id} onValueChange={(val: string) => setDatosCobroCliente({...datosCobroCliente, caja_destino_id: val})}>
-                  <SelectTrigger className="h-10 border-blue-200"><SelectValue placeholder="Seleccionar Caja destino..." /></SelectTrigger>
-                  <SelectContent>{cajas.map(c => (<SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>))}</SelectContent>
+                <Label>Método de Pago</Label>
+                <Select value={metodoPagoCliente} onValueChange={setMetodoPagoCliente}>
+                  <SelectTrigger className="h-10 border-blue-200"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Efectivo">Efectivo (Va a Mostrador)</SelectItem>
+                    <SelectItem value="Transferencia">Transferencia Bancaria</SelectItem>
+                    <SelectItem value="Tarjeta">Tarjeta Débito/Crédito</SelectItem>
+                    <SelectItem value="Cheque">Cheque</SelectItem>
+                  </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              {metodoPagoCliente === 'Transferencia' && (
+                <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
+                  <Label className="text-xs font-bold uppercase text-blue-600">Banco de Origen (Cliente)</Label>
+                  <Input placeholder="Ej: Banco Galicia, MercadoPago..." value={bancoOrigenCliente} onChange={(e) => setBancoOrigenCliente(e.target.value)} />
+                </div>
+              )}
+
+              {metodoPagoCliente === 'Tarjeta' && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-blue-600">Tipo</Label>
+                    <Select value={tipoTarjetaCliente} onValueChange={setTipoTarjetaCliente}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Crédito">Crédito</SelectItem>
+                        <SelectItem value="Débito">Débito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-blue-600">Marca</Label>
+                    <Select value={marcaTarjetaCliente} onValueChange={setMarcaTarjetaCliente}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Visa">Visa</SelectItem>
+                        <SelectItem value="Mastercard">Mastercard</SelectItem>
+                        <SelectItem value="Amex">Amex</SelectItem>
+                        <SelectItem value="Otra">Otra</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2 space-y-2">
+                    <Label className="text-xs font-bold uppercase text-blue-600">Banco Emisor</Label>
+                    <Input placeholder="Ej: Santander, BBVA..." value={bancoTarjetaCliente} onChange={(e) => setBancoTarjetaCliente(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border">
                 <div className="space-y-2">
                   <Label>Recibo Nº (Opcional)</Label>
                   <Input value={datosCobroCliente.comprobante} onChange={e => setDatosCobroCliente({...datosCobroCliente, comprobante: e.target.value})} />
                 </div>
                 <div className="space-y-2">
                   <Label>Notas</Label>
-                  <Input placeholder="Ej: Seña por repuestos..." value={datosCobroCliente.detalle} onChange={e => setDatosCobroCliente({...datosCobroCliente, detalle: e.target.value})} />
+                  <Input placeholder="Ej: Abono mensual..." value={datosCobroCliente.detalle} onChange={e => setDatosCobroCliente({...datosCobroCliente, detalle: e.target.value})} />
                 </div>
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsCobroClienteOpen(false)}>Cancelar</Button>
-            <Button onClick={handleCobrarCliente} disabled={isSaving} className="bg-blue-600 text-white hover:bg-blue-700">{isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Cobrar e Ingresar</Button>
+            <Button variant="ghost" onClick={() => setIsCobroClienteOpen(false)} disabled={isSaving}>Cancelar</Button>
+            <Button onClick={handleCobrarCliente} disabled={isSaving} className="bg-blue-600 text-white hover:bg-blue-700">
+              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null} Confirmar Cobro
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
