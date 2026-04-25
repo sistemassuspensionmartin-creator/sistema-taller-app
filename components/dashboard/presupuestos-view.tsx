@@ -725,12 +725,29 @@ export function PresupuestosView({
         await supabase.from('cajas').update({ saldo: Number(cajaAfectada.saldo || 0) + montoNum }).eq('id', cajaDestinoId);
       }
 
-      // 2. Activar Cuenta Corriente si corresponde (INTACTO)
+      // --- MAGIA: SI PASA A CUENTA CORRIENTE, ACTIVAMOS EL INTERRUPTOR Y CREAMOS LA DEUDA ---
       if (metodoPago === 'Cuenta Corriente' && clienteSeleccionado) {
-        await supabase.from('clientes').update({ tiene_cuenta_corriente: true }).eq('id', clienteSeleccionado);
-      }
+        // A) Leemos el saldo actual del cliente
+        const { data: cliData } = await supabase.from('clientes').select('saldo').eq('id', clienteSeleccionado).single();
+        const nuevoSaldoCli = Number(cliData?.saldo || 0) + montoNum;
 
-      // 3. Registro de movimiento (INTACTO)
+        // B) Encendemos la cuenta y le sumamos la deuda al saldo total
+        await supabase.from('clientes')
+          .update({ tiene_cuenta_corriente: true, saldo: nuevoSaldoCli })
+          .eq('id', clienteSeleccionado);
+          
+        // C) Registramos la deuda real en su historial con el vocabulario correcto
+        await supabase.from('movimientos_clientes').insert([{
+          cliente_id: clienteSeleccionado,
+          monto: montoNum,
+          tipo: 'cargo_deuda',
+          comprobante: `PRE-${numeroCorrelativo}`,
+          detalle: `Deuda por Presupuesto PRE-${numeroCorrelativo}`
+        }]);
+      }
+      // ---------------------------------------------------------------------------------
+
+      // 3. Registro de movimiento en CAJA (INTACTO)
       let detalleExtra = "";
       if (metodoPago === 'Transferencia' && bancoOrigen) detalleExtra = ` [${bancoOrigen}]`;
       if (metodoPago === 'Tarjeta') detalleExtra = ` [${marcaTarjeta} ${tipoTarjeta}]`;
@@ -767,7 +784,6 @@ export function PresupuestosView({
       setIsSaving(false);
     }
   }
-
   return (
     <>
       <div className="space-y-6 pb-8 print:hidden">

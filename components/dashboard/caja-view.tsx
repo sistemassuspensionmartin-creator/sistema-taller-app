@@ -240,7 +240,7 @@ export function CajaView({
       if (metodoPago === 'Transferencia' && bancoOrigen) detalleMetodo = ` [Banco: ${bancoOrigen}]`;
       if (metodoPago === 'Tarjeta') detalleMetodo = ` [${marcaTarjeta} ${tipoTarjeta}${bancoTarjeta ? ' - ' + bancoTarjeta : ''}]`;
 
-      // --- MAGIA: SI PASA A CUENTA CORRIENTE, ACTIVAMOS EL INTERRUPTOR Y CREAMOS LA DEUDA ---
+      // --- MAGIA ACTUALIZADA: ENCIENDE LA CUENTA Y CREA LA DEUDA ---
       if (metodoPago === 'Cuenta Corriente') {
         // 1. Buscamos a quién pertenece este presupuesto
         const { data: pData } = await supabase
@@ -249,27 +249,31 @@ export function CajaView({
           .eq('id', presupuestoACobrar.id)
           .single();
 
-        // 2. Le encendemos la cuenta corriente (Corregido para TypeScript)
         const clienteId = Array.isArray(pData?.vehiculos) 
           ? pData?.vehiculos[0]?.cliente_id 
           : (pData?.vehiculos as any)?.cliente_id;
 
         if (clienteId) {
-          // A) Encendemos la cuenta
+          // Buscamos su saldo actual
+          const { data: cliData } = await supabase.from('clientes').select('saldo').eq('id', clienteId).single();
+          const nuevoSaldoCli = Number(cliData?.saldo || 0) + monto;
+
+          // A) Encendemos la cuenta y sumamos el saldo
           await supabase.from('clientes')
-            .update({ tiene_cuenta_corriente: true })
+            .update({ tiene_cuenta_corriente: true, saldo: nuevoSaldoCli })
             .eq('id', clienteId);
             
-          // B) ¡NUEVO! Registramos la deuda real en su historial
-          await supabase.from('movimientos_cuenta_corriente').insert([{
+          // B) Registramos la deuda con el vocabulario de tu base
+          await supabase.from('movimientos_clientes').insert([{
             cliente_id: clienteId,
             monto: monto,
-            tipo_movimiento: 'deuda', // (Asegurate de que en tu BD uses 'deuda' o 'cargo')
-            detalle: `Deuda por Presupuesto PRE-${presupuestoACobrar.numero}`,
-            presupuesto_id: presupuestoACobrar.id
+            tipo: 'cargo_deuda',
+            comprobante: `PRE-${presupuestoACobrar.numero}`,
+            detalle: `Deuda por Presupuesto PRE-${presupuestoACobrar.numero}`
           }]);
         }
       }
+      
       // ---------------------------------------------------------------------------------
 
       await supabase.from('movimientos_caja').insert([{
