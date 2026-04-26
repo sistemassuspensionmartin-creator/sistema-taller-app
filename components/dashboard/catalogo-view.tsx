@@ -132,12 +132,11 @@ export function CatalogoView() {
 
     setIsSaving(true)
     try {
-      const payload = {
+      let payload: any = {
         tipo: formData.tipo,
-        detalle: nombreFinal, // Guardamos el nombre armado
+        detalle: nombreFinal,
         costo_base: parseFloat(formData.costo_base) || 0,
         precio_base: parseFloat(formData.precio_base) || 0,
-        // Solo guardamos stock si es Repuesto o Neumático
         stock_actual: (formData.tipo === "Repuesto" || formData.tipo === "Neumático") ? parseInt(formData.stock_actual) || 0 : 0,
         marca: formData.tipo === "Neumático" ? formData.marca : null,
         modelo: formData.tipo === "Neumático" ? formData.modelo : null,
@@ -145,9 +144,37 @@ export function CatalogoView() {
       }
 
       if (editingId) {
+        // Actualizamos (no tocamos el código porque ya tiene uno)
         const { error } = await supabase.from('catalogo').update(payload).eq('id', editingId)
         if (error) throw error
       } else {
+        // --- MAGIA: GENERADOR AUTOMÁTICO DE CÓDIGOS (SKU) ---
+        if (formData.tipo === "Repuesto" || formData.tipo === "Neumático") {
+          const prefijo = formData.tipo === "Repuesto" ? "R-" : "N-";
+          
+          // Buscamos el último código guardado con ese prefijo
+          const { data: ultimosItems } = await supabase
+            .from('catalogo')
+            .select('codigo')
+            .ilike('codigo', `${prefijo}%`)
+            .order('codigo', { ascending: false })
+            .limit(1);
+
+          if (ultimosItems && ultimosItems.length > 0 && ultimosItems[0].codigo) {
+            // Agarramos el R-1045, le sacamos la "R-" y lo convertimos en número (1045)
+            const ultimoNumero = parseInt(ultimosItems[0].codigo.replace(prefijo, ""));
+            if (!isNaN(ultimoNumero)) {
+              payload.codigo = `${prefijo}${ultimoNumero + 1}`; // Queda R-1046
+            } else {
+              payload.codigo = `${prefijo}1001`; // Por si hay algún error raro, arranca en 1001
+            }
+          } else {
+            // Si la tabla está vacía, es el primero absoluto
+            payload.codigo = `${prefijo}1001`;
+          }
+        }
+        // --------------------------------------------------
+
         const { error } = await supabase.from('catalogo').insert([payload])
         if (error) throw error
       }

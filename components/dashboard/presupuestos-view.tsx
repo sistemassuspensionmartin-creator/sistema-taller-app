@@ -121,7 +121,7 @@ export function PresupuestosView({
   const [itemsOriginales, setItemsOriginales] = useState<any[]>([])
   
   const [filas, setFilas] = useState<any[]>([
-    { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null }
+    { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null, catalogo_id: null }
   ])
 
   const [presupuestosAEliminar, setPresupuestosAEliminar] = useState<string[]>([])
@@ -280,7 +280,7 @@ export function PresupuestosView({
   const aplicarItemCatalogo = (idFila: string, idCatalogo: string) => {
     if (!isEditing) return;
     const item = catalogo.find(c => c.id === idCatalogo)
-    if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0" } : f))
+    if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0", catalogo_id: item.id } : f))
   }
 
   const eliminarFila = (id: string) => {
@@ -534,7 +534,8 @@ export function PresupuestosView({
         cantidad: parseFloat(f.cant) || 1,
         costo_unitario: parseFloat(f.costo) || 0,
         precio_unitario: parseFloat(f.precio) || 0,
-        estado_cambio: isMecanico ? (f.estado_cambio || null) : null // El admin blanquea los colores al guardar
+        estado_cambio: isMecanico ? (f.estado_cambio || null) : null,
+        catalogo_id: f.catalogo_id || null
       }))
 
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
