@@ -104,6 +104,8 @@ export function PresupuestosView({
   const [presupuestos, setPresupuestos] = useState<any[]>([])
   const [configuracion, setConfiguracion] = useState<any>({})
 
+  const [imprimirAlGuardar, setImprimirAlGuardar] = useState(true);
+
   const [isGarantiaModalOpen, setIsGarantiaModalOpen] = useState(false);
   const [motivoGarantia, setMotivoGarantia] = useState("");
   const [esGarantiaImpresion, setEsGarantiaImpresion] = useState(false);
@@ -873,24 +875,28 @@ export function PresupuestosView({
 
       if (tallerError) throw tallerError;
 
-      // --- ESTO ES LO QUE FALTABA PARA LA IMPRESIÓN ---
+      // Seteamos los datos para la impresora
       setEsGarantiaImpresion(true);
       setMotivoGarantiaImpresion(motivoGarantia);
-      // ------------------------------------------------
 
-      setIsGarantiaModalOpen(false);
-      
-      // Le preguntamos si quiere imprimir la orden ahora mismo
-      const quiereImprimir = window.confirm("¡Reingreso exitoso! ¿Desea imprimir la Orden de Trabajo de Garantía ahora?");
-      
-      if (quiereImprimir) {
-        // Llamamos a la impresión (asegurándonos de que sea tipo 'orden')
-        generarDocumento('orden'); 
+      setIsGarantiaModalOpen(false); // Cerramos el modal primero
+
+      if (imprimirAlGuardar) {
+        // Le damos 300 milisegundos para que el modal desaparezca visualmente antes de abrir la pantalla de impresión
+        setTimeout(() => {
+          generarDocumento('orden');
+        }, 300);
+      } else {
+        // Solo mostramos el cartel verde de éxito si NO imprime (porque la impresión ya es un éxito en sí mismo)
+        alert("¡Reingreso exitoso! El vehículo volvió al tablero del taller.");
       }
 
       setMotivoGarantia("");
       cargarDatos();
-      if (onNavigateToTaller) onNavigateToTaller();
+      
+      // ELIMINAMOS la navegación automática al taller (onNavigateToTaller) 
+      // para que no le rompa la foto a la impresora. El usuario se queda acá y navega él.
+
     } catch (error) {
       console.error(error);
       alert("Error al procesar el reingreso por garantía.");
@@ -1805,6 +1811,22 @@ export function PresupuestosView({
                 onChange={(e) => setMotivoGarantia(e.target.value)}
               />
             </div>
+
+            {/* --- CHECKBOX DE IMPRESIÓN --- */}
+            <div className="flex items-center space-x-2 pt-2 bg-slate-50 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-800">
+              <input
+                 type="checkbox"
+                 id="imprimir_garantia"
+                 checked={imprimirAlGuardar}
+                 onChange={(e) => setImprimirAlGuardar(e.target.checked)}
+                 className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-600 cursor-pointer"
+              />
+              <label htmlFor="imprimir_garantia" className="text-sm font-bold text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                Imprimir Orden de Trabajo automáticamente
+              </label>
+            </div>
+            {/* ----------------------------- */}
+
             <p className="text-[10px] text-muted-foreground italic">
               Nota: Esto no altera el cobro ni el stock original. Solo notifica al mecánico.
             </p>
