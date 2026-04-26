@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Clock, Wrench, CheckCircle2, Flag, ArrowRight, User, FileText, Loader2, MessageCircle, Star, Mail } from "lucide-react"
+import { Clock, Wrench, CheckCircle2, Flag, ArrowRight, User, FileText, Loader2, MessageCircle, Star, Mail, Gauge} from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -45,6 +45,12 @@ export function WorkOrdersTable({
   // Estados para el Modal Post-Venta
   const [isPostVentaModalOpen, setIsPostVentaModalOpen] = useState(false)
   const [ordenPostVenta, setOrdenPostVenta] = useState<any>(null)
+
+  // Estados para el Modal de Kilómetros de Salida
+  const [isKmModalOpen, setIsKmModalOpen] = useState(false);
+  const [kmEgresoInput, setKmEgresoInput] = useState("");
+  const [ordenParaFinalizar, setOrdenParaFinalizar] = useState<any>(null);
+  const [isSavingKm, setIsSavingKm] = useState(false);
 
   const hoyLocal = getLocalDateString(new Date());
 
@@ -124,12 +130,19 @@ export function WorkOrdersTable({
     if (currentIndex >= COLUMNAS.length - 1) return
 
     const nuevoEstado = COLUMNAS[currentIndex + 1].id
+    const orden = ordenes.find(o => o.id === id);
 
+    // --- BLOQUEO DE CALIDAD: KM DE SALIDA ---
+    if (nuevoEstado === "Terminado") {
+      setOrdenParaFinalizar(orden);
+      setKmEgresoInput(""); // Limpiamos el input
+      setIsKmModalOpen(true);
+      return; // Frenamos acá, la lógica sigue en 'confirmarFinalizacionConKm'
+    }
+
+    // --- BLOQUEO DE CAJA: SALDO PENDIENTE (Sigue igual) ---
     if (nuevoEstado === "Entregado") {
-      const orden = ordenes.find(o => o.id === id);
-      
       if (orden && orden.presupuesto_id) {
-        // Consultamos la base de datos EN VIVO para no depender de la memoria vieja
         const { data: presEnVivo } = await supabase
           .from('presupuestos')
           .select('estado') 
@@ -137,23 +150,55 @@ export function WorkOrdersTable({
           .single();
 
         if (presEnVivo && presEnVivo.estado !== 'Cobrado' && presEnVivo.estado !== 'Facturado') {
-          alert("⛔ ALERTA DE CAJA: No se puede entregar el vehículo.\n\nEl presupuesto asociado aún tiene saldo pendiente (Estado: " + presEnVivo.estado + "). Diríjase a Tesorería para registrar el cobro exacto antes de liberar la unidad.");
+          alert("⛔ ALERTA DE CAJA: No se puede entregar el vehículo con saldo pendiente.");
           return; 
         }
       }
     }
 
+    ejecutarCambioEstado(id, nuevoEstado);
+  }
+
+  // Función auxiliar para no repetir código de actualización
+  const ejecutarCambioEstado = async (id: string, nuevoEstado: string) => {
     const fechaEntrega = nuevoEstado === "Entregado" ? hoyLocal : null;
-
-    setOrdenes(ordenes.map(o => o.id === id ? { ...o, estado: nuevoEstado, fecha_entrega: fechaEntrega } : o))
-
     try {
       let updatePayload: any = { estado: nuevoEstado };
       if (fechaEntrega) updatePayload.fecha_entrega = fechaEntrega;
       await supabase.from('ordenes_trabajo').update(updatePayload).eq('id', id)
     } catch (error) {
-      alert("Error al mover el vehículo.")
-      cargarDatos()
+      alert("Error al mover el vehículo.");
+      cargarDatos();
+    }
+  }
+
+  const confirmarFinalizacionConKm = async () => {
+    const kmEntrada = parseInt(ordenParaFinalizar.vehiculo_kilometros || ordenParaFinalizar.km_ingreso) || 0;
+    const kmSalida = parseInt(kmEgresoInput);
+
+    if (!kmEgresoInput || isNaN(kmSalida)) return alert("Por favor, ingrese un kilometraje válido.");
+    if (kmSalida < kmEntrada) return alert(`❌ Error: El kilometraje de salida (${kmSalida}) no puede ser menor al de entrada (${kmEntrada}).`);
+
+    setIsSavingKm(true);
+    try {
+      // 1. Actualizar Orden de Trabajo
+      await supabase.from('ordenes_trabajo').update({ estado: 'Terminado' }).eq('id', ordenParaFinalizar.id);
+
+      // 2. Actualizar Presupuesto (km_egreso)
+      if (ordenParaFinalizar.presupuesto_id) {
+        await supabase.from('presupuestos').update({ km_egreso: kmSalida }).eq('id', ordenParaFinalizar.id_presupuesto || ordenParaFinalizar.presupuesto_id);
+      }
+
+      // 3. Actualizar Vehículo (kilometraje actual)
+      await supabase.from('vehiculos').update({ kilometraje: kmSalida.toString() }).eq('patente', ordenParaFinalizar.vehiculo_patente);
+
+      setIsKmModalOpen(false);
+      // No hace falta hacer setOrdenes manual porque el RealTime de Supabase lo detecta solo
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al guardar los datos.");
+    } finally {
+      setIsSavingKm(false);
     }
   }
 
@@ -362,6 +407,54 @@ export function WorkOrdersTable({
           
           <DialogFooter>
             <Button variant="ghost" onClick={() => setIsPostVentaModalOpen(false)}>Cancelar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* MODAL DE KILÓMETROS DE EGRESO */}
+      <Dialog open={isKmModalOpen} onOpenChange={setIsKmModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+              <Gauge className="w-6 h-6 text-emerald-600" /> Verificación de Salida
+            </DialogTitle>
+            <DialogDescription>
+              Para pasar a <b>Terminado</b>, es obligatorio registrar el kilometraje actual del vehículo <b>{ordenParaFinalizar?.vehiculo_patente}</b>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 space-y-4">
+            <div className="bg-secondary/30 p-3 rounded-lg border border-border flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">KM de Entrada:</span>
+              <span className="font-mono font-bold">{ordenParaFinalizar?.vehiculo_kilometros || ordenParaFinalizar?.km_ingreso || "0"} KM</span>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold">Kilometraje de Salida (Egreso) *</label>
+              <div className="relative">
+                <Gauge className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
+                <input 
+                  type="number"
+                  autoFocus
+                  className="w-full h-12 pl-10 pr-4 rounded-md border border-input bg-background text-lg font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                  placeholder="Ej: 125400"
+                  value={kmEgresoInput}
+                  onChange={(e) => setKmEgresoInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && confirmarFinalizacionConKm()}
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsKmModalOpen(false)} disabled={isSavingKm}>Cancelar</Button>
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white" 
+              onClick={confirmarFinalizacionConKm}
+              disabled={isSavingKm || !kmEgresoInput}
+            >
+              {isSavingKm ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+              Confirmar y Finalizar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
