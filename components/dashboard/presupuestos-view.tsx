@@ -558,6 +558,39 @@ export function PresupuestosView({
         }
       }
 
+      // --- MAGIA DE STOCK: SINCRONIZACIÓN AL EDITAR ---
+      // Solo si el auto YA ESTÁ en el taller, ajustamos el stock sobre la marcha
+      const yaEstabaEnTaller = presupuestos.find(p => p.id === editandoId)?.ingresado_al_taller;
+      
+      if (editandoId && yaEstabaEnTaller) {
+        // A. Buscamos qué se borró o se redujo
+        for (const original of itemsOriginales) {
+          if (!original.catalogo_id) continue;
+          const filaActual = filas.find(f => f.id === original.id || f.catalogo_id === original.catalogo_id);
+          
+          // Si ya no está en la lista o está marcado para eliminar: DEVOLVEMOS al stock
+          if (!filaActual || filaActual.estado_cambio === 'eliminado') {
+             const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', original.catalogo_id).single();
+             if (item) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + (original.cantidad || 0) }).eq('id', original.catalogo_id);
+          } 
+          // Si cambió la cantidad, ajustamos la diferencia
+          else if (parseFloat(filaActual.cant) !== original.cantidad) {
+             const diferencia = original.cantidad - parseFloat(filaActual.cant);
+             const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', original.catalogo_id).single();
+             if (item) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + diferencia }).eq('id', original.catalogo_id);
+          }
+        }
+
+        // B. Buscamos qué hay de NUEVO que no estaba antes: DESCONTAMOS del stock
+        for (const fila of filas) {
+          if (fila.catalogo_id && !itemsOriginales.some(o => o.id === fila.id)) {
+             const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', fila.catalogo_id).single();
+             if (item) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) - (parseFloat(fila.cant) || 0) }).eq('id', fila.catalogo_id);
+          }
+        }
+      }
+      // ------------------------------------------------
+
       alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
       
       if (!editandoId && numAleatorio !== 0) {
@@ -727,11 +760,25 @@ export function PresupuestosView({
           onNavigateToTurnos({ patente: vehiculoSeleccionado, presupuesto_id: editandoId });
         }
       } else if (opcion === "inmediato") {
-        // 2. MAGIA INTELIGENTE: Respetamos el estado si ya te pagaron
         const presuActual = presupuestos.find(p => p.id === editandoId);
         const estadoFinal = (presuActual?.estado === "Cobrado" || presuActual?.estado === "Facturado") ? presuActual.estado : "Aprobado";
 
-        // 3. Actualizamos y encendemos la bandera
+        // --- MAGIA DE STOCK: DESCUENTO INICIAL AL INGRESAR ---
+        for (const fila of filas) {
+          if (fila.catalogo_id && (fila.tipo === "Repuesto" || fila.tipo === "Neumático")) {
+            const cant = parseFloat(fila.cant) || 0;
+            if (cant > 0) {
+              // Descontamos del catálogo (stock = stock - cant)
+              const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', fila.catalogo_id).single();
+              if (item) {
+                await supabase.from('catalogo').update({ 
+                  stock_actual: (item.stock_actual || 0) - cant 
+                }).eq('id', fila.catalogo_id);
+              }
+            }
+          }
+        }
+
         await supabase.from('presupuestos').update({
           estado: estadoFinal,
           ingresado_al_taller: true,
@@ -741,9 +788,8 @@ export function PresupuestosView({
         setEstado(estadoFinal);
         setIsAprobarModalOpen(false);
 
-        const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre} ${clienteActual?.apellido || ''}`.trim();
+        const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
         
-        // 4. Creamos la Orden de Trabajo
         const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
           presupuesto_id: editandoId,
           vehiculo_patente: vehiculoSeleccionado,
@@ -753,8 +799,8 @@ export function PresupuestosView({
 
         if (tallerError) throw tallerError;
         
-        alert("¡Ingreso exitoso! El vehículo ya está en el tablero del taller.");
-        cargarDatos(); // Recargamos los datos para que el botón desaparezca YA
+        alert("¡Ingreso exitoso! El stock de repuestos ha sido descontado.");
+        cargarDatos(); 
         setVista("lista");
         if (onNavigateToTaller) onNavigateToTaller();
       }
