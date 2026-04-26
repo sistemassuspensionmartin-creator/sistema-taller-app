@@ -151,7 +151,7 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
     <div className="bg-white text-slate-900 p-5 font-sans max-w-[210mm] mx-auto relative">
       
       {/* HEADER ULTRA COMPACTO (Se adapta si es Garantía) */}
-      <div className={`flex justify-between items-center pb-3 mb-4 ${esGarantia ? 'border-b-4 border-black' : 'border-b-2 border-slate-800'}`}>
+      <div className="flex justify-between items-center pb-3 mb-4">
         {datos?.config?.logo_url ? (
           <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
         ) : (

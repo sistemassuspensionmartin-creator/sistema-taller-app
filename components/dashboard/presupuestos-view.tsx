@@ -106,6 +106,8 @@ export function PresupuestosView({
 
   const [isGarantiaModalOpen, setIsGarantiaModalOpen] = useState(false);
   const [motivoGarantia, setMotivoGarantia] = useState("");
+  const [esGarantiaImpresion, setEsGarantiaImpresion] = useState(false);
+  const [motivoGarantiaImpresion, setMotivoGarantiaImpresion] = useState("");
 
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
   const [mostrarResultados, setMostrarResultados] = useState(false)
@@ -725,7 +727,9 @@ export function PresupuestosView({
       config: configuracion,
       km_ingreso: esHistorico ? datosHistoricos.km_ingreso : kmIngreso,
       km_egreso: esHistorico ? datosHistoricos.km_egreso : kmEgreso,
-      demora_estimada: esHistorico ? datosHistoricos.demora_estimada : demoraEstimada
+      demora_estimada: esHistorico ? datosHistoricos.demora_estimada : demoraEstimada,
+      es_garantia: esGarantiaImpresion, 
+      motivo_garantia: motivoGarantiaImpresion,
     };
 
     setPrintType(tipo);
@@ -869,10 +873,22 @@ export function PresupuestosView({
 
       if (tallerError) throw tallerError;
 
-      alert("¡Reingreso exitoso! El vehículo volvió al tablero del taller con etiqueta de Garantía.");
+      // --- ESTO ES LO QUE FALTABA PARA LA IMPRESIÓN ---
+      setEsGarantiaImpresion(true);
+      setMotivoGarantiaImpresion(motivoGarantia);
+      // ------------------------------------------------
+
       setIsGarantiaModalOpen(false);
+      
+      // Le preguntamos si quiere imprimir la orden ahora mismo
+      const quiereImprimir = window.confirm("¡Reingreso exitoso! ¿Desea imprimir la Orden de Trabajo de Garantía ahora?");
+      
+      if (quiereImprimir) {
+        // Llamamos a la impresión (asegurándonos de que sea tipo 'orden')
+        generarDocumento('orden'); 
+      }
+
       setMotivoGarantia("");
-      // Opcional: recargar datos o llevar al tablero
       cargarDatos();
       if (onNavigateToTaller) onNavigateToTaller();
     } catch (error) {
