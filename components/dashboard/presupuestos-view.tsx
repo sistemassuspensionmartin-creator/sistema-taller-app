@@ -121,7 +121,7 @@ export function PresupuestosView({
   const [itemsOriginales, setItemsOriginales] = useState<any[]>([])
   
   const [filas, setFilas] = useState<any[]>([
-    { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null, catalogo_id: null }
+    { id: '1', tipo: "Servicio", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: null, catalogo_id: null, stock_actual: 0 }
   ])
 
   const [presupuestosAEliminar, setPresupuestosAEliminar] = useState<string[]>([])
@@ -266,7 +266,7 @@ export function PresupuestosView({
 
   const vehiculosDelCliente = vehiculos.filter(v => String(v.cliente_id) === String(clienteSeleccionado))
 
-  const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: userRole === 'mecanico' ? 'nuevo' : null }])
+  const agregarFilaVacia = () => setFilas([...filas, { id: Date.now().toString(), tipo: "Repuesto", detalle: "", cant: "1", costo: "0", precio: "0", estado_cambio: userRole === 'mecanico' ? 'nuevo' : null, catalogo_id: null, stock_actual: 0 }])
 
   const actualizarFila = (id: string, campo: string, valor: any) => {
     if (!isEditing) return;
@@ -280,7 +280,9 @@ export function PresupuestosView({
   const aplicarItemCatalogo = (idFila: string, idCatalogo: string) => {
     if (!isEditing) return;
     const item = catalogo.find(c => c.id === idCatalogo)
-    if (item) setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0", catalogo_id: item.id } : f))
+    if (item) {
+      setFilas(filas.map(f => f.id === idFila ? { ...f, detalle: item.detalle, costo: item.costo_base || "0", precio: item.precio_base || "0", catalogo_id: item.id, stock_actual: item.stock_actual || 0 } : f))
+    }
   }
 
   const eliminarFila = (id: string) => {
@@ -341,15 +343,20 @@ export function PresupuestosView({
       setItemsOriginales(itemsTraidos);
 
       if (itemsTraidos.length > 0) {
-        setFilas(itemsTraidos.map((item: any) => ({
-          id: item.id || Date.now().toString() + Math.random(),
-          tipo: item.tipo,
-          detalle: item.detalle,
-          cant: item.cantidad?.toString() || "1",
-          costo: item.costo_unitario?.toString() || "0",
-          precio: item.precio_unitario?.toString() || "0",
-          estado_cambio: item.estado_cambio || null
-        })))
+        setFilas(itemsTraidos.map((item: any) => {
+          const itemCat = catalogo.find(c => c.id === item.catalogo_id); // Buscamos el stock actual en vivo
+          return {
+            id: item.id || Date.now().toString() + Math.random(),
+            tipo: item.tipo,
+            detalle: item.detalle,
+            cant: item.cantidad?.toString() || "1",
+            costo: item.costo_unitario?.toString() || "0",
+            precio: item.precio_unitario?.toString() || "0",
+            estado_cambio: item.estado_cambio || null,
+            catalogo_id: item.catalogo_id || null,
+            stock_actual: itemCat ? itemCat.stock_actual : 0
+          }
+        }))
       } else {
         setFilas([])
       }
@@ -1221,7 +1228,18 @@ export function PresupuestosView({
                                 <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Escriba el detalle..." : ""} className={`h-10 flex-1 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} />
                               </div>
                             </TableCell>
-                            <TableCell><Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} readOnly={!isEditing} className={`h-10 text-center font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
+                            <TableCell className="align-top pt-3">
+                              <div className="flex flex-col items-center justify-start gap-1">
+                                <Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} readOnly={!isEditing} className={`h-10 text-center font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-white dark:bg-slate-950'}`} />
+                                
+                                {/* CARTELITO DE STOCK INSUFICIENTE */}
+                                {isEditing && (fila.tipo === 'Repuesto' || fila.tipo === 'Neumático') && fila.catalogo_id && parseFloat(fila.cant) > (fila.stock_actual || 0) && (
+                                  <span className="text-[10px] text-red-600 font-bold flex items-center text-center bg-red-50 dark:bg-red-900/30 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-800">
+                                    <AlertTriangle className="w-3 h-3 mr-0.5 shrink-0" /> Solo hay {fila.stock_actual || 0}
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
                             
                             {/* Columnas ocultas al mecánico */}
                             {mostrarCostos && userRole !== 'mecanico' && (
