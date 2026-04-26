@@ -697,7 +697,7 @@ export function PresupuestosView({
     }
   }
 
-  const generarDocumento = async (tipo: 'presupuesto' | 'orden', datosHistoricos?: any) => {
+  const generarDocumento = async (tipo: 'presupuesto' | 'orden', datosHistoricos?: any, garantiaForzada?: boolean, motivoForzado?: string) => {
     if (tipo === 'presupuesto') await actualizarAEnEsperaSiEsBorrador();
 
     const esHistorico = !!datosHistoricos;
@@ -730,8 +730,8 @@ export function PresupuestosView({
       km_ingreso: esHistorico ? datosHistoricos.km_ingreso : kmIngreso,
       km_egreso: esHistorico ? datosHistoricos.km_egreso : kmEgreso,
       demora_estimada: esHistorico ? datosHistoricos.demora_estimada : demoraEstimada,
-      es_garantia: esGarantiaImpresion, 
-      motivo_garantia: motivoGarantiaImpresion,
+      es_garantia: garantiaForzada || esGarantiaImpresion,
+      motivo_garantia: motivoForzado || motivoGarantiaImpresion,
     };
 
     setPrintType(tipo);
@@ -882,9 +882,9 @@ export function PresupuestosView({
       setIsGarantiaModalOpen(false); // Cerramos el modal primero
 
       if (imprimirAlGuardar) {
-        // Le damos 300 milisegundos para que el modal desaparezca visualmente antes de abrir la pantalla de impresión
+        // Le mandamos los datos directo en la mano a la impresora para que no tenga que esperar a React
         setTimeout(() => {
-          generarDocumento('orden');
+          generarDocumento('orden', undefined, true, motivoGarantia);
         }, 300);
       } else {
         // Solo mostramos el cartel verde de éxito si NO imprime (porque la impresión ya es un éxito en sí mismo)
