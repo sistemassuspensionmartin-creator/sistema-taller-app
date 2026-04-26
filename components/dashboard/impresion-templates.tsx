@@ -141,14 +141,17 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
 }
 
 // --- PLANTILLA 2: LA ORDEN DE TRABAJO (Colores Goodyear y Bordes Nítidos) ---
+// --- PLANTILLA 2: LA ORDEN DE TRABAJO (Con soporte para Garantías en Blanco y Negro) ---
 export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
+
+  const esGarantia = datos.es_garantia === true;
 
   return (
     <div className="bg-white text-slate-900 p-5 font-sans max-w-[210mm] mx-auto relative">
       
-      {/* HEADER ULTRA COMPACTO */}
-      <div className="flex justify-between items-center pb-3 mb-4">
+      {/* HEADER ULTRA COMPACTO (Se adapta si es Garantía) */}
+      <div className={`flex justify-between items-center pb-3 mb-4 ${esGarantia ? 'border-b-4 border-black' : 'border-b-2 border-slate-800'}`}>
         {datos?.config?.logo_url ? (
           <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
         ) : (
@@ -157,17 +160,31 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
           </div>
         )}
         <div className="text-right">
-          <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Orden de Trabajo</h2>
+          {esGarantia ? (
+            // ENCABEZADO DE GARANTÍA (Alto contraste B&N)
+            <div className="bg-black text-white px-4 py-1.5 rounded-lg mb-1 inline-block">
+              <h2 className="text-2xl font-black tracking-widest uppercase">REINGRESO GARANTÍA</h2>
+            </div>
+          ) : (
+            // ENCABEZADO NORMAL
+            <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase">Orden de Trabajo</h2>
+          )}
           <p className="text-slate-800 font-mono text-sm font-bold mt-0.5">#OT-{datos.numero_correlativo || 'PENDIENTE'}</p>
           <p className="text-[10px] font-black text-slate-400 uppercase">{new Date().toLocaleDateString('es-AR')}</p>
         </div>
       </div>
 
-      {/* FICHA TÉCNICA */}
+      {/* RECUADRO DE MOTIVO DE GARANTÍA (Solo aparece si es garantía) */}
+      {esGarantia && datos.motivo_garantia && (
+        <div className="border-4 border-black p-3 mb-4 rounded-xl bg-slate-50">
+          <h3 className="text-xs font-black text-black uppercase tracking-widest mb-1">Motivo del Reingreso / Falla Reportada:</h3>
+          <p className="text-base font-bold text-slate-900 italic">"{datos.motivo_garantia}"</p>
+        </div>
+      )}
+
       {/* FICHA TÉCNICA */}
       <div className="border-2 border-slate-800 rounded-xl mb-4 overflow-hidden">
         <div className="bg-white px-3 py-1.5 border-b-2 border-slate-800 flex justify-between items-center">
-          {/* Azul Goodyear */}
           <div className="flex items-center gap-1.5 text-[#003087] font-black text-[11px] uppercase tracking-wider">
             <Car className="w-3.5 h-3.5" />
             <span>Ficha Técnica y Cliente</span>
@@ -209,12 +226,13 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
 
       {/* TAREAS A REALIZAR */}
       <div className="mb-4">
-        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-800 pb-1 mb-2">Tareas a Realizar</h3>
+        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-800 pb-1 mb-2">
+          {esGarantia ? "Trabajos a Revisar" : "Tareas a Realizar"}
+        </h3>
         <div className="space-y-1.5 px-1">
           {datos.items?.filter((i:any) => i.tipo !== 'Repuesto' && i.tipo !== 'Neumático').map((srv: any, idx: number) => (
             <div key={idx} className="flex justify-between items-start border-b border-slate-300 pb-1">
               <div className="flex items-start gap-2.5">
-                {/* Cuadrito check más grueso */}
                 <div className="w-3.5 h-3.5 border-2 border-slate-800 rounded-sm mt-0.5 shrink-0"></div>
                 <p className="font-bold text-slate-900 text-sm leading-tight">{srv.detalle}</p>
               </div>
@@ -226,7 +244,9 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
 
       {/* REPUESTOS */}
       <div className="mb-4 mt-6">
-        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-800 pb-1 mb-2">Repuestos Requeridos</h3>
+        <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest border-b-2 border-slate-800 pb-1 mb-2">
+           {esGarantia ? "Repuestos Instalados Previamente" : "Repuestos Requeridos"}
+        </h3>
         <div className="space-y-1.5 px-1">
           {datos.items?.filter((i:any) => i.tipo === 'Repuesto' || i.tipo === 'Neumático').map((rep: any, idx: number) => (
             <div key={idx} className="flex justify-between items-start border-b border-slate-300 pb-1">
@@ -249,7 +269,6 @@ export function OrdenTrabajoImprimible({ datos }: { datos: any }) {
           <p className="text-slate-900 font-bold text-sm italic">"{datos.notas_internas}"</p>
         </div>
       )}
-
     </div>
   )
 }

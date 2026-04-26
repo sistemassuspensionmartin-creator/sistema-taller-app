@@ -104,6 +104,9 @@ export function PresupuestosView({
   const [presupuestos, setPresupuestos] = useState<any[]>([])
   const [configuracion, setConfiguracion] = useState<any>({})
 
+  const [isGarantiaModalOpen, setIsGarantiaModalOpen] = useState(false);
+  const [motivoGarantia, setMotivoGarantia] = useState("");
+
   const [busquedaEntidad, setBusquedaEntidad] = useState("")
   const [mostrarResultados, setMostrarResultados] = useState(false)
   const [busquedaLista, setBusquedaLista] = useState("")
@@ -848,6 +851,39 @@ export function PresupuestosView({
     }
   }
 
+  const handleReingresoGarantia = async () => {
+    if (!motivoGarantia.trim()) return alert("⚠️ Debe ingresar un motivo o falla para registrar la garantía.");
+    
+    setIsSaving(true);
+    try {
+      const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
+
+      const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
+        presupuesto_id: editandoId,
+        vehiculo_patente: vehiculoSeleccionado,
+        cliente_nombre: nombreCompleto || "Cliente",
+        estado: 'A Ingresar',
+        es_garantia: true,
+        motivo_garantia: motivoGarantia
+      }]);
+
+      if (tallerError) throw tallerError;
+
+      alert("¡Reingreso exitoso! El vehículo volvió al tablero del taller con etiqueta de Garantía.");
+      setIsGarantiaModalOpen(false);
+      setMotivoGarantia("");
+      // Opcional: recargar datos o llevar al tablero
+      cargarDatos();
+      if (onNavigateToTaller) onNavigateToTaller();
+    } catch (error) {
+      console.error(error);
+      alert("Error al procesar el reingreso por garantía.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+
   const handleRegistrarCobro = async () => {
     const montoNum = parseFloat(montoCobro);
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido.");
@@ -957,7 +993,6 @@ export function PresupuestosView({
                       <Button variant="default" onClick={async () => {
                         setIsSaving(true);
                         try {
-                          // Buscamos si ya tiene pagos parciales registrados en la caja
                           const { data: pagos } = await supabase.from('movimientos_caja').select('monto').eq('presupuesto_id', editandoId).eq('tipo_movimiento', 'ingreso_cobro');
                           const pagadoTotal = pagos?.reduce((acc, mov) => acc + Number(mov.monto), 0) || 0;
                           const restante = totalFinal - pagadoTotal;
@@ -988,6 +1023,14 @@ export function PresupuestosView({
                         <Link2 className="w-4 h-4 mr-2"/> Asociar
                       </Button>
                     )}
+
+                    {/* --- NUEVO BOTÓN MÁGICO: REINGRESO POR GARANTÍA --- */}
+                    {userRole !== 'mecanico' && (estado === "Cobrado" || estado === "Facturado") && presupuestos.find(p => p.id === editandoId)?.ingresado_al_taller && (
+                      <Button onClick={() => setIsGarantiaModalOpen(true)} className="bg-red-600 hover:bg-red-700 text-white shadow-sm border-none">
+                        🛡️ Reingreso por Garantía
+                      </Button>
+                    )}
+                    {/* ---------------------------------------------------- */}
 
                     {estado !== "Facturado" && (
                       <>
@@ -1034,7 +1077,6 @@ export function PresupuestosView({
 
               </div>
             </div>
-
             <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
               <CardHeader className="bg-secondary/10 border-b border-border pb-4">
                 <CardTitle className="text-lg flex justify-between items-center text-emerald-700 dark:text-emerald-500">
@@ -1721,6 +1763,41 @@ export function PresupuestosView({
               }}
             >
               Ingresar de todas formas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* MODAL REINGRESO GARANTÍA */}
+      <Dialog open={isGarantiaModalOpen} onOpenChange={setIsGarantiaModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-red-600 dark:text-red-500">
+              🛡️ Reingreso por Garantía
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-sm text-foreground">
+              Se creará una nueva orden en el Tablero del Taller vinculada a este presupuesto. 
+              Por favor, describa la falla reportada por el cliente:
+            </p>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Motivo del Reclamo / Falla *</label>
+              <textarea 
+                className="w-full h-24 p-3 rounded-md border border-input bg-background text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-600"
+                placeholder="Ej: Sigue haciendo ruido en la rueda delantera derecha al frenar..."
+                value={motivoGarantia}
+                onChange={(e) => setMotivoGarantia(e.target.value)}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground italic">
+              Nota: Esto no altera el cobro ni el stock original. Solo notifica al mecánico.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGarantiaModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+            <Button onClick={handleReingresoGarantia} disabled={isSaving} className="bg-red-600 text-white hover:bg-red-700">
+              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
+              Ingresar al Taller
             </Button>
           </DialogFooter>
         </DialogContent>
