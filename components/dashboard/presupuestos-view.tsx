@@ -96,6 +96,8 @@ export function PresupuestosView({
   const [kmEgreso, setKmEgreso] = useState("")
   const [demoraEstimada, setDemoraEstimada] = useState("")
 
+  const [alertaStock, setAlertaStock] = useState<{ visible: boolean, faltantes: string[], actualizaciones: any[], estadoFinal: string }>({ visible: false, faltantes: [], actualizaciones: [], estadoFinal: '' });
+
   const [clientes, setClientes] = useState<any[]>([])
   const [vehiculos, setVehiculos] = useState<any[]>([])
   const [catalogo, setCatalogo] = useState<any[]>([])
@@ -742,6 +744,38 @@ export function PresupuestosView({
     }, 300);
   }
 
+  const finalizarIngresoTaller = async (actualizacionesStock: any[], estadoFinal: string) => {
+    try {
+      // APLICAMOS EL DESCUENTO DE STOCK
+      for (const act of actualizacionesStock) {
+        const { error: errStock } = await supabase.from('catalogo').update({ stock_actual: act.nuevoStock }).eq('id', act.id);
+        if (errStock) await supabase.from('catalogo').update({ stock_actual: 0 }).eq('id', act.id); // Plan B
+      }
+
+      await supabase.from('presupuestos').update({
+        estado: estadoFinal, ingresado_al_taller: true, modificado_por_rol: userRole || 'admin'
+      }).eq('id', editandoId);
+      
+      setEstado(estadoFinal);
+      setIsAprobarModalOpen(false);
+
+      const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
+      
+      const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
+        presupuesto_id: editandoId, vehiculo_patente: vehiculoSeleccionado, cliente_nombre: nombreCompleto || "Cliente", estado: 'A Ingresar'
+      }]);
+
+      if (tallerError) throw tallerError;
+      
+      alert("¡Ingreso exitoso! El vehículo ya está en el tablero del taller.");
+      cargarDatos(); 
+      setVista("lista");
+      if (onNavigateToTaller) onNavigateToTaller();
+    } catch (error) {
+      alert("Error al finalizar el ingreso.");
+    }
+  }
+
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
     // 1. Validación de Presupuesto Rápido (No se puede ingresar al taller sin auto)
     if (!vehiculoSeleccionado || vehiculoSeleccionado === "SIN-PATENTE") {
@@ -799,49 +833,14 @@ export function PresupuestosView({
           }
         }
 
-        // SI HAY FALTANTES, FRENAMOS Y PREGUNTAMOS
+        // SI HAY FALTANTES, ABRIMOS EL MODAL LINDO Y CORTAMOS
         if (faltantes.length > 0) {
-          const confirmar = window.confirm(`⚠️ ATENCIÓN: No hay stock suficiente de los siguientes ítems:\n\n${faltantes.join("\n")}\n\n¿Desea ingresar el vehículo al taller de todas formas?`);
-          if (!confirmar) return; // Si el usuario toca "Cancelar", abortamos la misión y no se ingresa
+          setAlertaStock({ visible: true, faltantes, actualizaciones: actualizacionesStock, estadoFinal });
+          return; 
         }
 
-        // APLICAMOS EL DESCUENTO DE STOCK
-        for (const act of actualizacionesStock) {
-          const { error: errStock } = await supabase.from('catalogo').update({
-            stock_actual: act.nuevoStock
-          }).eq('id', act.id);
-
-          // PLAN B: Si tu base de datos prohíbe los números negativos y tira error, lo forzamos a 0 para que no se rompa el sistema.
-          if (errStock) {
-             await supabase.from('catalogo').update({ stock_actual: 0 }).eq('id', act.id);
-          }
-        }
-        // ------------------------------------------------
-
-        await supabase.from('presupuestos').update({
-          estado: estadoFinal,
-          ingresado_al_taller: true,
-          modificado_por_rol: userRole || 'admin'
-        }).eq('id', editandoId);
-        
-        setEstado(estadoFinal);
-        setIsAprobarModalOpen(false);
-
-        const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
-        
-        const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
-          presupuesto_id: editandoId,
-          vehiculo_patente: vehiculoSeleccionado,
-          cliente_nombre: nombreCompleto || "Cliente",
-          estado: 'A Ingresar'
-        }]);
-
-        if (tallerError) throw tallerError;
-        
-        alert("¡Ingreso exitoso! El vehículo ya está en el tablero del taller.");
-        cargarDatos(); 
-        setVista("lista");
-        if (onNavigateToTaller) onNavigateToTaller();
+        // SI HAY STOCK PERFECTO, TERMINAMOS EL TRABAJO DIRECTO
+        await finalizarIngresoTaller(actualizacionesStock, estadoFinal);
       }
     } catch (error) {
       console.error(error);
@@ -1680,6 +1679,52 @@ export function PresupuestosView({
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+              {/* MODAL LINDO DE STOCK INSUFICIENTE */}
+      <Dialog open={alertaStock.visible} onOpenChange={(open) => !open && setAlertaStock({ ...alertaStock, visible: false })}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-red-600 dark:text-red-500">
+              <AlertTriangle className="w-6 h-6" /> Stock Insuficiente
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-2 space-y-4">
+            <p className="text-sm text-foreground">
+              El sistema detectó que no hay stock suficiente para cubrir este ingreso. ¿Desea ingresar el vehículo al taller de todas formas?
+            </p>
+            
+            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-100 dark:border-red-900/50">
+              <ul className="space-y-2 text-sm text-red-800 dark:text-red-300 font-medium">
+                {alertaStock.faltantes.map((faltante, index) => (
+                  <li key={index} className="flex items-start gap-2">
+                    <span className="text-red-500 mt-0.5">•</span>
+                    {faltante}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            <p className="text-xs text-muted-foreground italic">
+              Nota: El stock quedará en 0 o en negativo para que recuerde realizar el pedido al proveedor.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setAlertaStock({ ...alertaStock, visible: false })}>
+              Cancelar
+            </Button>
+            <Button 
+              className="bg-red-600 text-white hover:bg-red-700 border-none" 
+              onClick={() => {
+                setAlertaStock({ ...alertaStock, visible: false });
+                finalizarIngresoTaller(alertaStock.actualizaciones, alertaStock.estadoFinal);
+              }}
+            >
+              Ingresar de todas formas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
