@@ -743,8 +743,13 @@ export function PresupuestosView({
   }
 
   const procesarAprobacion = async (opcion: "turnos" | "inmediato") => {
+    // 1. Validación de Presupuesto Rápido (No se puede ingresar al taller sin auto)
+    if (!vehiculoSeleccionado || vehiculoSeleccionado === "SIN-PATENTE") {
+       return alert("⚠️ Para ingresar el vehículo al Taller o programar un Turno, el presupuesto debe estar asociado a un Auto y un Cliente. Utilice el botón 'Activar Edición' para cargarlos.");
+    }
+
     try {
-      // 1. EL CANDADO: Revisamos en la base de datos si ya existe para evitar duplicados
+      // 2. EL CANDADO: Revisamos en la base de datos si ya existe para evitar duplicados
       const { data: tallerExistente, error: errExistente } = await supabase
         .from('ordenes_trabajo')
         .select('id')
@@ -770,21 +775,48 @@ export function PresupuestosView({
         const presuActual = presupuestos.find(p => p.id === editandoId);
         const estadoFinal = (presuActual?.estado === "Cobrado" || presuActual?.estado === "Facturado") ? presuActual.estado : "Aprobado";
 
-        // --- MAGIA DE STOCK: DESCUENTO INICIAL AL INGRESAR ---
+        // --- MAGIA DE STOCK: PRE-CHEQUEO Y ADVERTENCIA ---
+        let faltantes: string[] = [];
+        let actualizacionesStock: any[] = [];
+
         for (const fila of filas) {
           if (fila.catalogo_id && (fila.tipo === "Repuesto" || fila.tipo === "Neumático")) {
-            const cant = parseFloat(fila.cant) || 0;
-            if (cant > 0) {
-              // Descontamos del catálogo (stock = stock - cant)
-              const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', fila.catalogo_id).single();
+            const cantPedida = parseFloat(fila.cant) || 0;
+            if (cantPedida > 0) {
+              // Consultamos el stock real en vivo
+              const { data: item } = await supabase.from('catalogo').select('stock_actual, detalle').eq('id', fila.catalogo_id).single();
               if (item) {
-                await supabase.from('catalogo').update({ 
-                  stock_actual: (item.stock_actual || 0) - cant 
-                }).eq('id', fila.catalogo_id);
+                if ((item.stock_actual || 0) < cantPedida) {
+                  // Si no alcanza, lo anotamos en la lista de faltantes
+                  faltantes.push(`- ${item.detalle} (Faltan: ${cantPedida - (item.stock_actual || 0)})`);
+                }
+                actualizacionesStock.push({
+                  id: fila.catalogo_id,
+                  nuevoStock: (item.stock_actual || 0) - cantPedida
+                });
               }
             }
           }
         }
+
+        // SI HAY FALTANTES, FRENAMOS Y PREGUNTAMOS
+        if (faltantes.length > 0) {
+          const confirmar = window.confirm(`⚠️ ATENCIÓN: No hay stock suficiente de los siguientes ítems:\n\n${faltantes.join("\n")}\n\n¿Desea ingresar el vehículo al taller de todas formas?`);
+          if (!confirmar) return; // Si el usuario toca "Cancelar", abortamos la misión y no se ingresa
+        }
+
+        // APLICAMOS EL DESCUENTO DE STOCK
+        for (const act of actualizacionesStock) {
+          const { error: errStock } = await supabase.from('catalogo').update({
+            stock_actual: act.nuevoStock
+          }).eq('id', act.id);
+
+          // PLAN B: Si tu base de datos prohíbe los números negativos y tira error, lo forzamos a 0 para que no se rompa el sistema.
+          if (errStock) {
+             await supabase.from('catalogo').update({ stock_actual: 0 }).eq('id', act.id);
+          }
+        }
+        // ------------------------------------------------
 
         await supabase.from('presupuestos').update({
           estado: estadoFinal,
@@ -806,12 +838,13 @@ export function PresupuestosView({
 
         if (tallerError) throw tallerError;
         
-        alert("¡Ingreso exitoso! El stock de repuestos ha sido descontado.");
+        alert("¡Ingreso exitoso! El vehículo ya está en el tablero del taller.");
         cargarDatos(); 
         setVista("lista");
         if (onNavigateToTaller) onNavigateToTaller();
       }
     } catch (error) {
+      console.error(error);
       alert("Error al procesar la aprobación.");
     }
   }
