@@ -423,10 +423,6 @@ export function WorkOrdersTable({
           </DialogHeader>
 
           <div className="py-6 space-y-4">
-            <div className="bg-secondary/30 p-3 rounded-lg border border-border flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">KM de Entrada:</span>
-              <span className="font-mono font-bold">{ordenParaFinalizar?.vehiculo_kilometros || ordenParaFinalizar?.km_ingreso || "0"} KM</span>
-            </div>
 
             <div className="space-y-2">
               <label className="text-sm font-bold">Kilometraje de Salida (Egreso) *</label>

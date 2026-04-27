@@ -632,9 +632,17 @@ export function VehiclesView({
                             )}
                           </div>
                         </div>
-                        <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</span><p className="font-medium font-mono">{vehiculoSeleccionado.clientes.telefono || '-'}</p></div>
-                        <div><span className="text-muted-foreground block mb-1">DNI / CUIT</span><p className="font-medium">{vehiculoSeleccionado.clientes.documento || '-'}</p></div>
-                        <div className="col-span-2"><span className="text-muted-foreground block mb-1">Email</span><p className="font-medium">{vehiculoSeleccionado.clientes.email || '-'}</p></div>
+                        {userRole !== 'mecanico' ? (
+                          <>
+                            <div><span className="text-muted-foreground block mb-1 flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</span><p className="font-medium font-mono">{vehiculoSeleccionado.clientes.telefono || '-'}</p></div>
+                            <div><span className="text-muted-foreground block mb-1">DNI / CUIT</span><p className="font-medium">{vehiculoSeleccionado.clientes.documento || '-'}</p></div>
+                            <div className="col-span-2"><span className="text-muted-foreground block mb-1">Email</span><p className="font-medium">{vehiculoSeleccionado.clientes.email || '-'}</p></div>
+                          </>
+                        ) : (
+                          <div className="col-span-2 mt-2 text-xs text-muted-foreground italic bg-secondary/20 p-2 rounded text-center border border-border/50">
+                            *** Información de contacto protegida ***
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center">

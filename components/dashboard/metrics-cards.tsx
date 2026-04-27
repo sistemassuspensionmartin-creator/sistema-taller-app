@@ -177,17 +177,15 @@ export function MetricsCards({
           <h3 className="text-lg font-bold text-foreground">Acciones Rápidas</h3>
           <div className="grid grid-cols-1 gap-3">
             
-            {/* BOTÓN PRESUPUESTO RÁPIDO: Solo si NO es mecánico */}
+            <Button onClick={() => onNavigateToPresupuestos && onNavigateToPresupuestos("nuevo")} className="h-14 justify-start text-base bg-emerald-600 text-white hover:bg-emerald-700 border-none shadow-sm dark:bg-emerald-600 dark:text-white">
+              <span className="mr-3 text-xl">⚡</span> Presupuesto Rápido
+            </Button>
+          
             {userRole !== 'mecanico' && (
-              <Button onClick={() => onNavigateToPresupuestos && onNavigateToPresupuestos("nuevo")} className="h-14 justify-start text-base bg-emerald-600 text-white hover:bg-emerald-700 border-none shadow-sm dark:bg-emerald-600 dark:text-white">
-                <span className="mr-3 text-xl">⚡</span> Presupuesto Rápido
+              <Button onClick={onNavigateToTurnos} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
+                <CalendarPlus className="mr-3 h-5 w-5 text-purple-600" /> Agendar Ingreso
               </Button>
             )}
-
-            {/* BOTÓN AGENDA: Lo ven todos */}
-            <Button onClick={onNavigateToTurnos} className="h-14 justify-start text-base bg-white text-slate-700 hover:bg-slate-50 border border-border shadow-sm dark:bg-slate-950 dark:text-slate-200">
-              <CalendarPlus className="mr-3 h-5 w-5 text-purple-600" /> Agendar Ingreso
-            </Button>
             
             {/* BOTÓN COBRO: Solo si NO es mecánico */}
             {userRole !== 'mecanico' && (
