@@ -61,7 +61,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
             <div className="text-right pl-3 border-l-2 border-slate-200 flex flex-col justify-center">
               <p className="text-[10px] font-black text-slate-500 uppercase leading-none mb-1">Kilómetros</p>
               <div className="text-xs font-bold text-slate-700 leading-tight space-y-0.5">
-                <p>Ingreso: <span className="font-black text-slate-900">{datos.km_ingreso || datos.vehiculo_kilometros || "---"}</span></p>
                 <p>Egreso: <span className="font-black text-slate-900">{datos.km_egreso || "---"}</span></p>
               </div>
             </div>
