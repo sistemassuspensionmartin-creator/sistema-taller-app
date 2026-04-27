@@ -1223,13 +1223,21 @@ export function PresupuestosView({
 
                   <div className="space-y-2">
                     <Label className="text-muted-foreground flex items-center gap-1"><Phone className="w-3 h-3"/> Teléfono</Label>
-                    <Input
-                      readOnly
-                      placeholder="-"
-                      value={clienteActual?.telefono || ""}
-                      className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none"
-                    />
+                    
+                    {userRole !== 'mecanico' ? (
+                      <Input
+                        readOnly
+                        placeholder="-"
+                        value={clienteActual?.telefono || ""}
+                        className="bg-secondary/20 text-foreground font-medium font-mono h-10 border-border pointer-events-none"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-full items-center justify-center rounded-md border border-border/50 bg-secondary/20 text-xs italic text-muted-foreground pointer-events-none">
+                        *** Protegido ***
+                      </div>
+                    )}
                   </div>
+
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4 mt-4 border-t border-border">
                   <div className="space-y-2">
