@@ -59,11 +59,14 @@ export function MetricsCards({
         setEnTaller(enProcesoCount)
         setEntregadosHoy(entregadosHoyCount)
 
-        // 2. Agenda de Hoy
+        // 2. Agenda de Hoy (Solo contamos los turnos que están pendientes)
         const { data: turnos } = await supabase
           .from('turnos')
           .select('*')
           .eq('fecha', hoyString)
+          // NO MOSTRAMOS NI CONTAMOS LOS TURNOS CANCELADOS NI LOS QUE YA INGRESARON AL TALLER
+          .neq('estado', 'Cancelado')
+          .neq('estado', 'Ingresado')
           .order('hora', { ascending: true })
 
         setAgendaHoy(turnos || [])

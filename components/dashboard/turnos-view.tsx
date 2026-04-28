@@ -311,9 +311,16 @@ export function TurnosView({
   }
 
   const handleGuardarTurno = async () => {
-    if (!formData.fecha || !formData.hora || !formData.servicio || !formData.patente) {
+    // 1. Le sacamos "formData.patente" a esta validación inicial
+    if (!formData.fecha || !formData.hora || !formData.servicio) {
       alert("⚠️ Faltan completar campos obligatorios. Asegúrese de seleccionar la Fecha, Hora y el Servicio.");
       return
+    }
+
+    // 2. Agregamos esta pequeña red de seguridad: si no ponen patente, que al menos pongan el auto o el nombre
+    if (!formData.patente && !formData.marcaModelo && !formData.nombreDueño) {
+      alert("⚠️ Si no ingresa la patente, por favor complete al menos la Marca/Modelo o el Nombre del dueño para poder identificar el turno.");
+      return;
     }
 
     const selectedDate = new Date(formData.fecha + "T00:00:00");
@@ -334,7 +341,8 @@ export function TurnosView({
         cliente: formData.nombreDueño, 
         telefono: formData.telefono, 
         auto: formData.marcaModelo, 
-        patente: formData.patente, 
+        // 3. LA MAGIA: Si viene vacío, le clava "SIN-PATENTE" en mayúsculas
+        patente: (formData.patente || "SIN-PATENTE").toUpperCase(), 
         observaciones: formData.observaciones, 
         presupuesto_id: formData.presupuesto_id === "ninguno" || !formData.presupuesto_id ? null : formData.presupuesto_id, 
         estado: "pendiente"
@@ -344,7 +352,6 @@ export function TurnosView({
       if (error) throw error;
 
       if (payload.presupuesto_id) {
-        // Consultamos el estado actual para no pisar si ya está Cobrado o Facturado
         const { data: presActual } = await supabase.from('presupuestos').select('estado').eq('id', payload.presupuesto_id).single();
         if (presActual && presActual.estado !== "Cobrado" && presActual.estado !== "Facturado") {
           await supabase.from('presupuestos').update({ estado: "Aprobado" }).eq('id', payload.presupuesto_id);
