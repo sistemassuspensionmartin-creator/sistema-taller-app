@@ -84,33 +84,8 @@ export default function DashboardPage() {
       }
     })
 
-    let ultimaActividad = Date.now();
-    const actualizarActividad = () => { ultimaActividad = Date.now(); };
-
-    window.addEventListener('mousemove', actualizarActividad);
-    window.addEventListener('keydown', actualizarActividad);
-    window.addEventListener('click', actualizarActividad);
-    window.addEventListener('scroll', actualizarActividad);
-    
-    const intervaloRevision = setInterval(async () => {
-      const tiempoInactivo = Date.now() - ultimaActividad;
-      if (tiempoInactivo > 30 * 60 * 1000) { 
-        await supabase.auth.signOut();
-        setIsAuthenticated(false);
-        setUserRole(null);
-        setUserName(null);
-        alert("⛔ Por seguridad, tu sesión se ha cerrado tras 30 minutos de inactividad.");
-        window.location.reload();
-      }
-    }, 60000); 
-
     return () => {
       subscription.unsubscribe();
-      window.removeEventListener('mousemove', actualizarActividad);
-      window.removeEventListener('keydown', actualizarActividad);
-      window.removeEventListener('click', actualizarActividad);
-      window.removeEventListener('scroll', actualizarActividad);
-      clearInterval(intervaloRevision);
     }
   }, [])
 
