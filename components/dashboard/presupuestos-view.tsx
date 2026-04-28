@@ -586,22 +586,25 @@ export function PresupuestosView({
           
           // Si ya no está en la lista o está marcado para eliminar: DEVOLVEMOS al stock
           if (!filaActual || filaActual.estado_cambio === 'eliminado') {
-             const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', original.catalogo_id).single();
-             if (item) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + (original.cantidad || 0) }).eq('id', original.catalogo_id);
+             // CAMBIO: Verificamos si controla stock
+             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock').eq('id', original.catalogo_id).single();
+             if (item && item.controlar_stock !== false) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + (original.cantidad || 0) }).eq('id', original.catalogo_id);
           } 
           // Si cambió la cantidad, ajustamos la diferencia
           else if (parseFloat(filaActual.cant) !== original.cantidad) {
              const diferencia = original.cantidad - parseFloat(filaActual.cant);
-             const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', original.catalogo_id).single();
-             if (item) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + diferencia }).eq('id', original.catalogo_id);
+             // CAMBIO: Verificamos si controla stock
+             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock').eq('id', original.catalogo_id).single();
+             if (item && item.controlar_stock !== false) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + diferencia }).eq('id', original.catalogo_id);
           }
         }
 
         // B. Buscamos qué hay de NUEVO que no estaba antes: DESCONTAMOS del stock
         for (const fila of filas) {
           if (fila.catalogo_id && !itemsOriginales.some(o => o.id === fila.id)) {
-             const { data: item } = await supabase.from('catalogo').select('stock_actual').eq('id', fila.catalogo_id).single();
-             if (item) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) - (parseFloat(fila.cant) || 0) }).eq('id', fila.catalogo_id);
+             // CAMBIO: Verificamos si controla stock
+             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock').eq('id', fila.catalogo_id).single();
+             if (item && item.controlar_stock !== false) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) - (parseFloat(fila.cant) || 0) }).eq('id', fila.catalogo_id);
           }
         }
       }
@@ -826,11 +829,12 @@ export function PresupuestosView({
           if (fila.catalogo_id && (fila.tipo === "Repuesto" || fila.tipo === "Neumático")) {
             const cantPedida = parseFloat(fila.cant) || 0;
             if (cantPedida > 0) {
-              // Consultamos el stock real en vivo
-              const { data: item } = await supabase.from('catalogo').select('stock_actual, detalle').eq('id', fila.catalogo_id).single();
-              if (item) {
+              // CAMBIO ACÁ: Traemos también el dato 'controlar_stock'
+              const { data: item } = await supabase.from('catalogo').select('stock_actual, detalle, controlar_stock').eq('id', fila.catalogo_id).single();
+              
+              // CAMBIO ACÁ: Solo evaluamos si controlar_stock es TRUE (o si es null por compatibilidad vieja)
+              if (item && item.controlar_stock !== false) {
                 if ((item.stock_actual || 0) < cantPedida) {
-                  // Si no alcanza, lo anotamos en la lista de faltantes
                   faltantes.push(`- ${item.detalle} (Faltan: ${cantPedida - (item.stock_actual || 0)})`);
                 }
                 actualizacionesStock.push({

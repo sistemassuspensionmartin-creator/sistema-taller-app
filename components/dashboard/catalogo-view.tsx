@@ -56,7 +56,7 @@ export function CatalogoView() {
     costo_base: "",
     precio_base: "",
     stock_actual: "",
-    // Nuevos campos específicos
+    controlar_stock: true,
     marca: "",
     modelo: "",
     medida: ""
@@ -94,7 +94,17 @@ export function CatalogoView() {
 
   const abrirCrear = () => {
     setEditingId(null)
-    setFormData({ tipo: "Repuesto", detalle: "", costo_base: "", precio_base: "", stock_actual: "0", marca: "", modelo: "", medida: "" })
+    setFormData({ 
+      tipo: "Repuesto", 
+      detalle: "", 
+      costo_base: "", 
+      precio_base: "", 
+      stock_actual: "0", 
+      controlar_stock: true, // Por defecto tildado
+      marca: "", 
+      modelo: "", 
+      medida: "" 
+    })
     setIsModalOpen(true)
   }
 
@@ -106,6 +116,7 @@ export function CatalogoView() {
       costo_base: item.costo_base?.toString() || "0",
       precio_base: item.precio_base?.toString() || "0",
       stock_actual: item.stock_actual?.toString() || "0",
+      controlar_stock: item.controlar_stock ?? true, // <--- Cargar de la DB
       marca: item.marca || "",
       modelo: item.modelo || "",
       medida: item.medida || ""
@@ -137,7 +148,10 @@ export function CatalogoView() {
         detalle: nombreFinal,
         costo_base: parseFloat(formData.costo_base) || 0,
         precio_base: parseFloat(formData.precio_base) || 0,
-        stock_actual: (formData.tipo === "Repuesto" || formData.tipo === "Neumático") ? parseInt(formData.stock_actual) || 0 : 0,
+        controlar_stock: formData.controlar_stock, // <--- Enviar a la DB
+        stock_actual: (formData.controlar_stock && (formData.tipo === "Repuesto" || formData.tipo === "Neumático")) 
+                       ? parseInt(formData.stock_actual) || 0 
+                       : 0,
         marca: formData.tipo === "Neumático" ? formData.marca : null,
         modelo: formData.tipo === "Neumático" ? formData.modelo : null,
         medida: formData.tipo === "Neumático" ? formData.medida : null,
@@ -377,9 +391,26 @@ export function CatalogoView() {
                   </div>
                   
                   {formData.tipo === "Repuesto" && (
-                    <div className="space-y-2 w-1/3">
-                      <Label>Cantidad en Stock</Label>
-                      <Input type="number" placeholder="0" className="bg-slate-50 dark:bg-slate-900 border-border font-mono" value={formData.stock_actual} onChange={(e) => setFormData({...formData, stock_actual: e.target.value})} />
+                    <div className="space-y-4 w-full mt-4">
+                      <div className="flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-100 dark:border-blue-800">
+                        <input 
+                          type="checkbox" 
+                          id="controlar_stock"
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          checked={formData.controlar_stock}
+                          onChange={(e) => setFormData({...formData, controlar_stock: e.target.checked})}
+                        />
+                        <Label htmlFor="controlar_stock" className="text-sm font-bold cursor-pointer select-none">
+                          Controlar Inventario (Descontar de Stock al aprobar)
+                        </Label>
+                      </div>
+                      
+                      {formData.controlar_stock && (
+                        <div className="space-y-2 w-1/3 animate-in fade-in slide-in-from-top-2">
+                          <Label>Cantidad en Stock</Label>
+                          <Input type="number" placeholder="0" className="bg-white dark:bg-slate-900 border-border font-mono" value={formData.stock_actual} onChange={(e) => setFormData({...formData, stock_actual: e.target.value})} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
