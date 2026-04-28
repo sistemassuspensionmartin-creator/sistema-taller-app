@@ -42,6 +42,11 @@ export function WorkOrdersTable({
   const [configuracion, setConfiguracion] = useState<any>({})
   const [isLoading, setIsLoading] = useState(true)
 
+  // Estados para Anular Ingreso
+  const [isAnularModalOpen, setIsAnularModalOpen] = useState(false);
+  const [ordenAAnular, setOrdenAAnular] = useState<any>(null);
+  const [isAnulando, setIsAnulando] = useState(false);
+
   // Estados para el Modal Post-Venta
   const [isPostVentaModalOpen, setIsPostVentaModalOpen] = useState(false)
   const [ordenPostVenta, setOrdenPostVenta] = useState<any>(null)
@@ -202,6 +207,33 @@ export function WorkOrdersTable({
     }
   }
 
+  const confirmarAnulacion = async () => {
+    if (!ordenAAnular) return;
+    setIsAnulando(true);
+    
+    try {
+      // 1. Le sacamos el tilde de "ingresado" al presupuesto
+      if (ordenAAnular.presupuesto_id) {
+        await supabase.from('presupuestos').update({ ingresado_al_taller: false }).eq('id', ordenAAnular.presupuesto_id);
+      }
+
+      // 2. Borramos la tarjeta del taller
+      await supabase.from('ordenes_trabajo').delete().eq('id', ordenAAnular.id);
+
+      setIsAnularModalOpen(false);
+      setOrdenAAnular(null);
+      
+      // 3. Alerta gigante de advertencia contable
+      alert("⚠️ INGRESO ANULADO CON ÉXITO.\n\nEl vehículo fue retirado del taller y el presupuesto volvió a estado de espera.\n\nIMPORTANTE: Si ya habías cobrado este presupuesto o se descontaron repuestos, recordá ir a la Caja a asentar la devolución y ajustar el stock manualmente.");
+      
+    } catch (error) {
+      console.error(error);
+      alert("Hubo un error al anular el ingreso.");
+    } finally {
+      setIsAnulando(false);
+    }
+  }
+
   const handleNotificarCliente = async (orden: any) => {
     try {
       const { data, error } = await supabase.from('vehiculos').select('marca, modelo, clientes(telefono)').eq('patente', orden.vehiculo_patente).single();
@@ -355,6 +387,22 @@ export function WorkOrdersTable({
                               </Button>
                             )}
 
+                            {/* BOTÓN ANULAR INGRESO (Solo visible en las primeras columnas y no para el mecánico) */}
+                            {(columna.id === "A Ingresar" || columna.id === "En Proceso") && userRole !== 'mecanico' && (
+                              <Button 
+                                size="sm" 
+                                variant="outline" 
+                                className="w-full h-7 text-[10px] uppercase font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 transition-colors mb-1.5" 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setOrdenAAnular(orden); 
+                                  setIsAnularModalOpen(true); 
+                                }}
+                              >
+                                🛑 Anular Ingreso
+                              </Button>
+                            )}
+
                             {/* EL MECÁNICO NO PUEDE AVANZAR DESDE "TERMINADO" A "ENTREGADO" */}
                             {columna.id !== "Entregado" && !(columna.id === "Terminado" && userRole === 'mecanico') && (
                               <Button size="sm" variant="secondary" className="w-full h-7 text-xs bg-background hover:bg-emerald-50 hover:text-emerald-700 border border-border group-hover:border-emerald-200 transition-colors" onClick={(e) => { e.stopPropagation(); avanzarEstado(orden.id, orden.estado); }}>
@@ -450,6 +498,42 @@ export function WorkOrdersTable({
             >
               {isSavingKm ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
               Confirmar y Finalizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* MODAL DE ANULAR INGRESO */}
+      <Dialog open={isAnularModalOpen} onOpenChange={setIsAnularModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-red-600">
+              🛑 Anular Ingreso al Taller
+            </DialogTitle>
+            <DialogDescription className="pt-3 text-foreground font-medium text-sm">
+              ¿Estás seguro de que querés retirar el vehículo <b>{ordenAAnular?.vehiculo_patente}</b> del taller?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-2">
+            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-200 dark:border-red-900/50 space-y-2 text-sm text-red-800 dark:text-red-300">
+              <p><b>Esto hará lo siguiente:</b></p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Eliminará esta tarjeta del tablero.</li>
+                <li>Devolverá el presupuesto al estado previo (permitiendo que se vuelva a ingresar en el futuro si el cliente vuelve).</li>
+              </ul>
+              <p className="mt-3 font-bold underline">No deshará el pago ni devolverá el stock automáticamente.</p>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setIsAnularModalOpen(false)} disabled={isAnulando}>Cancelar</Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white border-none" 
+              onClick={confirmarAnulacion}
+              disabled={isAnulando}
+            >
+              {isAnulando ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Sí, Anular Ingreso
             </Button>
           </DialogFooter>
         </DialogContent>
