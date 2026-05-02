@@ -269,43 +269,103 @@ export function CatalogoView() {
     }
   }
 
- // --- ESTADO PARA EL CARTEL DE WHATSAPP ---
+ // --- ESTADOS: WHATSAPP, PROVEEDORES E INGRESOS ---
   const [pedidoParaMandar, setPedidoParaMandar] = useState<any>(null);
+  const [proveedores, setProveedores] = useState<any[]>([]);
+  const [mostrandoFormProveedor, setMostrandoFormProveedor] = useState(false);
+  const [nuevoProveedor, setNuevoProveedor] = useState({ nombre: "", telefono: "" });
+  
+  const [pedidoIngresando, setPedidoIngresando] = useState<any>(null);
+  const [cantidadIngresada, setCantidadIngresada] = useState("");
 
-  // --- FUNCIONES PARA GESTIONAR PEDIDOS ---
+  const fetchProveedores = async () => {
+    const { data } = await supabase.from('proveedores').select('*').order('nombre');
+    if (data) setProveedores(data);
+  }
+
+  // Agregamos que cargue los proveedores al abrir la pantalla
+  useEffect(() => { 
+    fetchCatalogo(); 
+    fetchPedidos(); 
+    fetchProveedores();
+  }, [])
+
+  // --- FUNCIONES DE PROVEEDORES ---
+  const handleAgregarProveedor = async () => {
+    if (!nuevoProveedor.nombre || !nuevoProveedor.telefono) return alert("Completá nombre y teléfono.");
+    const telefonoLimpio = nuevoProveedor.telefono.replace(/\D/g, "");
+    try {
+      await supabase.from('proveedores').insert([{ nombre: nuevoProveedor.nombre, telefono: telefonoLimpio }]);
+      setNuevoProveedor({ nombre: "", telefono: "" });
+      setMostrandoFormProveedor(false);
+      fetchProveedores();
+    } catch (error) {
+      alert("Error al guardar proveedor.");
+    }
+  }
+
+  const handleEliminarProveedor = async (id: string, nombre: string) => {
+    if (!confirm(`¿Borrar a ${nombre} de tu agenda?`)) return;
+    await supabase.from('proveedores').delete().eq('id', id);
+    fetchProveedores();
+  }
+
+  // --- FUNCIONES DE PEDIDOS Y WHATSAPP ---
   const handleEliminarPedido = async (id: string) => {
     if (!confirm("¿Eliminar este pedido de la lista de Faltantes?")) return;
-    try {
-      await supabase.from('pedidos_proveedor').delete().eq('id', id);
-      fetchPedidos();
-    } catch (error) {
-      alert("Error al eliminar el pedido.");
-    }
+    await supabase.from('pedidos_proveedor').delete().eq('id', id);
+    fetchPedidos();
   }
 
-  const handleEstadoPedido = async (id: string, nuevoEstado: string) => {
-    try {
-      await supabase.from('pedidos_proveedor').update({ estado: nuevoEstado }).eq('id', id);
-      fetchPedidos();
-      // Si ya ingresaron, recargamos el catálogo por si queremos ajustar el stock manual luego
-      if (nuevoEstado === 'Ingresaron') fetchCatalogo();
-    } catch (error) {
-      alert("Error al actualizar el estado.");
-    }
-  }
-
-  // Ahora esta función solo abre el cartel en vez de disparar el link al vacío
+  // --- Esta es la función que faltaba para abrir el cartel ---
   const abrirOpcionesWhatsApp = (pedido: any) => {
     setPedidoParaMandar(pedido);
   }
 
-  // Esta es la que realmente manda el mensaje al número que elijas
-  const enviarWhatsAppAProveedor = (numero: string) => {
+  const enviarWhatsAppAProveedor = async (numero: string) => {
     if (!pedidoParaMandar) return;
     const texto = `Hola! Te consulto por disponibilidad y precio de lo siguiente:\n\n👉 *${pedidoParaMandar.cantidad}x ${pedidoParaMandar.detalle}*\n\n¡Gracias!`;
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
-    handleEstadoPedido(pedidoParaMandar.id, 'Solicitado');
+    
+    // Lo marcamos como solicitado
+    await supabase.from('pedidos_proveedor').update({ estado: 'Solicitado' }).eq('id', pedidoParaMandar.id);
     setPedidoParaMandar(null);
+    fetchPedidos();
+  }
+
+  // --- LA MAGIA: CONFIRMAR INGRESO Y SUBIR STOCK ---
+  const handleConfirmarIngreso = async () => {
+    if (!pedidoIngresando) return;
+    const cantRecibida = parseInt(cantidadIngresada);
+    
+    if (isNaN(cantRecibida) || cantRecibida <= 0) return alert("Poné una cantidad válida.");
+    if (cantRecibida > pedidoIngresando.cantidad) return alert("No podés ingresar más de lo que pediste acá.");
+
+    try {
+      // 1. Le sumamos el stock al ítem en el catálogo
+      if (pedidoIngresando.catalogo_id) {
+        const { data: itemCat } = await supabase.from('catalogo').select('stock_actual').eq('id', pedidoIngresando.catalogo_id).single();
+        if (itemCat) {
+          const nuevoStock = (itemCat.stock_actual || 0) + cantRecibida;
+          await supabase.from('catalogo').update({ stock_actual: nuevoStock }).eq('id', pedidoIngresando.catalogo_id);
+        }
+      }
+
+      // 2. Evaluamos si trajo todo o trajo por la mitad
+      if (cantRecibida < pedidoIngresando.cantidad) {
+        const restante = pedidoIngresando.cantidad - cantRecibida;
+        await supabase.from('pedidos_proveedor').update({ cantidad: restante, estado: 'Pedir' }).eq('id', pedidoIngresando.id);
+      } else {
+        await supabase.from('pedidos_proveedor').update({ estado: 'Ingresaron' }).eq('id', pedidoIngresando.id);
+      }
+
+      setPedidoIngresando(null);
+      setCantidadIngresada("");
+      fetchPedidos();
+      fetchCatalogo(); // Recarga la tabla de stock para ver el número nuevo
+    } catch (error) {
+      alert("Error al ingresar el stock.");
+    }
   }
 
   const itemsFiltrados = items.filter(item => {
@@ -369,7 +429,6 @@ export function CatalogoView() {
           <Button onClick={simularFaltante} variant="outline" className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
             🧪 Simular Faltante
           </Button>
-
           <Button onClick={abrirCrear} className="bg-primary text-primary-foreground">
             <Plus className="mr-2 h-4 w-4" /> Nuevo Ítem
           </Button>
@@ -441,11 +500,12 @@ export function CatalogoView() {
                           <div className="flex justify-end gap-1">
                             {pedido.estado !== 'Ingresaron' && (
                               <>
-                                {/* ACÁ LLAMAMOS AL CARTELITO EN VEZ DEL WHATSAPP DIRECTO */}
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" title="Mandar por WhatsApp al Proveedor" onClick={() => abrirOpcionesWhatsApp(pedido)}>
+                                {/* BOTÓN DE WHATSAPP CON MODAL */}
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" title="Contactar Proveedor" onClick={() => abrirOpcionesWhatsApp(pedido)}>
                                   <MessageCircle className="h-4 w-4" />
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Marcar como que ya ingresaron" onClick={() => handleEstadoPedido(pedido.id, 'Ingresaron')}>
+                                {/* BOTÓN DE INGRESO DE STOCK CON MODAL */}
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Ingresar Stock" onClick={() => { setPedidoIngresando(pedido); setCantidadIngresada(pedido.cantidad.toString()); }}>
                                   <CheckCircle className="h-4 w-4" />
                                 </Button>
                               </>
@@ -552,38 +612,9 @@ export function CatalogoView() {
             )}
           </CardContent>
         </Card>
-
-        {/* MODAL PARA ELEGIR A QUÉ VENDEDOR MANDARLE EL WHATSAPP */}
-        <Dialog open={!!pedidoParaMandar} onOpenChange={(open) => !open && setPedidoParaMandar(null)}>
-          <DialogContent className="max-w-sm border-border bg-card">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-foreground">
-                <MessageCircle className="w-5 h-5 text-green-500" />
-                Contactar Proveedor
-              </DialogTitle>
-            </DialogHeader>
-            <div className="py-4 space-y-3">
-              <p className="text-sm text-muted-foreground mb-4">¿A qué vendedor querés enviarle el pedido de <b>{pedidoParaMandar?.detalle}</b>?</p>
-              
-              {/* ACÁ PODÉS CAMBIAR LOS NOMBRES Y NÚMEROS POR LOS REALES DE TUS PROVEEDORES */}
-              {/* Recordá poner el código de país sin el "+" ni espacios. Ej para Argentina: 54911... */}
-              
-              <Button className="w-full justify-start bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" onClick={() => enviarWhatsAppAProveedor("5491100000000")}>
-                <MessageCircle className="w-4 h-4 mr-2" /> Vendedor 1 (Juan)
-              </Button>
-              
-              <Button className="w-full justify-start bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" onClick={() => enviarWhatsAppAProveedor("5491100000000")}>
-                <MessageCircle className="w-4 h-4 mr-2" /> Vendedor 2 (Pedro)
-              </Button>
-
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setPedidoParaMandar(null)}>Cancelar</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </Tabs>
 
+      {/* --- EL MODAL ORIGINAL PARA CREAR/EDITAR ÍTEMS DEL CATÁLOGO --- */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-3xl min-h-[500px] border-border bg-card overflow-y-auto p-0 flex flex-col">
           <div className="bg-secondary/30 p-6 border-b border-border shrink-0">
@@ -606,7 +637,6 @@ export function CatalogoView() {
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Información Principal</h3></div>
               
-              {/* FORMULARIO CONDICIONAL: SI ES NEUMÁTICO MUESTRA ESTO */}
               {formData.tipo === "Neumático" ? (
                 <div className="grid sm:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900/30 p-6 rounded-lg border border-border">
                   <div className="space-y-2">
@@ -636,7 +666,6 @@ export function CatalogoView() {
                   </div>
                 </div>
               ) : (
-                /* FORMULARIO ESTÁNDAR PARA REPUESTOS Y SERVICIOS */
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Detalle / Nombre <span className="text-destructive">*</span></Label>
@@ -696,6 +725,73 @@ export function CatalogoView() {
             <Button onClick={handleGuardarItem} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : (editingId ? "Actualizar Ítem" : "Guardar en Catálogo")}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL 1: WHATSAPP Y PROVEEDORES --- */}
+      <Dialog open={!!pedidoParaMandar} onOpenChange={(open) => { if (!open) { setPedidoParaMandar(null); setMostrandoFormProveedor(false); } }}>
+        <DialogContent className="max-w-sm border-border bg-card">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="w-5 h-5 text-green-500" /> Contactar Proveedor</DialogTitle></DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground">¿A quién querés enviarle el pedido de <b>{pedidoParaMandar?.detalle}</b>?</p>
+            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+              {proveedores.length === 0 && !mostrandoFormProveedor ? (
+                <p className="text-xs text-center text-muted-foreground py-2 border border-dashed border-border rounded-lg">No tenés proveedores guardados.</p>
+              ) : (
+                proveedores.map(prov => (
+                  <div key={prov.id} className="flex items-center gap-2">
+                    <Button className="flex-1 justify-start bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" onClick={() => enviarWhatsAppAProveedor(prov.telefono)}>
+                      <MessageCircle className="w-4 h-4 mr-2" /> {prov.nombre}
+                    </Button>
+                    <Button variant="ghost" size="icon" className="shrink-0 text-muted-foreground hover:text-destructive" onClick={() => handleEliminarProveedor(prov.id, prov.nombre)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+            {mostrandoFormProveedor ? (
+              <div className="bg-secondary/30 p-3 rounded-lg border border-border space-y-3 animate-in fade-in zoom-in-95">
+                <div>
+                  <Label className="text-xs">Nombre del Proveedor</Label>
+                  <Input placeholder="Ej: Neumáticos Carlitos" className="h-8 mt-1" value={nuevoProveedor.nombre} onChange={e => setNuevoProveedor({...nuevoProveedor, nombre: e.target.value})} />
+                </div>
+                <div>
+                  <Label className="text-xs">WhatsApp (Código país + nro)</Label>
+                  <Input placeholder="Ej: 5491123456789" className="h-8 mt-1 font-mono text-sm" value={nuevoProveedor.telefono} onChange={e => setNuevoProveedor({...nuevoProveedor, telefono: e.target.value})} />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="ghost" size="sm" className="flex-1 h-8 text-xs" onClick={() => setMostrandoFormProveedor(false)}>Cancelar</Button>
+                  <Button size="sm" className="flex-1 h-8 text-xs bg-primary text-primary-foreground" onClick={handleAgregarProveedor}>Guardar</Button>
+                </div>
+              </div>
+            ) : (
+              <Button variant="outline" className="w-full border-dashed" onClick={() => setMostrandoFormProveedor(true)}>
+                <Plus className="w-4 h-4 mr-2" /> Añadir nuevo proveedor
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL 2: CONFIRMAR INGRESO DE STOCK --- */}
+      <Dialog open={!!pedidoIngresando} onOpenChange={(open) => !open && setPedidoIngresando(null)}>
+        <DialogContent className="max-w-sm border-border bg-card">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Package className="w-5 h-5 text-blue-500" /> Ingreso de Stock</DialogTitle></DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
+              <p className="text-sm text-blue-800 dark:text-blue-300">Habías pedido <b>{pedidoIngresando?.cantidad}x {pedidoIngresando?.detalle}</b>.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>¿Cuántas unidades te trajeron finalmente?</Label>
+              <Input type="number" className="text-center text-lg font-bold h-12" value={cantidadIngresada} onChange={(e) => setCantidadIngresada(e.target.value)} />
+              <p className="text-xs text-muted-foreground text-center">Si te trajeron menos, el resto quedará como "Faltante".</p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setPedidoIngresando(null)}>Cancelar</Button>
+              <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmarIngreso}>Sumar al Stock</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
