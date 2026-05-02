@@ -333,17 +333,25 @@ export function CatalogoView() {
 // --- MAGIA: CALCULAR GLOBITO ROJO ---
   const pendientesDePedir = pedidos.filter(p => p.estado === 'Pedir').length;
 
-  // --- BOTÓN TEMPORAL PARA SIMULAR (Luego lo borramos) ---
+  // --- BOTÓN TEMPORAL PARA SIMULAR (Con atrapador de errores) ---
   const simularFaltante = async () => {
     try {
-      await supabase.from('pedidos_proveedor').insert([{
+      const { error } = await supabase.from('pedidos_proveedor').insert([{
         detalle: "Neumático GoodYear 195 / 65 R 15 (SIMULACIÓN)",
         cantidad: 4,
         estado: 'Pedir'
       }]);
+      
+      // Si Supabase tira un error, lo atrapamos y lo mostramos
+      if (error) {
+        alert("Error de Supabase: " + error.message);
+        console.error(error);
+        return;
+      }
+
       fetchPedidos(); // Recargamos para que aparezca el globito
-    } catch (error) {
-      alert("Error simulando.");
+    } catch (error: any) {
+      alert("Error en el código: " + error.message);
     }
   }
 
