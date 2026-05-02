@@ -329,6 +329,26 @@ export function CatalogoView() {
     return <Wrench className="w-3 h-3 mr-1" />
   }
 
+
+// --- MAGIA: CALCULAR GLOBITO ROJO ---
+  const pendientesDePedir = pedidos.filter(p => p.estado === 'Pedir').length;
+
+  // --- BOTÓN TEMPORAL PARA SIMULAR (Luego lo borramos) ---
+  const simularFaltante = async () => {
+    try {
+      await supabase.from('pedidos_proveedor').insert([{
+        detalle: "Neumático GoodYear 195 / 65 R 15 (SIMULACIÓN)",
+        cantidad: 4,
+        estado: 'Pedir'
+      }]);
+      fetchPedidos(); // Recargamos para que aparezca el globito
+    } catch (error) {
+      alert("Error simulando.");
+    }
+  }
+
+
+
   return (
     <div className="space-y-6 pb-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -336,9 +356,16 @@ export function CatalogoView() {
           <h2 className="text-2xl font-semibold text-foreground">Catálogo y Stock</h2>
           <p className="text-sm text-muted-foreground">Administrá tus repuestos, neumáticos, servicios y mano de obra.</p>
         </div>
-        <Button onClick={abrirCrear} className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> Nuevo Ítem
-        </Button>
+        <div className="flex gap-2">
+          {/* BOTÓN DE SIMULACIÓN - LUEGO LO BORRAMOS */}
+          <Button onClick={simularFaltante} variant="outline" className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
+            🧪 Simular Faltante
+          </Button>
+
+          <Button onClick={abrirCrear} className="bg-primary text-primary-foreground">
+            <Plus className="mr-2 h-4 w-4" /> Nuevo Ítem
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="todos" onValueChange={setFiltroTab} className="w-full">
@@ -346,9 +373,15 @@ export function CatalogoView() {
           <TabsTrigger value="todos">Todos</TabsTrigger>
           <TabsTrigger value="repuestos">Repuestos & Neumáticos</TabsTrigger>
           <TabsTrigger value="servicios">Servicios y Mano de Obra</TabsTrigger>
-          {/* NUEVA PESTAÑA */}
-          <TabsTrigger value="pedidos" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 dark:data-[state=active]:bg-blue-900/30 font-bold">
+          
+          {/* PESTAÑA CON GLOBITO ROJO INTELIGENTE */}
+          <TabsTrigger value="pedidos" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 dark:data-[state=active]:bg-blue-900/30 font-bold relative">
             Pedidos a Proveedor
+            {pendientesDePedir > 0 && (
+              <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow-sm animate-in zoom-in">
+                {pendientesDePedir}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
