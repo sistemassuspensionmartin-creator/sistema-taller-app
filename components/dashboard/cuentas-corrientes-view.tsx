@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { 
   Building2, Users, Plus, FileText, ArrowDownRight, ArrowUpRight, 
-  Wallet, Search, Receipt, Loader2, User, HandCoins, Trash2, AlertCircle
+  Wallet, Search, Receipt, Loader2, User, HandCoins, Trash2, AlertCircle, Edit
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -39,7 +39,7 @@ export function CuentasCorrientesView() {
   
   // ESTADOS: PROVEEDORES
   const [isNuevoProveedorOpen, setIsNuevoProveedorOpen] = useState(false)
-  const [nuevoProveedor, setNuevoProveedor] = useState({ nombre: "", telefono: "", cuit: "", notas: "" })
+  const [nuevoProveedor, setNuevoProveedor] = useState<any>({ id: null, nombre: "", telefono: "", cuit: "", notas: "" })
   const [isFacturaOpen, setIsFacturaOpen] = useState(false)
   const [provSeleccionado, setProvSeleccionado] = useState<any>(null)
   const [datosFactura, setDatosFactura] = useState({ monto: "", comprobante: "", detalle: "" })
@@ -137,16 +137,31 @@ export function CuentasCorrientesView() {
     }
   }
 
-  const handleCrearProveedor = async () => {
+  const abrirEditarProveedor = (prov: any) => {
+    setNuevoProveedor({ id: prov.id, nombre: prov.nombre || "", telefono: prov.telefono || "", cuit: prov.cuit || "", notas: prov.notas || "" });
+    setIsNuevoProveedorOpen(true);
+  }
+
+  const handleGuardarProveedor = async () => {
     if (!nuevoProveedor.nombre) return alert("El nombre es obligatorio")
     setIsSaving(true)
     try {
-      const { error } = await supabase.from('proveedores').insert([nuevoProveedor])
-      if (error) throw error
+      const { id, ...datos } = nuevoProveedor; // Separamos el ID de los datos
+      
+      if (id) {
+        // Si hay ID, ACTUALIZAMOS
+        const { error } = await supabase.from('proveedores').update(datos).eq('id', id);
+        if (error) throw error;
+      } else {
+        // Si no hay ID, CREAMOS
+        const { error } = await supabase.from('proveedores').insert([datos]);
+        if (error) throw error;
+      }
+      
       setIsNuevoProveedorOpen(false)
-      setNuevoProveedor({ nombre: "", telefono: "", cuit: "", notas: "" })
+      setNuevoProveedor({ id: null, nombre: "", telefono: "", cuit: "", notas: "" })
       cargarDatosBase()
-    } catch (error: any) { alert("Error al crear: " + error.message) } 
+    } catch (error: any) { alert("Error al guardar: " + error.message) } 
     finally { setIsSaving(false) }
   }
 
@@ -482,7 +497,7 @@ export function CuentasCorrientesView() {
                 <Receipt className={`w-8 h-8 ${totalProveedoresNegativo ? 'text-emerald-600' : 'text-rose-600'}`} />
               </div>
             </Card>
-            <Button onClick={() => setIsNuevoProveedorOpen(true)} className="h-full min-h-[100px] border-2 border-dashed border-border bg-transparent text-foreground hover:bg-secondary hover:border-primary flex flex-col gap-2">
+            <Button onClick={() => { setNuevoProveedor({ id: null, nombre: "", telefono: "", cuit: "", notas: "" }); setIsNuevoProveedorOpen(true); }} className="h-full min-h-[100px] border-2 border-dashed border-border bg-transparent text-foreground hover:bg-secondary hover:border-primary flex flex-col gap-2">
               <Plus className="w-6 h-6 text-primary" />
               <span>Nuevo Proveedor</span>
             </Button>
@@ -532,10 +547,13 @@ export function CuentasCorrientesView() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <Button size="sm" variant="outline" className="h-8" onClick={() => abrirLedgerProv(prov)}><Search className="w-3 h-3 mr-1" /> Resumen</Button>
-                            <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => { setProvSeleccionado(prov); setIsFacturaOpen(true); }}><FileText className="w-3 h-3 mr-1" /> Cargar Fra</Button>
-                            <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setProvSeleccionado(prov); setIsPagoOpen(true); }}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
-                          </div>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditarProveedor(prov)} title="Editar Proveedor">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-8" onClick={() => abrirLedgerProv(prov)}><Search className="w-3 h-3 mr-1" /> Resumen</Button>
+                          <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => { setProvSeleccionado(prov); setIsFacturaOpen(true); }}><FileText className="w-3 h-3 mr-1" /> Cargar Fra</Button>
+                          <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setProvSeleccionado(prov); setIsPagoOpen(true); }}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
+                        </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -739,7 +757,12 @@ export function CuentasCorrientesView() {
     
       <Dialog open={isNuevoProveedorOpen} onOpenChange={setIsNuevoProveedorOpen}>
         <DialogContent className="max-w-md border-border bg-card">
-          <DialogHeader><DialogTitle className="text-xl flex items-center gap-2"><Building2 className="w-5 h-5 text-primary" /> Nuevo Proveedor</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" /> 
+              {nuevoProveedor.id ? "Editar Proveedor" : "Nuevo Proveedor"}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2"><Label>Nombre / Razón Social *</Label><Input value={nuevoProveedor.nombre} onChange={e => setNuevoProveedor({...nuevoProveedor, nombre: e.target.value})} /></div>
             <div className="grid grid-cols-2 gap-4">
@@ -747,7 +770,13 @@ export function CuentasCorrientesView() {
               <div className="space-y-2"><Label>Teléfono</Label><Input value={nuevoProveedor.telefono} onChange={e => setNuevoProveedor({...nuevoProveedor, telefono: e.target.value})} /></div>
             </div>
           </div>
-          <DialogFooter><Button variant="ghost" onClick={() => setIsNuevoProveedorOpen(false)}>Cancelar</Button><Button onClick={handleCrearProveedor} disabled={isSaving || !nuevoProveedor.nombre}>{isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Guardar</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsNuevoProveedorOpen(false)}>Cancelar</Button>
+            <Button onClick={handleGuardarProveedor} disabled={isSaving || !nuevoProveedor.nombre}>
+              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} 
+              {nuevoProveedor.id ? "Actualizar" : "Guardar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
