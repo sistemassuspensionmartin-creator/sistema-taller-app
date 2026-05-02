@@ -310,11 +310,35 @@ export function CatalogoView() {
     fetchProveedores();
   }
 
-  // --- FUNCIONES DE PEDIDOS Y WHATSAPP ---
-  const handleEliminarPedido = async (id: string) => {
-    if (!confirm("¿Eliminar este pedido de la lista de Faltantes?")) return;
-    await supabase.from('pedidos_proveedor').delete().eq('id', id);
+ // --- ESTADOS PARA CARTELES HERMOSOS ---
+  const [itemParaPedir, setItemParaPedir] = useState<any>(null);
+  const [cantidadManual, setCantidadManual] = useState("4");
+  const [pedidoAEliminar, setPedidoAEliminar] = useState<any>(null);
+
+  // --- FUNCIONES ACTUALIZADAS (Sin los carteles feos del navegador) ---
+  const confirmarEliminarPedido = async () => {
+    if (!pedidoAEliminar) return;
+    await supabase.from('pedidos_proveedor').delete().eq('id', pedidoAEliminar.id);
     fetchPedidos();
+    setPedidoAEliminar(null); // Cerramos el cartel
+  }
+
+  const confirmarPedirManual = async () => {
+    const cantidadNumerica = parseInt(cantidadManual);
+    if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) return alert("Cantidad inválida.");
+    try {
+      await supabase.from('pedidos_proveedor').insert([{
+        catalogo_id: itemParaPedir.id,
+        detalle: itemParaPedir.detalle,
+        cantidad: cantidadNumerica,
+        estado: 'Pedir'
+      }]);
+      fetchPedidos();
+      setFiltroTab("pedidos");
+      setItemParaPedir(null); // Cerramos el cartel
+    } catch (error) {
+      alert("Error al generar el pedido.");
+    }
   }
 
   // --- Esta es la función que faltaba para abrir el cartel ---
@@ -333,28 +357,6 @@ export function CatalogoView() {
     fetchPedidos();
   }
 
-  // --- FORZAR UN PEDIDO MANUALMENTE DESDE EL CATÁLOGO ---
-  const handlePedirManual = async (item: any) => {
-    // Le preguntamos cuántos quiere pedir
-    const cant = prompt(`¿Cuántas unidades de "${item.detalle}" querés agregar a la lista de pedidos?`, "4");
-    if (!cant) return;
-    
-    const cantidadNumerica = parseInt(cant);
-    if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) return alert("Cantidad inválida.");
-
-    try {
-      await supabase.from('pedidos_proveedor').insert([{
-        catalogo_id: item.id,
-        detalle: item.detalle,
-        cantidad: cantidadNumerica,
-        estado: 'Pedir'
-      }]);
-      fetchPedidos();
-      setFiltroTab("pedidos"); // Lo mandamos a la pestaña de pedidos para que lo vea
-    } catch (error) {
-      alert("Error al generar el pedido.");
-    }
-  }
 
   // --- LA MAGIA: CONFIRMAR INGRESO Y SUBIR STOCK ---
   const handleConfirmarIngreso = async () => {
@@ -517,7 +519,10 @@ return (
                   {pedidos.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay artículos pendientes de pedido.</TableCell></TableRow>
                   ) : (
-                    pedidos.map(pedido => (
+                    [...pedidos].sort((a, b) => {
+                      const peso: any = { "Pedir": 1, "Solicitado": 2, "Ingresaron": 3 };
+                      return (peso[a.estado] || 99) - (peso[b.estado] || 99) || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    }).map(pedido => (
                       <TableRow key={pedido.id} className="hover:bg-secondary/20">
                         <TableCell>
                           <Badge variant="outline" className={
@@ -546,7 +551,7 @@ return (
                                 </Button>
                               </>
                             )}
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-900/20" title="Eliminar de la lista" onClick={() => handleEliminarPedido(pedido.id)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-900/20" title="Eliminar de la lista" onClick={() => setPedidoAEliminar(pedido)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -631,7 +636,7 @@ return (
                             <div className="flex justify-end gap-1">
                               {/* NUEVO: BOTÓN DE FORZAR PEDIDO (Solo para repuestos y neumáticos) */}
                               {(item.tipo === "Repuesto" || item.tipo === "Neumático") && (
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Pedir a Proveedor" onClick={() => handlePedirManual(item)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Pedir a Proveedor" onClick={() => { setItemParaPedir(item); setCantidadManual("4"); }}>
                                   <Clock className="h-4 w-4" />
                                 </Button>
                               )}
@@ -831,6 +836,34 @@ return (
             <div className="flex gap-2 pt-2">
               <Button variant="ghost" className="flex-1" onClick={() => setPedidoIngresando(null)}>Cancelar</Button>
               <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={handleConfirmarIngreso}>Sumar al Stock</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* --- MODAL PARA FORZAR PEDIDO MANUAL --- */}
+      <Dialog open={!!itemParaPedir} onOpenChange={(open) => !open && setItemParaPedir(null)}>
+        <DialogContent className="max-w-sm border-border bg-card">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Clock className="w-5 h-5 text-blue-500" /> Solicitar Ítem</DialogTitle></DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground">¿Cuántas unidades de <b>{itemParaPedir?.detalle}</b> querés agregar a la lista de pedidos?</p>
+            <Input type="number" className="text-center text-lg font-bold h-12" value={cantidadManual} onChange={(e) => setCantidadManual(e.target.value)} />
+            <div className="flex gap-2 pt-2">
+              <Button variant="ghost" className="flex-1" onClick={() => setItemParaPedir(null)}>Cancelar</Button>
+              <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white" onClick={confirmarPedirManual}>Agregar a Pedidos</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL PARA CONFIRMAR ELIMINAR PEDIDO --- */}
+      <Dialog open={!!pedidoAEliminar} onOpenChange={(open) => !open && setPedidoAEliminar(null)}>
+        <DialogContent className="max-w-sm border-border bg-card">
+          <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-5 h-5" /> Eliminar Pedido</DialogTitle></DialogHeader>
+          <div className="py-2 space-y-4">
+            <p className="text-sm text-muted-foreground">¿Estás seguro de que querés eliminar el pedido de <b>{pedidoAEliminar?.detalle}</b> de la lista de faltantes?</p>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="ghost" onClick={() => setPedidoAEliminar(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={confirmarEliminarPedido}>Sí, eliminar</Button>
             </div>
           </div>
         </DialogContent>
