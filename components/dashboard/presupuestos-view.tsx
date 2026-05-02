@@ -1729,9 +1729,9 @@ export function PresupuestosView({
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {/* --- ACÁ ESTÁN LAS 3 OPCIONES NUEVAS --- */}
-                              <SelectItem value="Débito (Taller)">Débito (Va al Taller)</SelectItem>
-                              <SelectItem value="Crédito (Taller)">Crédito (Va al Taller)</SelectItem>
-                              <SelectItem value="Crédito (Neumater)">Crédito (Va a Neumater)</SelectItem>
+                              <SelectItem value="Débito (Taller)">Débito (Taller)</SelectItem>
+                              <SelectItem value="Crédito (Taller)">Crédito (Taller)</SelectItem>
+                              <SelectItem value="Crédito (Neumater)">Crédito (Neumater)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

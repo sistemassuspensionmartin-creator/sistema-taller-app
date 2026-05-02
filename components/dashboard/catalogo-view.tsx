@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Edit, Loader2, Save, Package, Wrench, DollarSign, Percent, Tag, CircleDashed, Trash2 } from "lucide-react"
+import { Plus, Search, Edit, Loader2, Save, Package, Wrench, DollarSign, Percent, Tag, CircleDashed, Trash2, MessageCircle, CheckCircle, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -69,10 +69,23 @@ export function CatalogoView() {
       const { data, error } = await supabase.from('catalogo').select('*')
       if (error) throw error
 
-      // MAGIA: Ordenamiento inteligente
+      // MAGIA: Ordenamiento por Tipo y luego Inteligente
+      const pesoTipo: Record<string, number> = {
+        "Neumático": 1,
+        "Repuesto": 2,
+        "Servicio": 3,
+        "Mano de Obra": 4
+      };
+
       const datosOrdenados = (data || []).sort((a, b) => {
+        // 1. Primero ordenamos por la categoría principal (pesoTipo)
+        const pesoA = pesoTipo[a.tipo] || 99;
+        const pesoB = pesoTipo[b.tipo] || 99;
+        
+        if (pesoA !== pesoB) return pesoA - pesoB;
+
+        // 2. Si ambos son del MISMO tipo, aplicamos las reglas internas
         if (a.tipo === 'Neumático' && b.tipo === 'Neumático') {
-          // Extraemos todos los números del texto. Ej "195 / 65 R 15" -> [195, 65, 15]
           const numsA = a.medida ? a.medida.match(/\d+/g) : [];
           const numsB = b.medida ? b.medida.match(/\d+/g) : [];
 
@@ -80,12 +93,14 @@ export function CatalogoView() {
             const anchoA = parseInt(numsA[0]), perfilA = parseInt(numsA[1]), rodadoA = parseInt(numsA[2]);
             const anchoB = parseInt(numsB[0]), perfilB = parseInt(numsB[1]), rodadoB = parseInt(numsB[2]);
 
-            if (rodadoA !== rodadoB) return rodadoA - rodadoB; // 1ro: Rodado (13, 14, 15...)
-            if (anchoA !== anchoB) return anchoA - anchoB;     // 2do: Ancho (175, 185, 195...)
-            if (perfilA !== perfilB) return perfilA - perfilB; // 3ro: Perfil (50, 55, 60...)
+            // De menor a mayor: Rodado -> Ancho -> Perfil
+            if (rodadoA !== rodadoB) return rodadoA - rodadoB;
+            if (anchoA !== anchoB) return anchoA - anchoB;
+            if (perfilA !== perfilB) return perfilA - perfilB;
           }
         }
-        // Si no son neumáticos (o no tienen la medida bien escrita), ordenamos por orden alfabético
+        
+        // Para Repuestos, Servicios o si falla la lectura de medida, va alfabético
         return a.detalle.localeCompare(b.detalle);
       });
 
@@ -97,7 +112,23 @@ export function CatalogoView() {
     }
   }
 
-  useEffect(() => { fetchCatalogo() }, [])
+// --- NUEVO: ESTADO Y CARGA DE PEDIDOS ---
+  const [pedidos, setPedidos] = useState<any[]>([])
+
+  const fetchPedidos = async () => {
+    try {
+      const { data, error } = await supabase.from('pedidos_proveedor').select('*').order('created_at', { ascending: false })
+      if (error) throw error
+      setPedidos(data || [])
+    } catch (error) {
+      console.error("Error al cargar pedidos:", error)
+    }
+  }
+
+  useEffect(() => { 
+    fetchCatalogo(); 
+    fetchPedidos(); 
+  }, [])
 
   // MAGIA: Formateador automático de medidas (Ej: 265 / 65 R 18)
   const handleMedidaChange = (e: any) => {
@@ -238,6 +269,45 @@ export function CatalogoView() {
     }
   }
 
+ // --- ESTADO PARA EL CARTEL DE WHATSAPP ---
+  const [pedidoParaMandar, setPedidoParaMandar] = useState<any>(null);
+
+  // --- FUNCIONES PARA GESTIONAR PEDIDOS ---
+  const handleEliminarPedido = async (id: string) => {
+    if (!confirm("¿Eliminar este pedido de la lista de Faltantes?")) return;
+    try {
+      await supabase.from('pedidos_proveedor').delete().eq('id', id);
+      fetchPedidos();
+    } catch (error) {
+      alert("Error al eliminar el pedido.");
+    }
+  }
+
+  const handleEstadoPedido = async (id: string, nuevoEstado: string) => {
+    try {
+      await supabase.from('pedidos_proveedor').update({ estado: nuevoEstado }).eq('id', id);
+      fetchPedidos();
+      // Si ya ingresaron, recargamos el catálogo por si queremos ajustar el stock manual luego
+      if (nuevoEstado === 'Ingresaron') fetchCatalogo();
+    } catch (error) {
+      alert("Error al actualizar el estado.");
+    }
+  }
+
+  // Ahora esta función solo abre el cartel en vez de disparar el link al vacío
+  const abrirOpcionesWhatsApp = (pedido: any) => {
+    setPedidoParaMandar(pedido);
+  }
+
+  // Esta es la que realmente manda el mensaje al número que elijas
+  const enviarWhatsAppAProveedor = (numero: string) => {
+    if (!pedidoParaMandar) return;
+    const texto = `Hola! Te consulto por disponibilidad y precio de lo siguiente:\n\n👉 *${pedidoParaMandar.cantidad}x ${pedidoParaMandar.detalle}*\n\n¡Gracias!`;
+    window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
+    handleEstadoPedido(pedidoParaMandar.id, 'Solicitado');
+    setPedidoParaMandar(null);
+  }
+
   const itemsFiltrados = items.filter(item => {
     const coincideTab = filtroTab === "todos" || 
                        (filtroTab === "repuestos" && (item.tipo === "Repuesto" || item.tipo === "Neumático")) || 
@@ -272,35 +342,99 @@ export function CatalogoView() {
       </div>
 
       <Tabs defaultValue="todos" onValueChange={setFiltroTab} className="w-full">
-        <TabsList className="mb-4 bg-secondary">
+        <TabsList className="mb-4 bg-secondary flex-wrap h-auto">
           <TabsTrigger value="todos">Todos</TabsTrigger>
           <TabsTrigger value="repuestos">Repuestos & Neumáticos</TabsTrigger>
           <TabsTrigger value="servicios">Servicios y Mano de Obra</TabsTrigger>
+          {/* NUEVA PESTAÑA */}
+          <TabsTrigger value="pedidos" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 dark:data-[state=active]:bg-blue-900/30 font-bold">
+            Pedidos a Proveedor
+          </TabsTrigger>
         </TabsList>
 
         <Card className="border-border bg-card">
-          <CardHeader className="border-b border-border bg-secondary/10 pb-4">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar por detalle o nombre..." className="pl-9" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
-            </div>
-          </CardHeader>
+          {filtroTab !== "pedidos" && (
+            <CardHeader className="border-b border-border bg-secondary/10 pb-4">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar por detalle o nombre..." className="pl-9" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              </div>
+            </CardHeader>
+          )}
+          
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-secondary/20">
-                  <TableHead className="w-[150px]">Tipo</TableHead>
-                  <TableHead>Detalle</TableHead>
-                  <TableHead className="text-center w-[100px]">Stock</TableHead>
-                  <TableHead className="text-right w-[120px] bg-slate-50 dark:bg-slate-900/50">Costo</TableHead>
-                  <TableHead className="text-right w-[120px] text-primary">Precio Venta</TableHead>
-                  <TableHead className="text-right w-[120px]">Ganancia</TableHead>
-                  <TableHead className="text-right w-[80px]">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            {filtroTab === "pedidos" ? (
+              /* --- TABLA DE PEDIDOS A PROVEEDOR --- */
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-secondary/20">
+                    <TableHead className="w-[140px]">Estado</TableHead>
+                    <TableHead>Detalle del Repuesto/Neumático</TableHead>
+                    <TableHead className="text-center w-[120px]">Cantidad</TableHead>
+                    <TableHead className="w-[120px] text-muted-foreground">Fecha</TableHead>
+                    <TableHead className="text-right w-[150px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pedidos.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="h-32 text-center text-muted-foreground">No hay artículos pendientes de pedido.</TableCell></TableRow>
+                  ) : (
+                    pedidos.map(pedido => (
+                      <TableRow key={pedido.id} className="hover:bg-secondary/20">
+                        <TableCell>
+                          <Badge variant="outline" className={
+                            pedido.estado === 'Pedir' ? 'bg-amber-100 text-amber-700 border-amber-300' :
+                            pedido.estado === 'Solicitado' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                            'bg-emerald-100 text-emerald-700 border-emerald-300'
+                          }>
+                            {pedido.estado === 'Pedir' ? <Clock className="w-3 h-3 mr-1"/> : 
+                             pedido.estado === 'Solicitado' ? <MessageCircle className="w-3 h-3 mr-1"/> : 
+                             <CheckCircle className="w-3 h-3 mr-1"/>}
+                            {pedido.estado}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-medium text-foreground">{pedido.detalle}</TableCell>
+                        <TableCell className="text-center font-bold text-lg">{pedido.cantidad}</TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{new Date(pedido.created_at).toLocaleDateString('es-AR')}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            {pedido.estado !== 'Ingresaron' && (
+                              <>
+                                {/* ACÁ LLAMAMOS AL CARTELITO EN VEZ DEL WHATSAPP DIRECTO */}
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" title="Mandar por WhatsApp al Proveedor" onClick={() => abrirOpcionesWhatsApp(pedido)}>
+                                  <MessageCircle className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Marcar como que ya ingresaron" onClick={() => handleEstadoPedido(pedido.id, 'Ingresaron')}>
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-900/20" title="Eliminar de la lista" onClick={() => handleEliminarPedido(pedido.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            ) : (
+              /* --- TABLA ORIGINAL DE CATÁLOGO --- */
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-secondary/20">
+                    <TableHead className="w-[150px]">Tipo</TableHead>
+                    <TableHead>Detalle</TableHead>
+                    <TableHead className="text-center w-[100px]">Stock</TableHead>
+                    <TableHead className="text-right w-[120px] bg-slate-50 dark:bg-slate-900/50">Costo</TableHead>
+                    <TableHead className="text-right w-[120px] text-primary">Precio Venta</TableHead>
+                    <TableHead className="text-right w-[120px]">Ganancia</TableHead>
+                    <TableHead className="text-right w-[80px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {isLoading ? (
-                    /* MAGIA VISUAL: Esqueletos para Stock / Catálogo */
                     Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
                         <TableCell><div className="h-6 w-20 bg-secondary/60 rounded-full animate-pulse"></div></TableCell>
@@ -312,6 +446,8 @@ export function CatalogoView() {
                         </TableCell>
                         <TableCell className="text-center"><div className="h-5 w-12 bg-secondary/60 rounded animate-pulse mx-auto"></div></TableCell>
                         <TableCell className="text-right"><div className="h-5 w-24 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                        <TableCell className="text-right"><div className="h-5 w-24 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
+                        <TableCell className="text-right"><div className="h-5 w-24 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <div className="h-8 w-8 bg-secondary/60 rounded animate-pulse"></div>
@@ -320,65 +456,91 @@ export function CatalogoView() {
                         </TableCell>
                       </TableRow>
                     ))
-                ) : itemsFiltrados.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">No hay ítems en esta categoría.</TableCell></TableRow>
-                ) : (
-                  itemsFiltrados.map((item) => {
-                    const margen = item.precio_base - (item.costo_base || 0)
-                    return (
-                      <TableRow key={item.id} className="hover:bg-secondary/50">
-                        <TableCell>
-                          <Badge variant="outline" className={getBadgeColor(item.tipo)}>
-                            {getIcono(item.tipo)}
-                            {item.tipo}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium text-foreground">{item.detalle}</TableCell>
-                        
-                        {/* CELDA DE STOCK MODIFICADA */}
-                        <TableCell className="text-center">
-                          {(item.tipo === "Repuesto" || item.tipo === "Neumático") ? (
-                            item.controlar_stock !== false ? (
-                              <Badge variant={item.stock_actual <= 2 ? "destructive" : "secondary"} className="font-mono">
-                                {item.stock_actual}
-                              </Badge>
+                  ) : itemsFiltrados.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="h-32 text-center text-muted-foreground">No hay ítems en esta categoría.</TableCell></TableRow>
+                  ) : (
+                    itemsFiltrados.map((item) => {
+                      const margen = item.precio_base - (item.costo_base || 0)
+                      return (
+                        <TableRow key={item.id} className="hover:bg-secondary/50">
+                          <TableCell>
+                            <Badge variant="outline" className={getBadgeColor(item.tipo)}>
+                              {getIcono(item.tipo)}
+                              {item.tipo}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium text-foreground">{item.detalle}</TableCell>
+                          <TableCell className="text-center">
+                            {(item.tipo === "Repuesto" || item.tipo === "Neumático") ? (
+                              item.controlar_stock !== false ? (
+                                <Badge variant={item.stock_actual <= 2 ? "destructive" : "secondary"} className="font-mono">
+                                  {item.stock_actual}
+                                </Badge>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground uppercase font-bold bg-secondary/50 px-2 py-1 rounded">Genérico</span>
+                              )
                             ) : (
-                              <span className="text-[10px] text-muted-foreground uppercase font-bold bg-secondary/50 px-2 py-1 rounded">Genérico</span>
-                            )
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-
-                        <TableCell className="text-right bg-slate-50 dark:bg-slate-900/20 text-muted-foreground font-mono">
-                          ${(item.costo_base || 0).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-bold text-foreground font-mono">
-                          ${item.precio_base.toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400 font-mono">
-                          ${margen.toLocaleString()}
-                        </TableCell>
-                        
-                        {/* CELDA DE ACCIONES MODIFICADA */}
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditar(item)}>
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleEliminarItem(item.id, item.detalle)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })
-                )}
-              </TableBody>
-            </Table>
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right bg-slate-50 dark:bg-slate-900/20 text-muted-foreground font-mono">
+                            ${(item.costo_base || 0).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-bold text-foreground font-mono">
+                            ${item.precio_base.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400 font-mono">
+                            ${margen.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditar(item)}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleEliminarItem(item.id, item.detalle)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
+
+        {/* MODAL PARA ELEGIR A QUÉ VENDEDOR MANDARLE EL WHATSAPP */}
+        <Dialog open={!!pedidoParaMandar} onOpenChange={(open) => !open && setPedidoParaMandar(null)}>
+          <DialogContent className="max-w-sm border-border bg-card">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-foreground">
+                <MessageCircle className="w-5 h-5 text-green-500" />
+                Contactar Proveedor
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-4 space-y-3">
+              <p className="text-sm text-muted-foreground mb-4">¿A qué vendedor querés enviarle el pedido de <b>{pedidoParaMandar?.detalle}</b>?</p>
+              
+              {/* ACÁ PODÉS CAMBIAR LOS NOMBRES Y NÚMEROS POR LOS REALES DE TUS PROVEEDORES */}
+              {/* Recordá poner el código de país sin el "+" ni espacios. Ej para Argentina: 54911... */}
+              
+              <Button className="w-full justify-start bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" onClick={() => enviarWhatsAppAProveedor("5491100000000")}>
+                <MessageCircle className="w-4 h-4 mr-2" /> Vendedor 1 (Juan)
+              </Button>
+              
+              <Button className="w-full justify-start bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400" onClick={() => enviarWhatsAppAProveedor("5491100000000")}>
+                <MessageCircle className="w-4 h-4 mr-2" /> Vendedor 2 (Pedro)
+              </Button>
+
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPedidoParaMandar(null)}>Cancelar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </Tabs>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
