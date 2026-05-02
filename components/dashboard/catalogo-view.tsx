@@ -417,7 +417,7 @@ export function CatalogoView() {
 
 
 
-  return (
+return (
     <div className="space-y-6 pb-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -440,7 +440,6 @@ export function CatalogoView() {
           <TabsTrigger value="todos">Todos</TabsTrigger>
           <TabsTrigger value="repuestos">Repuestos & Neumáticos</TabsTrigger>
           <TabsTrigger value="servicios">Servicios y Mano de Obra</TabsTrigger>
-          
           {/* PESTAÑA CON GLOBITO ROJO INTELIGENTE */}
           <TabsTrigger value="pedidos" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 dark:data-[state=active]:bg-blue-900/30 font-bold relative">
             Pedidos a Proveedor
@@ -453,6 +452,7 @@ export function CatalogoView() {
         </TabsList>
 
         <Card className="border-border bg-card">
+          {/* EL BUSCADOR SE OCULTA SOLO SI ESTAMOS EN LA PESTAÑA PEDIDOS */}
           {filtroTab !== "pedidos" && (
             <CardHeader className="border-b border-border bg-secondary/10 pb-4">
               <div className="relative max-w-md">
@@ -464,7 +464,7 @@ export function CatalogoView() {
           
           <CardContent className="p-0">
             {filtroTab === "pedidos" ? (
-              /* --- TABLA DE PEDIDOS A PROVEEDOR --- */
+              /* --- NUEVA TABLA: PEDIDOS A PROVEEDOR --- */
               <Table>
                 <TableHeader>
                   <TableRow className="bg-secondary/20">
@@ -500,11 +500,9 @@ export function CatalogoView() {
                           <div className="flex justify-end gap-1">
                             {pedido.estado !== 'Ingresaron' && (
                               <>
-                                {/* BOTÓN DE WHATSAPP CON MODAL */}
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20" title="Contactar Proveedor" onClick={() => abrirOpcionesWhatsApp(pedido)}>
                                   <MessageCircle className="h-4 w-4" />
                                 </Button>
-                                {/* BOTÓN DE INGRESO DE STOCK CON MODAL */}
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Ingresar Stock" onClick={() => { setPedidoIngresando(pedido); setCantidadIngresada(pedido.cantidad.toString()); }}>
                                   <CheckCircle className="h-4 w-4" />
                                 </Button>
@@ -521,7 +519,7 @@ export function CatalogoView() {
                 </TableBody>
               </Table>
             ) : (
-              /* --- TABLA ORIGINAL DE CATÁLOGO --- */
+              /* --- TU TABLA ORIGINAL INTACTA: CATÁLOGO --- */
               <Table>
                 <TableHeader>
                   <TableRow className="bg-secondary/20">
@@ -546,8 +544,6 @@ export function CatalogoView() {
                           </div>
                         </TableCell>
                         <TableCell className="text-center"><div className="h-5 w-12 bg-secondary/60 rounded animate-pulse mx-auto"></div></TableCell>
-                        <TableCell className="text-right"><div className="h-5 w-24 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
-                        <TableCell className="text-right"><div className="h-5 w-24 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
                         <TableCell className="text-right"><div className="h-5 w-24 bg-secondary/60 rounded animate-pulse ml-auto"></div></TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -614,7 +610,7 @@ export function CatalogoView() {
         </Card>
       </Tabs>
 
-      {/* --- EL MODAL ORIGINAL PARA CREAR/EDITAR ÍTEMS DEL CATÁLOGO --- */}
+      {/* --- TU MODAL ORIGINAL PARA CREAR/EDITAR --- */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-3xl min-h-[500px] border-border bg-card overflow-y-auto p-0 flex flex-col">
           <div className="bg-secondary/30 p-6 border-b border-border shrink-0">
@@ -729,7 +725,7 @@ export function CatalogoView() {
         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL 1: WHATSAPP Y PROVEEDORES --- */}
+      {/* --- LOS 2 MODALES NUEVOS --- */}
       <Dialog open={!!pedidoParaMandar} onOpenChange={(open) => { if (!open) { setPedidoParaMandar(null); setMostrandoFormProveedor(false); } }}>
         <DialogContent className="max-w-sm border-border bg-card">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="w-5 h-5 text-green-500" /> Contactar Proveedor</DialogTitle></DialogHeader>
@@ -775,7 +771,6 @@ export function CatalogoView() {
         </DialogContent>
       </Dialog>
 
-      {/* --- MODAL 2: CONFIRMAR INGRESO DE STOCK --- */}
       <Dialog open={!!pedidoIngresando} onOpenChange={(open) => !open && setPedidoIngresando(null)}>
         <DialogContent className="max-w-sm border-border bg-card">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Package className="w-5 h-5 text-blue-500" /> Ingreso de Stock</DialogTitle></DialogHeader>
