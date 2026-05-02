@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Edit, Loader2, Save, Package, Wrench, DollarSign, Percent, Tag, CircleDashed } from "lucide-react"
+import { Plus, Search, Edit, Loader2, Save, Package, Wrench, DollarSign, Percent, Tag, CircleDashed, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -65,9 +65,31 @@ export function CatalogoView() {
   const fetchCatalogo = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('catalogo').select('*').order('detalle')
+      // Le sacamos el order() de la base de datos porque lo vamos a ordenar nosotros a mano
+      const { data, error } = await supabase.from('catalogo').select('*')
       if (error) throw error
-      setItems(data || [])
+
+      // MAGIA: Ordenamiento inteligente
+      const datosOrdenados = (data || []).sort((a, b) => {
+        if (a.tipo === 'Neumático' && b.tipo === 'Neumático') {
+          // Extraemos todos los números del texto. Ej "195 / 65 R 15" -> [195, 65, 15]
+          const numsA = a.medida ? a.medida.match(/\d+/g) : [];
+          const numsB = b.medida ? b.medida.match(/\d+/g) : [];
+
+          if (numsA && numsB && numsA.length >= 3 && numsB.length >= 3) {
+            const anchoA = parseInt(numsA[0]), perfilA = parseInt(numsA[1]), rodadoA = parseInt(numsA[2]);
+            const anchoB = parseInt(numsB[0]), perfilB = parseInt(numsB[1]), rodadoB = parseInt(numsB[2]);
+
+            if (rodadoA !== rodadoB) return rodadoA - rodadoB; // 1ro: Rodado (13, 14, 15...)
+            if (anchoA !== anchoB) return anchoA - anchoB;     // 2do: Ancho (175, 185, 195...)
+            if (perfilA !== perfilB) return perfilA - perfilB; // 3ro: Perfil (50, 55, 60...)
+          }
+        }
+        // Si no son neumáticos (o no tienen la medida bien escrita), ordenamos por orden alfabético
+        return a.detalle.localeCompare(b.detalle);
+      });
+
+      setItems(datosOrdenados)
     } catch (error) {
       console.error("Error al cargar el catálogo:", error)
     } finally {
@@ -122,6 +144,20 @@ export function CatalogoView() {
       medida: item.medida || ""
     })
     setIsModalOpen(true)
+  }
+
+  const handleEliminarItem = async (id: string, nombre: string) => {
+    if (!confirm(`¿Estás seguro de que querés eliminar "${nombre}" del catálogo?`)) return;
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.from('catalogo').delete().eq('id', id);
+      if (error) throw error;
+      fetchCatalogo();
+    } catch (error) {
+      alert("No se pudo eliminar el ítem. Es posible que ya esté siendo usado en algún presupuesto histórico.");
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const handleGuardarItem = async () => {
@@ -298,15 +334,22 @@ export function CatalogoView() {
                           </Badge>
                         </TableCell>
                         <TableCell className="font-medium text-foreground">{item.detalle}</TableCell>
+                        
+                        {/* CELDA DE STOCK MODIFICADA */}
                         <TableCell className="text-center">
                           {(item.tipo === "Repuesto" || item.tipo === "Neumático") ? (
-                            <Badge variant={item.stock_actual <= 2 ? "destructive" : "secondary"} className="font-mono">
-                              {item.stock_actual}
-                            </Badge>
+                            item.controlar_stock !== false ? (
+                              <Badge variant={item.stock_actual <= 2 ? "destructive" : "secondary"} className="font-mono">
+                                {item.stock_actual}
+                              </Badge>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground uppercase font-bold bg-secondary/50 px-2 py-1 rounded">Genérico</span>
+                            )
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
+
                         <TableCell className="text-right bg-slate-50 dark:bg-slate-900/20 text-muted-foreground font-mono">
                           ${(item.costo_base || 0).toLocaleString()}
                         </TableCell>
@@ -316,10 +359,17 @@ export function CatalogoView() {
                         <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400 font-mono">
                           ${margen.toLocaleString()}
                         </TableCell>
+                        
+                        {/* CELDA DE ACCIONES MODIFICADA */}
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditar(item)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditar(item)}>
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => handleEliminarItem(item.id, item.detalle)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )

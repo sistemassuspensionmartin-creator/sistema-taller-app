@@ -919,16 +919,27 @@ export function PresupuestosView({
 
     setIsSaving(true);
     try {
-      // 1. Ruteo automático de Cajas (INTACTO)
+      // 1. Ruteo automático de Cajas 
       const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
       let cajaDestinoId = null;
+      
       if (metodoPago === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
-      if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.includes('Transferencia'))?.id;
-      if (metodoPago === 'Tarjeta') cajaDestinoId = cajas.find(c => c.nombre.includes('Tarjeta'))?.id;
-      if (metodoPago === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.includes('Cheque'))?.id;
+      if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('transferencia'))?.id;
+      if (metodoPago === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('cheque'))?.id;
+      
+      // --- MAGIA: RUTEO INTELIGENTE DE TARJETAS ---
+      if (metodoPago === 'Tarjeta') {
+        if (tipoTarjeta === 'Débito (Taller)') {
+          cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('debito taller') || c.nombre.toLowerCase().includes('débito taller'))?.id;
+        } else if (tipoTarjeta === 'Crédito (Neumater)') {
+          cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('neumater') || c.nombre.toLowerCase().includes('neumarter'))?.id;
+        } else if (tipoTarjeta === 'Crédito (Taller)') {
+          cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('credito taller') || c.nombre.toLowerCase().includes('crédito taller'))?.id;
+        }
+      }
 
       if (!cajaDestinoId && metodoPago !== 'Cuenta Corriente') {
-        throw new Error("Caja destino no encontrada. Verifique los nombres de las cajas.");
+        throw new Error("Caja destino no encontrada. Verifique que las cajas existan en la base de datos.");
       }
 
       if (cajaDestinoId) {
@@ -1717,8 +1728,10 @@ export function PresupuestosView({
                           <Select value={tipoTarjeta} onValueChange={setTipoTarjeta}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="Crédito">Crédito</SelectItem>
-                              <SelectItem value="Débito">Débito</SelectItem>
+                              {/* --- ACÁ ESTÁN LAS 3 OPCIONES NUEVAS --- */}
+                              <SelectItem value="Débito (Taller)">Débito (Va al Taller)</SelectItem>
+                              <SelectItem value="Crédito (Taller)">Crédito (Va al Taller)</SelectItem>
+                              <SelectItem value="Crédito (Neumater)">Crédito (Va a Neumater)</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -1740,7 +1753,6 @@ export function PresupuestosView({
                         </div>
                       </div>
                     )}
-
                     <div className="space-y-2 pt-2 border-t border-border">
                       <Label>Notas Adicionales (Opcional)</Label>
                       <Input placeholder="Ej: Seña del 50%..." value={notasCobro} onChange={(e) => setNotasCobro(e.target.value)} />
