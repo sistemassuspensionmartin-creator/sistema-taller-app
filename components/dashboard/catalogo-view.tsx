@@ -333,6 +333,29 @@ export function CatalogoView() {
     fetchPedidos();
   }
 
+  // --- FORZAR UN PEDIDO MANUALMENTE DESDE EL CATÁLOGO ---
+  const handlePedirManual = async (item: any) => {
+    // Le preguntamos cuántos quiere pedir
+    const cant = prompt(`¿Cuántas unidades de "${item.detalle}" querés agregar a la lista de pedidos?`, "4");
+    if (!cant) return;
+    
+    const cantidadNumerica = parseInt(cant);
+    if (isNaN(cantidadNumerica) || cantidadNumerica <= 0) return alert("Cantidad inválida.");
+
+    try {
+      await supabase.from('pedidos_proveedor').insert([{
+        catalogo_id: item.id,
+        detalle: item.detalle,
+        cantidad: cantidadNumerica,
+        estado: 'Pedir'
+      }]);
+      fetchPedidos();
+      setFiltroTab("pedidos"); // Lo mandamos a la pestaña de pedidos para que lo vea
+    } catch (error) {
+      alert("Error al generar el pedido.");
+    }
+  }
+
   // --- LA MAGIA: CONFIRMAR INGRESO Y SUBIR STOCK ---
   const handleConfirmarIngreso = async () => {
     if (!pedidoIngresando) return;
@@ -354,15 +377,30 @@ export function CatalogoView() {
       // 2. Evaluamos si trajo todo o trajo por la mitad
       if (cantRecibida < pedidoIngresando.cantidad) {
         const restante = pedidoIngresando.cantidad - cantRecibida;
-        await supabase.from('pedidos_proveedor').update({ cantidad: restante, estado: 'Pedir' }).eq('id', pedidoIngresando.id);
+        
+        // A. Actualizamos el pedido original para que queden los "restantes" en estado SOLICITADO
+        await supabase.from('pedidos_proveedor').update({ 
+          cantidad: restante, 
+          estado: 'Solicitado' // <--- CAMBIO: Se queda en Solicitado, no en Pedir
+        }).eq('id', pedidoIngresando.id);
+        
+        // B. Creamos un REGISTRO HISTÓRICO de las que SÍ llegaron hoy
+        await supabase.from('pedidos_proveedor').insert([{
+          catalogo_id: pedidoIngresando.catalogo_id,
+          detalle: pedidoIngresando.detalle + " (Ingreso Parcial)",
+          cantidad: cantRecibida,
+          estado: 'Ingresaron'
+        }]);
+
       } else {
+        // Trajo todo junto, solo le cambiamos el estado para que quede en el historial
         await supabase.from('pedidos_proveedor').update({ estado: 'Ingresaron' }).eq('id', pedidoIngresando.id);
       }
 
       setPedidoIngresando(null);
       setCantidadIngresada("");
       fetchPedidos();
-      fetchCatalogo(); // Recarga la tabla de stock para ver el número nuevo
+      fetchCatalogo(); 
     } catch (error) {
       alert("Error al ingresar el stock.");
     }
@@ -591,6 +629,13 @@ return (
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
+                              {/* NUEVO: BOTÓN DE FORZAR PEDIDO (Solo para repuestos y neumáticos) */}
+                              {(item.tipo === "Repuesto" || item.tipo === "Neumático") && (
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20" title="Pedir a Proveedor" onClick={() => handlePedirManual(item)}>
+                                  <Clock className="h-4 w-4" />
+                                </Button>
+                              )}
+                              
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditar(item)}>
                                 <Edit className="h-4 w-4" />
                               </Button>
