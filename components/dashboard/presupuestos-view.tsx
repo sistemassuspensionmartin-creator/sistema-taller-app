@@ -603,12 +603,27 @@ export function PresupuestosView({
         for (const fila of filas) {
           if (fila.catalogo_id && !itemsOriginales.some(o => o.id === fila.id)) {
              // CAMBIO: Verificamos si controla stock
-             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock').eq('id', fila.catalogo_id).single();
-             if (item && item.controlar_stock !== false) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) - (parseFloat(fila.cant) || 0) }).eq('id', fila.catalogo_id);
+             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock, tipo, detalle').eq('id', fila.catalogo_id).single();
+             
+             if (item && item.controlar_stock !== false) {
+                 const cantDescontada = parseFloat(fila.cant) || 0;
+                 
+                 // 1. Descontamos del stock
+                 await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) - cantDescontada }).eq('id', fila.catalogo_id);
+                 
+                 // 2. --- NUEVO: AUTODISPARADOR AL EDITAR ---
+                 if (item.tipo === 'Neumático' || item.tipo === 'Repuesto') {
+                     await supabase.from('pedidos_proveedor').insert([{
+                         catalogo_id: fila.catalogo_id,
+                         detalle: item.detalle,
+                         cantidad: cantDescontada,
+                         estado: 'Pedir'
+                     }]);
+                 }
+             }
           }
         }
       }
-      // ------------------------------------------------
 
       alert(editandoId ? "¡Presupuesto actualizado con éxito!" : "¡Presupuesto guardado con éxito!")
       
@@ -762,8 +777,18 @@ export function PresupuestosView({
       for (const act of actualizacionesStock) {
         const { error: errStock } = await supabase.from('catalogo').update({ stock_actual: act.nuevoStock }).eq('id', act.id);
         if (errStock) await supabase.from('catalogo').update({ stock_actual: 0 }).eq('id', act.id); // Plan B
-      }
 
+        // --- NUEVO: AUTODISPARADOR DE PEDIDOS AL INGRESAR ---
+        if (act.tipo === 'Neumático' || act.tipo === 'Repuesto') {
+          await supabase.from('pedidos_proveedor').insert([{
+            catalogo_id: act.id,
+            detalle: act.detalle,
+            cantidad: act.cantDescontada,
+            estado: 'Pedir'
+          }]);
+        }
+      }
+      
       await supabase.from('presupuestos').update({
         estado: estadoFinal, ingresado_al_taller: true, modificado_por_rol: userRole || 'admin'
       }).eq('id', editandoId);
@@ -839,7 +864,11 @@ export function PresupuestosView({
                 }
                 actualizacionesStock.push({
                   id: fila.catalogo_id,
-                  nuevoStock: (item.stock_actual || 0) - cantPedida
+                  nuevoStock: (item.stock_actual || 0) - cantPedida,
+                  // --- NUEVO PARA EL AUTODISPARADOR ---
+                  tipo: fila.tipo,
+                  detalle: item.detalle,
+                  cantDescontada: cantPedida
                 });
               }
             }
