@@ -63,7 +63,7 @@ export function WorkOrdersTable({
     setIsLoading(true)
     try {
       const [resOrdenes, resConfig] = await Promise.all([
-        supabase.from('ordenes_trabajo').select('*, presupuestos(numero_correlativo, total_final)').order('created_at', { ascending: false }),
+        supabase.from('ordenes_trabajo').select('*, presupuestos(numero_correlativo, total_final), vehiculos(marca, modelo)').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
       
@@ -100,7 +100,7 @@ export function WorkOrdersTable({
           else if (payload.eventType === 'INSERT') {
             const { data: nuevaOrdenConDatos } = await supabase
               .from('ordenes_trabajo')
-              .select('*, presupuestos(numero_correlativo, total_final)')
+              .select('*, presupuestos(numero_correlativo, total_final), vehiculos(marca, modelo)')
               .eq('id', payload.new.id)
               .single();
 
@@ -354,7 +354,17 @@ export function WorkOrdersTable({
                       }}
                     >
                       <CardContent className="p-3 relative">
-                        <div className="font-bold text-foreground mb-1">{orden.vehiculo_patente}</div>
+                        <div className="flex justify-between items-start mb-1">
+                          <div className="font-bold text-foreground text-lg">{orden.vehiculo_patente}</div>
+                          
+                          {/* --- NUEVO: MARCA Y MODELO --- */}
+                          {orden.vehiculos && (
+                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-muted-foreground bg-secondary/30">
+                              {orden.vehiculos.marca} {orden.vehiculos.modelo}
+                            </Badge>
+                          )}
+                        </div>
+                        
                         <div className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
                           <User className="w-3 h-3"/> {orden.cliente_nombre}
                         </div>

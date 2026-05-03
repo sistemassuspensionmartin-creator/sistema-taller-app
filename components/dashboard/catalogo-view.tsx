@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, Edit, Loader2, Save, Package, Wrench, DollarSign, Percent, Tag, CircleDashed, Trash2, MessageCircle, CheckCircle, Clock } from "lucide-react"
+import { Plus, Search, Edit, Loader2, Save, Package, Wrench, DollarSign, Percent, Tag, CircleDashed, Trash2, MessageCircle, CheckCircle, Clock, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -177,13 +178,23 @@ export function CatalogoView() {
     setIsModalOpen(true)
   }
 
-  const handleEliminarItem = async (id: string, nombre: string) => {
-    if (!confirm(`¿Estás seguro de que querés eliminar "${nombre}" del catálogo?`)) return;
+  // --- ESTADOS PARA ELIMINAR ---
+  const [itemAEliminar, setItemAEliminar] = useState<any>(null);
+
+  // --- FUNCIÓN QUE ABRE EL CARTEL ---
+  const handleEliminarItem = (id: string, nombre: string) => {
+    setItemAEliminar({ id, nombre });
+  }
+
+  // --- FUNCIÓN QUE EJECUTA LA ELIMINACIÓN ---
+  const confirmarEliminarItem = async () => {
+    if (!itemAEliminar) return;
     setIsLoading(true);
     try {
-      const { error } = await supabase.from('catalogo').delete().eq('id', id);
+      const { error } = await supabase.from('catalogo').delete().eq('id', itemAEliminar.id);
       if (error) throw error;
       fetchCatalogo();
+      setItemAEliminar(null); // Cierra el cartel
     } catch (error) {
       alert("No se pudo eliminar el ítem. Es posible que ya esté siendo usado en algún presupuesto histórico.");
     } finally {
@@ -864,6 +875,30 @@ return (
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="ghost" onClick={() => setPedidoAEliminar(null)}>Cancelar</Button>
               <Button variant="destructive" onClick={confirmarEliminarPedido}>Sí, eliminar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* --- MODAL PARA CONFIRMAR ELIMINAR ÍTEM DEL CATÁLOGO --- */}
+      <Dialog open={!!itemAEliminar} onOpenChange={(open) => !open && setItemAEliminar(null)}>
+        <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl outline-none">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+              ¿Eliminar Ítem?
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
+              ¿Estás seguro de que querés eliminar <b>"{itemAEliminar?.nombre}"</b> del catálogo permanentemente?
+            </DialogDescription>
+            <div className="flex gap-3 w-full mt-4">
+              <Button onClick={() => setItemAEliminar(null)} variant="outline" className="flex-1 h-12 rounded-xl text-base font-bold">
+                Cancelar
+              </Button>
+              <Button onClick={confirmarEliminarItem} disabled={isLoading} className="flex-1 h-12 rounded-xl text-base font-bold bg-red-600 hover:bg-red-700 text-white shadow-md">
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : "Eliminar"}
+              </Button>
             </div>
           </div>
         </DialogContent>
