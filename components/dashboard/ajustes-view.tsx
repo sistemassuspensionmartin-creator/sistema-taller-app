@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { 
   Save, UploadCloud, Store, FileText, MessageSquare, Image as ImageIcon, 
   Loader2, CheckCircle2, Users, Download, Database,
-  UserPlus, ShieldCheck, Banknote, Wrench, MoreVertical, UserCog, Trash2, Mail, Type, AlignLeft
+  UserPlus, ShieldCheck, Banknote, Wrench, MoreVertical, UserCog, Trash2, Mail, Type, AlignLeft, Package
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -365,6 +365,8 @@ export function AjustesView() {
                 <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{patente}}"}</span>
                 <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{total}}"}</span>
                 <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{taller}}"}</span>
+                <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{cantidad}}"}</span>
+                <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{repuesto}}"}</span>
               </div>
             </div>
 
@@ -407,6 +409,19 @@ export function AjustesView() {
                     <Textarea className="pl-10 min-h-[150px]" value={config.msj_postventa_email_cuerpo || ""} onChange={e => setConfig({...config, msj_postventa_email_cuerpo: e.target.value})} placeholder="Hola {{cliente}}, queríamos agradecerte por confiar en nosotros..." />
                   </div>
                 </div>
+              </div>
+
+              <div className="border-t border-border pt-4"></div>
+              
+              <div className="space-y-2">
+                <Label className="font-bold flex items-center gap-2 text-emerald-600"><Package className="w-4 h-4"/> Solicitud a Proveedor (WhatsApp)</Label>
+                <p className="text-sm text-muted-foreground mb-2">Este mensaje se enviará al proveedor desde la lista de Pedidos.</p>
+                <Textarea 
+                  className="min-h-[100px]" 
+                  value={config.msj_pedido_proveedor || ""} 
+                  onChange={e => setConfig({...config, msj_pedido_proveedor: e.target.value})} 
+                  placeholder="Hola, te escribo de {{taller}}. Necesito pedirte {{cantidad}} unidades de {{repuesto}}. ¿Tenés en stock?" 
+                />
               </div>
 
             </div>

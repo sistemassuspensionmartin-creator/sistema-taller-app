@@ -294,11 +294,20 @@ export function CatalogoView() {
     if (data) setProveedores(data);
   }
 
-  // Agregamos que cargue los proveedores al abrir la pantalla
+  // --- NUEVO: ESTADO PARA LA CONFIGURACIÓN ---
+  const [configuracion, setConfiguracion] = useState<any>({});
+
+  const fetchConfig = async () => {
+    const { data } = await supabase.from('configuracion').select('*').eq('id', 1).single();
+    if (data) setConfiguracion(data);
+  }
+
+  // Agregamos que cargue TODO al abrir la pantalla
   useEffect(() => { 
     fetchCatalogo(); 
     fetchPedidos(); 
     fetchProveedores();
+    fetchConfig(); // <--- Acá sumamos que descargue la config
   }, [])
 
   // --- FUNCIONES DE PROVEEDORES ---
@@ -359,7 +368,15 @@ export function CatalogoView() {
 
   const enviarWhatsAppAProveedor = async (numero: string) => {
     if (!pedidoParaMandar) return;
-    const texto = `Hola! Te consulto por disponibilidad y precio de lo siguiente:\n\n👉 *${pedidoParaMandar.cantidad}x ${pedidoParaMandar.detalle}*\n\n¡Gracias!`;
+    
+    // --- MAGIA: LECTURA DEL MENSAJE DINÁMICO ---
+    let texto = configuracion.msj_pedido_proveedor || "Hola, te escribo de {{taller}}. Necesito pedirte {{cantidad}} unidades de {{repuesto}}. ¿Tenés en stock?";
+    
+    texto = texto
+      .replace(/{{cantidad}}/g, pedidoParaMandar.cantidad.toString())
+      .replace(/{{repuesto}}/g, pedidoParaMandar.detalle)
+      .replace(/{{taller}}/g, configuracion.nombre_taller || "nuestro taller");
+
     window.open(`https://wa.me/${numero}?text=${encodeURIComponent(texto)}`, '_blank');
     
     // Lo marcamos como solicitado
