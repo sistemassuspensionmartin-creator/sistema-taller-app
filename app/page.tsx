@@ -64,28 +64,27 @@ export default function DashboardPage() {
     if (!isAuthenticated || isLocked) return;
 
     let inactivityTimer: NodeJS.Timeout;
-    const INACTIVITY_TIME = 5000; 
+    const INACTIVITY_TIME = 5000;
 
     const resetTimer = () => {
       clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
-        setIsLocked(true); // ¡Pum! Bloquea la pantalla
+        setIsLocked(true);
+        localStorage.setItem('taller_locked', 'true'); // Guardamos la marca de bloqueo
       }, INACTIVITY_TIME);
     };
 
-    // Escuchamos movimientos de mouse o teclas
     const events = ['mousemove', 'keydown', 'mousedown', 'touchstart'];
     events.forEach(event => window.addEventListener(event, resetTimer));
+    resetTimer();
 
-    resetTimer(); // Arranca a contar apenas entrás
-
-    // Reloj vigía de las 19:00hs
     const timeChecker = setInterval(async () => {
       const now = new Date();
       if (now.getHours() === 19 && now.getMinutes() === 0) {
-        await supabase.auth.signOut(); // Cierra sesión de raíz
+        localStorage.removeItem('taller_locked');
+        await supabase.auth.signOut();
       }
-    }, 60000); // Revisa la hora cada 1 minuto
+    }, 60000);
 
     return () => {
       events.forEach(event => window.removeEventListener(event, resetTimer));
@@ -101,12 +100,31 @@ export default function DashboardPage() {
         setIsLocked(false);
         setPinInput("");
         setPinError(false);
+        localStorage.removeItem('taller_locked'); // Si puso el PIN bien, borramos la marca
       } else {
         setPinError(true);
-        setTimeout(() => setPinInput(""), 500); // Borra rápido si le erró
+        setTimeout(() => setPinInput(""), 500);
       }
     }
   }, [pinInput, masterPin]);
+
+  // 4. NUEVO: Soporte para Teclado Físico
+  useEffect(() => {
+    if (!isLocked) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) {
+        setPinInput(p => p.length < 4 ? p + e.key : p);
+      } else if (e.key === 'Backspace') {
+        setPinInput(p => p.slice(0, -1));
+      } else if (e.key.toLowerCase() === 'c' || e.key === 'Escape') {
+        setPinInput("");
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLocked]);
 
   useEffect(() => {
     window.alert = (msg) => {
@@ -121,11 +139,21 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const inicializarSesion = async () => {
+      // --- MAGIA SEGURIDAD: SI RECARGÓ ESTANDO BLOQUEADO, LO ECHAMOS ---
+      if (localStorage.getItem('taller_locked') === 'true') {
+        localStorage.removeItem('taller_locked');
+        await supabase.auth.signOut();
+        setIsAuthenticated(false);
+        setUserRole(null);
+        setUserName(null);
+        return; // Cortamos acá, no lo dejamos entrar
+      }
+      // -----------------------------------------------------------------
+
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setIsAuthenticated(true)
         
-        // --- CORRECCIÓN MAGICA: UNA SOLA COMILLA ---
         const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', session.user.id).single()
         
         if (perfil) {
