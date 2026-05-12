@@ -64,7 +64,7 @@ export default function DashboardPage() {
     if (!isAuthenticated || isLocked) return;
 
     let inactivityTimer: NodeJS.Timeout;
-    const INACTIVITY_TIME = 5000;
+    const INACTIVITY_TIME = 5 * 60 * 100;
 
     const resetTimer = () => {
       clearTimeout(inactivityTimer);
@@ -363,7 +363,7 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md text-white animate-in fade-in">
           <Lock className="w-16 h-16 text-emerald-500 mb-6" />
           <h2 className="text-3xl font-bold mb-2 tracking-wide">Pantalla Bloqueada</h2>
-          <p className="text-slate-400 mb-8">Por seguridad, el sistema se bloqueó tras 15 min de inactividad.</p>
+          <p className="text-slate-400 mb-8">Por seguridad, el sistema se bloqueó tras 5 min de inactividad.</p>
 
           {/* Los 4 puntitos del PIN */}
           <div className="flex gap-4 mb-8">
