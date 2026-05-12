@@ -46,7 +46,7 @@ export function AdminDashboardView() {
         let egrActual = 0, egrPrev = 0;
         const agrupado: any = {};
 
-        movs.forEach(m => {
+        movs.forEach((m: any) => {
           const monto = Number(m.monto);
           const fechaM = new Date(m.fecha);
           const esMesActual = fechaM >= hace30;
@@ -147,12 +147,16 @@ export function AdminDashboardView() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  {/* @ts-ignore */}
                   <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                  {/* @ts-ignore */}
                   <YAxis hide />
+                  {/* @ts-ignore */}
                   <Tooltip 
                     contentStyle={{borderRadius: '8px', border: '1px solid #f1f5f9', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'}}
                     formatter={(v: any) => [formatCifra(v), "Ingreso"]}
                   />
+                  {/* @ts-ignore */}
                   <Area type="monotone" dataKey="valor" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
                 </AreaChart>
               </ResponsiveContainer>
