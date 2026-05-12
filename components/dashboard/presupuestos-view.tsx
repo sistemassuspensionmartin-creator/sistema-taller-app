@@ -807,6 +807,8 @@ export function PresupuestosView({
       demora_estimada: esHistorico ? datosHistoricos.demora_estimada : demoraEstimada,
       es_garantia: garantiaForzada || esGarantiaImpresion,
       motivo_garantia: motivoForzado || motivoGarantiaImpresion,
+      descuento: esHistorico ? (datosHistoricos.descuento || 0) : (parseFloat(descuento.toString()) || 0),
+      subtotal: esHistorico ? (datosHistoricos.total_final + Number(datosHistoricos.descuento || 0)) : subtotalNeto,
     };
 
     setPrintType(tipo);
