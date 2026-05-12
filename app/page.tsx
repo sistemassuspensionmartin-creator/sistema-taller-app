@@ -2,7 +2,7 @@
 "use client"
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { AlertCircle, CheckCircle2, Info, Loader2, User, Car, Settings} from "lucide-react"
+import { AlertCircle, CheckCircle2, Info, Loader2, User, Car, Settings, Lock} from "lucide-react"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -42,6 +42,71 @@ export default function DashboardPage() {
   
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
+  // --- MAGIA: ESTADOS DE LA BÓVEDA DE SEGURIDAD ---
+  const [isLocked, setIsLocked] = useState(false)
+  const [pinInput, setPinInput] = useState("")
+  const [masterPin, setMasterPin] = useState("1234")
+  const [pinError, setPinError] = useState(false)
+
+  // 1. Cargamos el PIN desde la configuración al iniciar
+  useEffect(() => {
+    const fetchConfig = async () => {
+      const { data } = await supabase.from('configuracion').select('pin_seguridad').eq('id', 1).single();
+      if (data?.pin_seguridad) {
+        setMasterPin(data.pin_seguridad);
+      }
+    }
+    if (isAuthenticated) fetchConfig();
+  }, [isAuthenticated]);
+
+  // 2. El Centinela de Inactividad y Auto-cierre
+  useEffect(() => {
+    if (!isAuthenticated || isLocked) return;
+
+    let inactivityTimer: NodeJS.Timeout;
+    const INACTIVITY_TIME = 5000; 
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        setIsLocked(true); // ¡Pum! Bloquea la pantalla
+      }, INACTIVITY_TIME);
+    };
+
+    // Escuchamos movimientos de mouse o teclas
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+
+    resetTimer(); // Arranca a contar apenas entrás
+
+    // Reloj vigía de las 19:00hs
+    const timeChecker = setInterval(async () => {
+      const now = new Date();
+      if (now.getHours() === 19 && now.getMinutes() === 0) {
+        await supabase.auth.signOut(); // Cierra sesión de raíz
+      }
+    }, 60000); // Revisa la hora cada 1 minuto
+
+    return () => {
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+      clearTimeout(inactivityTimer);
+      clearInterval(timeChecker);
+    };
+  }, [isAuthenticated, isLocked]);
+
+  // 3. Validación automática del PIN
+  useEffect(() => {
+    if (pinInput.length === 4) {
+      if (pinInput === masterPin) {
+        setIsLocked(false);
+        setPinInput("");
+        setPinError(false);
+      } else {
+        setPinError(true);
+        setTimeout(() => setPinInput(""), 500); // Borra rápido si le erró
+      }
+    }
+  }, [pinInput, masterPin]);
 
   useEffect(() => {
     window.alert = (msg) => {
@@ -265,6 +330,45 @@ export default function DashboardPage() {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+      {/* --- PANTALLA NEGRA DE BLOQUEO --- */}
+      {isLocked && (
+        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md text-white animate-in fade-in">
+          <Lock className="w-16 h-16 text-emerald-500 mb-6" />
+          <h2 className="text-3xl font-bold mb-2 tracking-wide">Pantalla Bloqueada</h2>
+          <p className="text-slate-400 mb-8">Por seguridad, el sistema se bloqueó tras 15 min de inactividad.</p>
+
+          {/* Los 4 puntitos del PIN */}
+          <div className="flex gap-4 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className={`w-5 h-5 rounded-full border-2 transition-all ${pinInput.length > i ? 'bg-emerald-500 border-emerald-500 scale-110' : 'border-slate-600'}`} />
+            ))}
+          </div>
+
+          {pinError && <p className="text-red-500 font-bold mb-4 animate-bounce">PIN Incorrecto</p>}
+
+          {/* Teclado numérico táctil */}
+          <div className="grid grid-cols-3 gap-3 w-full max-w-[280px]">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+              <button key={num} onClick={() => setPinInput(p => (p.length < 4 ? p + num : p))} className="h-16 text-2xl font-bold bg-slate-800 rounded-xl hover:bg-slate-700 active:bg-slate-600 transition-colors">
+                {num}
+              </button>
+            ))}
+            <button onClick={() => setPinInput("")} className="h-16 text-xl font-bold bg-slate-800/50 rounded-xl hover:bg-red-500/20 text-red-400 active:bg-red-500/30 transition-colors">
+              C
+            </button>
+            <button onClick={() => setPinInput(p => (p.length < 4 ? p + "0" : p))} className="h-16 text-2xl font-bold bg-slate-800 rounded-xl hover:bg-slate-700 active:bg-slate-600 transition-colors">
+              0
+            </button>
+            <button onClick={() => setPinInput(p => p.slice(0, -1))} className="h-16 text-xl font-bold bg-slate-800/50 rounded-xl hover:bg-amber-500/20 text-amber-400 active:bg-amber-500/30 transition-colors">
+              ⌫
+            </button>
+          </div>
+          
+          <button onClick={async () => { await supabase.auth.signOut(); setIsLocked(false); }} className="mt-12 text-sm text-slate-500 hover:text-white transition-colors underline underline-offset-4">
+            No soy {userName}, Cerrar Sesión
+          </button>
+        </div>
+      )}
       <div className="flex h-screen bg-background">
         <DashboardSidebar 
           activeSection={activeSection} 
