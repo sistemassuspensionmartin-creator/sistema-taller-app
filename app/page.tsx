@@ -64,7 +64,7 @@ export default function DashboardPage() {
     if (!isAuthenticated || isLocked) return;
 
     let inactivityTimer: NodeJS.Timeout;
-    const INACTIVITY_TIME = 5 * 60 * 100;
+    const INACTIVITY_TIME = 5 * 60 * 1000;
 
     const resetTimer = () => {
       clearTimeout(inactivityTimer);
