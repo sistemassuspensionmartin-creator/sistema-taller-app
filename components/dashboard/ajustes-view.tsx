@@ -84,13 +84,13 @@ export function AjustesView() {
   // --- LÓGICA DE USUARIOS ---
   const abrirModalCreacion = () => {
     setUsuarioEditando(null)
-    setNuevoUsuario({ nombre: "", apellido: "", email: "", password: "", rol: "mecanico" })
+    setNuevoUsuario({ nombre: "", apellido: "", email: "", password: "", rol: "mecanico", pin_bloqueo: "" })
     setIsUserModalOpen(true)
   }
 
   const abrirModalEdicion = (u: any) => {
     setUsuarioEditando(u.id)
-    setNuevoUsuario({ nombre: u.nombre, apellido: u.apellido || "", email: u.email, password: "", rol: u.rol })
+    setNuevoUsuario({ nombre: u.nombre, apellido: u.apellido || "", email: u.email, password: "", rol: u.rol, pin_bloqueo: u.pin_bloqueo || "" })
     setIsUserModalOpen(true)
   }
 
@@ -105,7 +105,8 @@ export function AjustesView() {
             nombre: nuevoUsuario.nombre,
             apellido: nuevoUsuario.apellido,
             email: nuevoUsuario.email,
-            rol: nuevoUsuario.rol
+            rol: nuevoUsuario.rol,
+            pin_bloqueo: nuevoUsuario.pin_bloqueo || null
           })
           .eq('id', usuarioEditando)
         if (error) throw error
@@ -115,7 +116,9 @@ export function AjustesView() {
         if (!nuevoUsuario.password || nuevoUsuario.password.length < 6) {
           return alert("La contraseña debe tener al menos 6 caracteres.");
         }
-
+        if (nuevoUsuario.pin_bloqueo && nuevoUsuario.pin_bloqueo.length !== 4) {
+          return alert("El PIN debe ser exactamente de 4 números.");
+        }
         const res = await fetch('/api/usuarios', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -553,6 +556,20 @@ export function AjustesView() {
                 />
               </div>
             )}
+            <div className="space-y-2">
+              <Label>PIN de Seguridad (4 dígitos)</Label>
+              <Input 
+                type="text" 
+                maxLength={4}
+                placeholder="Ej: 1234 (Opcional)" 
+                value={nuevoUsuario.pin_bloqueo || ""} 
+                onChange={e => {
+                  // Solo permitimos números
+                  const val = e.target.value.replace(/[^0-9]/g, '');
+                  setNuevoUsuario({...nuevoUsuario, pin_bloqueo: val})
+                }} 
+              />
+            </div>
             <div className="space-y-2">
               <Label>Rol / Permisos</Label>
               <Select value={nuevoUsuario.rol} onValueChange={(v: string) => setNuevoUsuario({...nuevoUsuario, rol: v})}>
