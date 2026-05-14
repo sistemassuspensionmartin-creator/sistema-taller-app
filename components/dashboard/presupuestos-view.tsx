@@ -230,6 +230,20 @@ export function PresupuestosView({
       setEditandoId(null)
       setIsEditing(false)
     }
+
+    // --- MAGIA: SUSCRIPCIÓN EN TIEMPO REAL ---
+    const canalPresupuestos = supabase.channel('sincronizacion-presupuestos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuestos' }, () => {
+         cargarDatos() // Recarga los datos de fondo sin molestar al usuario
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuesto_items' }, () => {
+         cargarDatos()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(canalPresupuestos)
+    }
   }, [vista])
 
   useEffect(() => {
@@ -1004,6 +1018,18 @@ export function PresupuestosView({
     
     // --- CAMBIO 1: Validamos contra lo que RESTA cobrar, no contra el total histórico ---
     if (montoNum > infoPago.restante) return alert("El monto no puede superar lo que resta cobrar.");
+
+    // --- MAGIA: CANDADO ANTI-DESINCRONIZACIÓN ---
+    // Frenamos el proceso 1 segundo para revisar la base de datos real
+    if (editandoId) {
+      const { data: presDB } = await supabase.from('presupuestos').select('total_final, modificado_por_nombre').eq('id', editandoId).single();
+      
+      // Si la diferencia entre lo que la cajera ve y lo que hay en la base es mayor a 1 peso (alguien lo modificó de fondo):
+      if (presDB && Math.abs(Number(presDB.total_final) - totalFinal) > 1) {
+        return alert(`⚠️ ERROR DE COBRO FRENADO:\n\n${presDB.modificado_por_nombre || 'Alguien'} acaba de modificar este presupuesto desde otra computadora mientras lo tenías abierto.\n\nEl total real ahora es $${presDB.total_final}.\nPor favor, cerrá esta ventana y volvé a abrir el presupuesto para actualizar los valores antes de cobrar.`);
+      }
+    }
+    // ---------------------------------------------
 
     setIsSaving(true);
     try {
