@@ -117,20 +117,36 @@ export function MetricsCards({
 
   // --- MAGIA: FUNCIÓN PARA CALCULAR ESTADO DEMORADO ---
   const determinarEstadoTurno = (turno: any) => {
-    if (turno.estado === 'Ingresado') return { texto: 'Ya en Taller', clases: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400' };
-    if (turno.estado === 'Cancelado') return { texto: 'Cancelado', clases: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 opacity-70 line-through' };
+    // Normalizamos el texto para evitar problemas con mayúsculas/espacios
+    const estadoActual = (turno.estado || '').toLowerCase().trim();
+
+    // Si en la base de datos dice 'asistio' (o sus variantes viejas)
+    if (estadoActual === 'asistio' || estadoActual === 'ingresado' || estadoActual === 'ingreso') {
+      return { texto: 'Asistio', clases: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400' };
+    }
     
+    // Si en la base de datos dice 'cancelado'
+    if (estadoActual === 'cancelado') {
+      return { texto: 'Cancelado', clases: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 opacity-70 line-through' };
+    }
+    
+    // Si está 'pendiente' (o cualquier otro valor), miramos el reloj
     if (turno.hora) {
       const ahora = new Date();
       const [horas, minutos] = turno.hora.split(':').map(Number);
+      
       const horaTurno = new Date();
       horaTurno.setHours(horas, minutos, 0, 0);
-      const horaTolerancia = new Date(horaTurno.getTime() + 15 * 60000); // 15 min de tolerancia
+
+      // Le damos un margen de cortesía de 15 minutos antes de marcarlo como demorado
+      const horaTolerancia = new Date(horaTurno.getTime() + 15 * 60000);
 
       if (ahora > horaTolerancia) {
         return { texto: 'Demorado', clases: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800 animate-pulse' };
       }
     }
+
+    // Si todavía no es la hora o está en tolerancia
     return { texto: 'Esperando Arribo', clases: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300' };
   }
 
