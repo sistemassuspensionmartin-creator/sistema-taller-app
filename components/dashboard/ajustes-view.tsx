@@ -96,6 +96,19 @@ export function AjustesView() {
 
   const handleGuardarUsuario = async () => {
     if (!nuevoUsuario.nombre || !nuevoUsuario.email) return alert("Nombre y Email son obligatorios")
+    
+    // --- MAGIA: REGLA DE PIN OBLIGATORIO ---
+    if (nuevoUsuario.rol !== 'mecanico') {
+      if (!nuevoUsuario.pin_bloqueo || nuevoUsuario.pin_bloqueo.length !== 4) {
+        return alert("⚠️ El PIN de 4 dígitos es OBLIGATORIO para Administradores y Cajeros.");
+      }
+    } else {
+      // Si es mecánico es opcional, pero si lo completa, debe estar bien
+      if (nuevoUsuario.pin_bloqueo && nuevoUsuario.pin_bloqueo.length !== 4) {
+        return alert("⚠️ Si le ponés PIN al mecánico, debe tener exactamente 4 números.");
+      }
+    }
+    
     setIsSaving(true)
     try {
       if (usuarioEditando) {
@@ -561,7 +574,7 @@ export function AjustesView() {
               <Input 
                 type="text" 
                 maxLength={4}
-                placeholder="Ej: 1234 (Opcional)" 
+                placeholder={nuevoUsuario.rol === 'mecanico' ? "Ej: 1234 (Opcional)" : "Ej: 1234 (Obligatorio)"} 
                 value={nuevoUsuario.pin_bloqueo || ""} 
                 onChange={e => {
                   // Solo permitimos números

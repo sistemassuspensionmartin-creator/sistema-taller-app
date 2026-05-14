@@ -45,19 +45,9 @@ export default function DashboardPage() {
   // --- MAGIA: ESTADOS DE LA BÓVEDA DE SEGURIDAD ---
   const [isLocked, setIsLocked] = useState(false)
   const [pinInput, setPinInput] = useState("")
-  const [masterPin, setMasterPin] = useState("1234")
+  const [masterPin, setMasterPin] = useState("")
   const [pinError, setPinError] = useState(false)
-
-  // 1. Cargamos el PIN desde la configuración al iniciar
-  useEffect(() => {
-    const fetchConfig = async () => {
-      const { data } = await supabase.from('configuracion').select('pin_seguridad').eq('id', 1).single();
-      if (data?.pin_seguridad) {
-        setMasterPin(data.pin_seguridad);
-      }
-    }
-    if (isAuthenticated) fetchConfig();
-  }, [isAuthenticated]);
+  const [failedAttempts, setFailedAttempts] = useState(0) // <-- NUEVO: Contador de errores
 
   // 2. El Centinela de Inactividad y Auto-cierre
   useEffect(() => {
@@ -68,16 +58,20 @@ export default function DashboardPage() {
 
     const resetTimer = () => {
       clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        setIsLocked(true);
-        localStorage.setItem('taller_locked', 'true'); // Guardamos la marca de bloqueo
-      }, INACTIVITY_TIME);
+      // MAGIA: El mecánico NO se bloquea por inactividad. Los demás sí.
+      if (userRole !== 'mecanico') {
+        inactivityTimer = setTimeout(() => {
+          setIsLocked(true);
+          localStorage.setItem('taller_locked', 'true');
+        }, INACTIVITY_TIME);
+      }
     };
 
     const events = ['mousemove', 'keydown', 'mousedown', 'touchstart'];
     events.forEach(event => window.addEventListener(event, resetTimer));
     resetTimer();
 
+    // El cierre a las 19:00hs aplica para TODOS sin excepción
     const timeChecker = setInterval(async () => {
       const now = new Date();
       if (now.getHours() === 19 && now.getMinutes() === 0) {
@@ -91,22 +85,37 @@ export default function DashboardPage() {
       clearTimeout(inactivityTimer);
       clearInterval(timeChecker);
     };
-  }, [isAuthenticated, isLocked]);
+  }, [isAuthenticated, isLocked, userRole]);
 
-  // 3. Validación automática del PIN
+  // 3. Validación automática del PIN y Castigo por intentos fallidos
   useEffect(() => {
     if (pinInput.length === 4) {
       if (pinInput === masterPin) {
         setIsLocked(false);
         setPinInput("");
         setPinError(false);
-        localStorage.removeItem('taller_locked'); // Si puso el PIN bien, borramos la marca
+        setFailedAttempts(0); // Si acierta, le perdonamos el historial
+        localStorage.removeItem('taller_locked');
       } else {
-        setPinError(true);
-        setTimeout(() => setPinInput(""), 500);
+        const nuevosFallos = failedAttempts + 1;
+        setFailedAttempts(nuevosFallos);
+        
+        if (nuevosFallos >= 5) {
+          // CASTIGO: Lo echamos del sistema
+          alert("⛔ ALARMA DE SEGURIDAD: Demasiados intentos fallidos. La sesión se ha cerrado automáticamente.");
+          localStorage.removeItem('taller_locked');
+          supabase.auth.signOut();
+          setIsLocked(false);
+          setPinInput("");
+          setFailedAttempts(0);
+        } else {
+          // Solo le avisamos que le erró y limpiamos los puntitos
+          setPinError(true);
+          setTimeout(() => setPinInput(""), 500);
+        }
       }
     }
-  }, [pinInput, masterPin]);
+  }, [pinInput, masterPin, failedAttempts]);
 
   // 4. NUEVO: Soporte para Teclado Físico
   useEffect(() => {
@@ -154,11 +163,12 @@ export default function DashboardPage() {
       if (session) {
         setIsAuthenticated(true)
         
-        const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', session.user.id).single()
+        const { data: perfil } = await supabase.from('perfiles').select('rol, nombre, pin_bloqueo').eq('id', session.user.id).single()
         
         if (perfil) {
           setUserRole(perfil.rol)
-          setUserName(perfil.nombre) 
+          setUserName(perfil.nombre)
+          setMasterPin(perfil.pin_bloqueo || "") 
         }
       } else {
         setIsAuthenticated(false)
@@ -344,12 +354,12 @@ export default function DashboardPage() {
         
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          
-          // --- CORRECCIÓN MAGICA: UNA SOLA COMILLA ---
-          const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', session.user.id).single();
+          // Buscamos el perfil con el PIN incluido
+          const { data: perfil } = await supabase.from('perfiles').select('rol, nombre, pin_bloqueo').eq('id', session.user.id).single();
           
           setUserRole(perfil?.rol || null);
           setUserName(perfil?.nombre || null);
+          setMasterPin(perfil?.pin_bloqueo || ""); // <-- CARGAMOS EL PIN ACÁ
           setIsAuthenticated(true);
         }
       }} />
@@ -372,7 +382,7 @@ export default function DashboardPage() {
             ))}
           </div>
 
-          {pinError && <p className="text-red-500 font-bold mb-4 animate-bounce">PIN Incorrecto</p>}
+          {pinError && <p className="text-red-500 font-bold mb-4 animate-bounce">PIN Incorrecto ({5 - failedAttempts} intentos restantes)</p>}
 
           {/* Teclado numérico táctil */}
           <div className="grid grid-cols-3 gap-3 w-full max-w-[280px]">
