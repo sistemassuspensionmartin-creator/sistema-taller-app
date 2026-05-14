@@ -89,7 +89,8 @@ export default function DashboardPage() {
 
   // 3. Validación automática del PIN y Castigo por intentos fallidos
   useEffect(() => {
-    if (pinInput.length === 4) {
+    // MAGIA: Le agregamos "&& !pinError" para que NO cuente 5 veces seguidas el mismo error
+    if (pinInput.length === 4 && !pinError) {
       if (pinInput === masterPin) {
         setIsLocked(false);
         setPinInput("");
@@ -107,15 +108,19 @@ export default function DashboardPage() {
           supabase.auth.signOut();
           setIsLocked(false);
           setPinInput("");
+          setPinError(false);
           setFailedAttempts(0);
         } else {
-          // Solo le avisamos que le erró y limpiamos los puntitos
+          // Bloqueamos el lector por medio segundo para que no haga un bucle infinito
           setPinError(true);
-          setTimeout(() => setPinInput(""), 500);
+          setTimeout(() => {
+            setPinInput("");
+            setPinError(false); // Liberamos el lector para el próximo intento
+          }, 500);
         }
       }
     }
-  }, [pinInput, masterPin, failedAttempts]);
+  }, [pinInput, masterPin, failedAttempts, pinError]);
 
   // 4. NUEVO: Soporte para Teclado Físico
   useEffect(() => {
