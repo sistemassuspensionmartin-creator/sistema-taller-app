@@ -55,6 +55,43 @@ const TipoBadge = ({ tipo }: { tipo: string }) => {
   }
 }
 
+// --- NUEVO COMPONENTE: BUSCADOR AISLADO PARA NO PERDER EL FOCO ---
+const BuscadorRepuesto = ({ fila, catalogo, aplicarItemCatalogo }: any) => {
+  const [busqueda, setBusqueda] = useState("");
+  const catalogoFiltrado = catalogo.filter((c: any) => c.tipo === fila.tipo);
+
+  return (
+    <Select 
+      onOpenChange={(open: boolean) => { if(open) setBusqueda("") }} 
+      onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}
+    >
+      <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
+        <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
+      </SelectTrigger>
+      <SelectContent>
+        <div className="p-2 sticky top-0 bg-popover z-10 border-b border-border shadow-sm">
+          <Input 
+            placeholder="Buscar..." 
+            value={busqueda} 
+            onChange={(e: any) => setBusqueda(e.target.value)}
+            onKeyDown={(e: any) => e.stopPropagation()} 
+            onClick={(e: any) => e.stopPropagation()}
+            className="h-8 text-xs bg-secondary/50"
+          />
+        </div>
+        {catalogoFiltrado.filter((c: any) => c.detalle.toLowerCase().includes(busqueda.toLowerCase())).length === 0 ? (
+          <SelectItem value="none" disabled>Sin resultados</SelectItem>
+        ) : (
+          catalogoFiltrado
+            .filter((c: any) => c.detalle.toLowerCase().includes(busqueda.toLowerCase()))
+            .map((c: any) => <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>)
+        )}
+      </SelectContent>
+    </Select>
+  );
+}
+
+
 export function PresupuestosView({
   onNavigateToTurnos,
   onNavigateToTaller,
@@ -79,6 +116,7 @@ export function PresupuestosView({
   const [mostrarCostos, setMostrarCostos] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+
 
   // --- ESTADOS PARA COBRO ---
   const [cajas, setCajas] = useState<any[]>([])
@@ -147,7 +185,7 @@ export function PresupuestosView({
       const [resClientes, resVehiculos, resCatalogo, resPresupuestos, resConfig, resCajas] = await Promise.all([
         supabase.from('clientes').select('*').order('nombre'),
         supabase.from('vehiculos').select('*'),
-        supabase.from('catalogo').select('*').order('detalle'),
+        supabase.from('catalogo').select('*'),
         supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }),
         supabase.from('configuracion').select('*').eq('id', 1).single(),
         supabase.from('cajas').select('*').order('nombre')
@@ -155,7 +193,27 @@ export function PresupuestosView({
       
       setClientes(resClientes.data || [])
       setVehiculos(resVehiculos.data || [])
-      setCatalogo(resCatalogo.data || [])
+      // MAGIA: Ordenamiento Inteligente del Catálogo
+      const pesoTipo: any = { "Neumático": 1, "Repuesto": 2, "Servicio": 3, "Mano de Obra": 4 };
+      const catalogoOrdenado = (resCatalogo.data || []).sort((a: any, b: any) => {
+        const pesoA = pesoTipo[a.tipo] || 99;
+        const pesoB = pesoTipo[b.tipo] || 99;
+        if (pesoA !== pesoB) return pesoA - pesoB;
+
+        if (a.tipo === 'Neumático' && b.tipo === 'Neumático') {
+          const numsA = a.medida ? a.medida.match(/\d+/g) : [];
+          const numsB = b.medida ? b.medida.match(/\d+/g) : [];
+          if (numsA && numsB && numsA.length >= 3 && numsB.length >= 3) {
+            const anchoA = parseInt(numsA[0], 10), perfilA = parseInt(numsA[1], 10), rodadoA = parseInt(numsA[2], 10);
+            const anchoB = parseInt(numsB[0], 10), perfilB = parseInt(numsB[1], 10), rodadoB = parseInt(numsB[2], 10);
+            if (rodadoA !== rodadoB) return rodadoA - rodadoB;
+            if (anchoA !== anchoB) return anchoA - anchoB;
+            if (perfilA !== perfilB) return perfilA - perfilB;
+          }
+        }
+        return a.detalle.localeCompare(b.detalle);
+      });
+      setCatalogo(catalogoOrdenado);
       setPresupuestos(resPresupuestos.data || [])
       if (resConfig.data) setConfiguracion(resConfig.data)
       setCajas(resCajas.data || [])
@@ -171,6 +229,20 @@ export function PresupuestosView({
       cargarDatos()
       setEditandoId(null)
       setIsEditing(false)
+    }
+
+    // --- MAGIA: SUSCRIPCIÓN EN TIEMPO REAL ---
+    const canalPresupuestos = supabase.channel('sincronizacion-presupuestos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuestos' }, () => {
+         cargarDatos() // Recarga los datos de fondo sin molestar al usuario
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuesto_items' }, () => {
+         cargarDatos()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(canalPresupuestos)
     }
   }, [vista])
 
@@ -495,9 +567,8 @@ export function PresupuestosView({
           .eq('presupuesto_id', editandoId)
           .eq('tipo_movimiento', 'ingreso_cobro');
           
-        const pagadoTotal = pagos?.reduce((acc, mov) => acc + Number(mov.monto), 0) || 0;
-
-        // Si el total final nuevo NO coincide con lo que pagó (se sumaron o restaron cosas)
+        const pagadoTotal = pagos?.reduce((acc: any, mov: any) => acc + Number(mov.monto), 0) || 0;
+        
         if (totalFinal !== pagadoTotal) {
           estadoCalculado = 'Aprobado'; // Lo bajamos de categoría
           setEstado('Aprobado'); // Actualizamos la vista visualmente
@@ -750,6 +821,8 @@ export function PresupuestosView({
       demora_estimada: esHistorico ? datosHistoricos.demora_estimada : demoraEstimada,
       es_garantia: garantiaForzada || esGarantiaImpresion,
       motivo_garantia: motivoForzado || motivoGarantiaImpresion,
+      descuento: esHistorico ? (datosHistoricos.descuento || 0) : (parseFloat(descuento.toString()) || 0),
+      subtotal: esHistorico ? (datosHistoricos.total_final + Number(datosHistoricos.descuento || 0)) : subtotalNeto,
     };
 
     setPrintType(tipo);
@@ -946,6 +1019,18 @@ export function PresupuestosView({
     // --- CAMBIO 1: Validamos contra lo que RESTA cobrar, no contra el total histórico ---
     if (montoNum > infoPago.restante) return alert("El monto no puede superar lo que resta cobrar.");
 
+    // --- MAGIA: CANDADO ANTI-DESINCRONIZACIÓN ---
+    // Frenamos el proceso 1 segundo para revisar la base de datos real
+    if (editandoId) {
+      const { data: presDB } = await supabase.from('presupuestos').select('total_final, modificado_por_nombre').eq('id', editandoId).single();
+      
+      // Si la diferencia entre lo que la cajera ve y lo que hay en la base es mayor a 1 peso (alguien lo modificó de fondo):
+      if (presDB && Math.abs(Number(presDB.total_final) - totalFinal) > 1) {
+        return alert(`⚠️ ERROR DE COBRO FRENADO:\n\n${presDB.modificado_por_nombre || 'Alguien'} acaba de modificar este presupuesto desde otra computadora mientras lo tenías abierto.\n\nEl total real ahora es $${presDB.total_final}.\nPor favor, cerrá esta ventana y volvé a abrir el presupuesto para actualizar los valores antes de cobrar.`);
+      }
+    }
+    // ---------------------------------------------
+
     setIsSaving(true);
     try {
       // 1. Ruteo automático de Cajas 
@@ -1060,7 +1145,7 @@ export function PresupuestosView({
                         setIsSaving(true);
                         try {
                           const { data: pagos } = await supabase.from('movimientos_caja').select('monto').eq('presupuesto_id', editandoId).eq('tipo_movimiento', 'ingreso_cobro');
-                          const pagadoTotal = pagos?.reduce((acc, mov) => acc + Number(mov.monto), 0) || 0;
+                          const pagadoTotal = pagos?.reduce((acc: any, mov: any) => acc + Number(mov.monto), 0) || 0;
                           const restante = totalFinal - pagadoTotal;
                           
                           setInfoPago({ pagado: pagadoTotal, restante: restante });
@@ -1360,18 +1445,11 @@ export function PresupuestosView({
                             <TableCell>
                               <div className="flex gap-2">
                                 {isEditing && (
-                                  <Select onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}>
-                                    <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
-                                      <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {catalogoFiltrado.length === 0 ? (
-                                        <SelectItem value="none" disabled>No hay {fila.tipo.toLowerCase()}s</SelectItem>
-                                      ) : (
-                                        catalogoFiltrado.map(c => <SelectItem key={c.id} value={c.id}>{c.detalle}</SelectItem>)
-                                      )}
-                                    </SelectContent>
-                                  </Select>
+                                  <BuscadorRepuesto 
+                                    fila={fila} 
+                                    catalogo={catalogo} 
+                                    aplicarItemCatalogo={aplicarItemCatalogo} 
+                                  />
                                 )}
                                 <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Escriba el detalle..." : ""} className={`h-10 flex-1 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} />
                               </div>
@@ -1797,7 +1875,7 @@ export function PresupuestosView({
                 </DialogContent>
               </Dialog>
               {/* MODAL LINDO DE STOCK INSUFICIENTE */}
-      <Dialog open={alertaStock.visible} onOpenChange={(open) => !open && setAlertaStock({ ...alertaStock, visible: false })}>
+      <Dialog open={alertaStock.visible} onOpenChange={(open: boolean) => !open && setAlertaStock({ ...alertaStock, visible: false })}>
         <DialogContent className="max-w-md border-border bg-card">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-bold text-red-600 dark:text-red-500">

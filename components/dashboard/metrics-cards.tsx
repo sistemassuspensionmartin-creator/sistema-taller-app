@@ -59,18 +59,16 @@ export function MetricsCards({
         setEnTaller(enProcesoCount)
         setEntregadosHoy(entregadosHoyCount)
 
-        // 2. Agenda de Hoy (Solo contamos los turnos que están pendientes)
+        // 2. Agenda de Hoy (TRAEMOS TODOS LOS DE HOY PARA VER EL ESTADO REAL)
         const { data: turnos } = await supabase
           .from('turnos')
           .select('*')
           .eq('fecha', hoyString)
-          // NO MOSTRAMOS NI CONTAMOS LOS TURNOS CANCELADOS NI LOS QUE YA INGRESARON AL TALLER
-          .neq('estado', 'Cancelado')
-          .neq('estado', 'Ingresado')
           .order('hora', { ascending: true })
 
         setAgendaHoy(turnos || [])
-        setTurnosHoy(turnos?.length || 0)
+        // Contamos como "Ingresos Esperados" solo los válidos
+        setTurnosHoy((turnos || []).filter((t: any) => t.estado !== 'Cancelado').length)
 
         // 3. Sistema de Alerta de Caja (Solo buscamos si no es mecánico)
         if (userRole !== 'mecanico') {
@@ -103,7 +101,54 @@ export function MetricsCards({
     }
 
     cargarTablero()
+    
+    // --- MAGIA: SUSCRIPCIÓN EN TIEMPO REAL ---
+    const canalTurnos = supabase.channel('cambios-turnos-inicio')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos' }, () => {
+         cargarTablero() 
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(canalTurnos)
+    }
   }, [userRole]) // Agregamos userRole a las dependencias
+
+
+  // --- MAGIA: FUNCIÓN PARA CALCULAR ESTADO DEMORADO ---
+  const determinarEstadoTurno = (turno: any) => {
+    // Normalizamos el texto para evitar problemas con mayúsculas/espacios
+    const estadoActual = (turno.estado || '').toLowerCase().trim();
+
+    // Si en la base de datos dice 'asistio' (o sus variantes viejas)
+    if (estadoActual === 'asistio' || estadoActual === 'ingresado' || estadoActual === 'ingreso') {
+      return { texto: 'Asistio', clases: 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400' };
+    }
+    
+    // Si en la base de datos dice 'cancelado'
+    if (estadoActual === 'cancelado') {
+      return { texto: 'Cancelado', clases: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 opacity-70 line-through' };
+    }
+    
+    // Si está 'pendiente' (o cualquier otro valor), miramos el reloj
+    if (turno.hora) {
+      const ahora = new Date();
+      const [horas, minutos] = turno.hora.split(':').map(Number);
+      
+      const horaTurno = new Date();
+      horaTurno.setHours(horas, minutos, 0, 0);
+
+      // Le damos un margen de cortesía de 15 minutos antes de marcarlo como demorado
+      const horaTolerancia = new Date(horaTurno.getTime() + 15 * 60000);
+
+      if (ahora > horaTolerancia) {
+        return { texto: 'Demorado', clases: 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800 animate-pulse' };
+      }
+    }
+
+    // Si todavía no es la hora o está en tolerancia
+    return { texto: 'Esperando Arribo', clases: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300' };
+  }
 
   return (
     <div className="space-y-6 pb-8 animate-in fade-in duration-300">
@@ -219,7 +264,9 @@ export function MetricsCards({
                   <p className="text-muted-foreground font-medium">No hay vehículos agendados para ingresar hoy.</p>
                 </div>
               ) : (
-                agendaHoy.map((turno) => (
+                agendaHoy.map((turno) => {
+                  const estadoVisual = determinarEstadoTurno(turno);
+                  return (
                   <div key={turno.id} className="p-4 flex items-center justify-between hover:bg-secondary/20 transition-colors">
                     <div className="flex items-center gap-4">
                       <div className="bg-secondary p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
@@ -235,17 +282,14 @@ export function MetricsCards({
                       </div>
                     </div>
                     <div>
-                      {turno.estado === 'Ingresado' ? (
-                        <Badge className="bg-emerald-100 text-emerald-800 shadow-none hover:bg-emerald-100 border-emerald-200">Ya en Taller</Badge>
-                      ) : turno.estado === 'Cancelado' ? (
-                        <Badge variant="outline" className="text-red-500 border-red-200 bg-red-50">Cancelado</Badge>
-                      ) : (
-                        <Badge variant="secondary" className="bg-slate-100 text-slate-700 border-slate-200">Esperando Arribo</Badge>
-                      )}
+                        <Badge variant="outline" className={`px-2.5 py-1 ${estadoVisual.clases}`}>
+                          {estadoVisual.texto}
+                        </Badge>
                     </div>
                   </div>
-                ))
-              )}
+                )
+              })
+            )}
             </div>
           </Card>
         </div>

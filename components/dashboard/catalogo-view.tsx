@@ -78,7 +78,7 @@ export function CatalogoView() {
         "Mano de Obra": 4
       };
 
-      const datosOrdenados = (data || []).sort((a, b) => {
+      const datosOrdenados = (data || []).sort((a: any, b: any) => {
         // 1. Primero ordenamos por la categoría principal (pesoTipo)
         const pesoA = pesoTipo[a.tipo] || 99;
         const pesoB = pesoTipo[b.tipo] || 99;
@@ -461,29 +461,6 @@ export function CatalogoView() {
 // --- MAGIA: CALCULAR GLOBITO ROJO ---
   const pendientesDePedir = pedidos.filter(p => p.estado === 'Pedir').length;
 
-  // --- BOTÓN TEMPORAL PARA SIMULAR (Con atrapador de errores) ---
-  const simularFaltante = async () => {
-    try {
-      const { error } = await supabase.from('pedidos_proveedor').insert([{
-        detalle: "Neumático GoodYear 195 / 65 R 15 (SIMULACIÓN)",
-        cantidad: 4,
-        estado: 'Pedir'
-      }]);
-      
-      // Si Supabase tira un error, lo atrapamos y lo mostramos
-      if (error) {
-        alert("Error de Supabase: " + error.message);
-        console.error(error);
-        return;
-      }
-
-      fetchPedidos(); // Recargamos para que aparezca el globito
-    } catch (error: any) {
-      alert("Error en el código: " + error.message);
-    }
-  }
-
-
 
 return (
     <div className="space-y-6 pb-8">
@@ -493,10 +470,6 @@ return (
           <p className="text-sm text-muted-foreground">Administrá tus repuestos, neumáticos, servicios y mano de obra.</p>
         </div>
         <div className="flex gap-2">
-          {/* BOTÓN DE SIMULACIÓN - LUEGO LO BORRAMOS */}
-          <Button onClick={simularFaltante} variant="outline" className="border-red-500 text-red-600 hover:bg-red-50 dark:hover:bg-red-950">
-            🧪 Simular Faltante
-          </Button>
           <Button onClick={abrirCrear} className="bg-primary text-primary-foreground">
             <Plus className="mr-2 h-4 w-4" /> Nuevo Ítem
           </Button>
@@ -804,7 +777,7 @@ return (
       </Dialog>
 
       {/* --- LOS 2 MODALES NUEVOS --- */}
-      <Dialog open={!!pedidoParaMandar} onOpenChange={(open) => { if (!open) { setPedidoParaMandar(null); setMostrandoFormProveedor(false); } }}>
+      <Dialog open={!!pedidoParaMandar} onOpenChange={(open: boolean) => { if (!open) { setPedidoParaMandar(null); setMostrandoFormProveedor(false); } }}>
         <DialogContent className="max-w-sm border-border bg-card">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="w-5 h-5 text-green-500" /> Contactar Proveedor</DialogTitle></DialogHeader>
           <div className="py-4 space-y-4">
@@ -849,7 +822,7 @@ return (
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!pedidoIngresando} onOpenChange={(open) => !open && setPedidoIngresando(null)}>
+      <Dialog open={!!pedidoIngresando} onOpenChange={(open: boolean) => !open && setPedidoIngresando(null)}>
         <DialogContent className="max-w-sm border-border bg-card">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Package className="w-5 h-5 text-blue-500" /> Ingreso de Stock</DialogTitle></DialogHeader>
           <div className="py-4 space-y-4">
@@ -869,7 +842,7 @@ return (
         </DialogContent>
       </Dialog>
       {/* --- MODAL PARA FORZAR PEDIDO MANUAL --- */}
-      <Dialog open={!!itemParaPedir} onOpenChange={(open) => !open && setItemParaPedir(null)}>
+      <Dialog open={!!itemParaPedir} onOpenChange={(open: boolean) => !open && setItemParaPedir(null)}>
         <DialogContent className="max-w-sm border-border bg-card">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Clock className="w-5 h-5 text-blue-500" /> Solicitar Ítem</DialogTitle></DialogHeader>
           <div className="py-4 space-y-4">
@@ -884,7 +857,7 @@ return (
       </Dialog>
 
       {/* --- MODAL PARA CONFIRMAR ELIMINAR PEDIDO --- */}
-      <Dialog open={!!pedidoAEliminar} onOpenChange={(open) => !open && setPedidoAEliminar(null)}>
+      <Dialog open={!!pedidoAEliminar} onOpenChange={(open: boolean) => !open && setPedidoAEliminar(null)}>
         <DialogContent className="max-w-sm border-border bg-card">
           <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="w-5 h-5" /> Eliminar Pedido</DialogTitle></DialogHeader>
           <div className="py-2 space-y-4">
@@ -897,7 +870,7 @@ return (
         </DialogContent>
       </Dialog>
       {/* --- MODAL PARA CONFIRMAR ELIMINAR ÍTEM DEL CATÁLOGO --- */}
-      <Dialog open={!!itemAEliminar} onOpenChange={(open) => !open && setItemAEliminar(null)}>
+      <Dialog open={!!itemAEliminar} onOpenChange={(open: boolean) => !open && setItemAEliminar(null)}>
         <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl outline-none">
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">

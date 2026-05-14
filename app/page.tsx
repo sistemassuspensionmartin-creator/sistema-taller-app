@@ -2,7 +2,7 @@
 "use client"
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { AlertCircle, CheckCircle2, Info, Loader2, User, Car, Settings} from "lucide-react"
+import { AlertCircle, CheckCircle2, Info, Loader2, User, Car, Settings, Lock} from "lucide-react"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -42,6 +42,103 @@ export default function DashboardPage() {
   
   const [volverA, setVolverA] = useState<string | null>(null)
   const [turnoAgendarInfo, setTurnoAgendarInfo] = useState<any>(null)
+  // --- MAGIA: ESTADOS DE LA BÓVEDA DE SEGURIDAD ---
+  const [isLocked, setIsLocked] = useState(false)
+  const [pinInput, setPinInput] = useState("")
+  const [masterPin, setMasterPin] = useState("")
+  const [pinError, setPinError] = useState(false)
+  const [failedAttempts, setFailedAttempts] = useState(0) // <-- NUEVO: Contador de errores
+
+  // 2. El Centinela de Inactividad y Auto-cierre
+  useEffect(() => {
+    if (!isAuthenticated || isLocked) return;
+
+    let inactivityTimer: NodeJS.Timeout;
+    const INACTIVITY_TIME = 5 * 60 * 1000;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimer);
+      // MAGIA: El mecánico NO se bloquea por inactividad. Los demás sí.
+      if (userRole !== 'mecanico') {
+        inactivityTimer = setTimeout(() => {
+          setIsLocked(true);
+          localStorage.setItem('taller_locked', 'true');
+        }, INACTIVITY_TIME);
+      }
+    };
+
+    const events = ['mousemove', 'keydown', 'mousedown', 'touchstart'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+    resetTimer();
+
+    // El cierre a las 19:00hs aplica para TODOS sin excepción
+    const timeChecker = setInterval(async () => {
+      const now = new Date();
+      if (now.getHours() === 19 && now.getMinutes() === 0) {
+        localStorage.removeItem('taller_locked');
+        await supabase.auth.signOut();
+      }
+    }, 60000);
+
+    return () => {
+      events.forEach(event => window.removeEventListener(event, resetTimer));
+      clearTimeout(inactivityTimer);
+      clearInterval(timeChecker);
+    };
+  }, [isAuthenticated, isLocked, userRole]);
+
+  // 3. Validación automática del PIN y Castigo por intentos fallidos
+  useEffect(() => {
+    // MAGIA: Le agregamos "&& !pinError" para que NO cuente 5 veces seguidas el mismo error
+    if (pinInput.length === 4 && !pinError) {
+      if (pinInput === masterPin) {
+        setIsLocked(false);
+        setPinInput("");
+        setPinError(false);
+        setFailedAttempts(0); // Si acierta, le perdonamos el historial
+        localStorage.removeItem('taller_locked');
+      } else {
+        const nuevosFallos = failedAttempts + 1;
+        setFailedAttempts(nuevosFallos);
+        
+        if (nuevosFallos >= 5) {
+          // CASTIGO: Lo echamos del sistema
+          alert("⛔ ALARMA DE SEGURIDAD: Demasiados intentos fallidos. La sesión se ha cerrado automáticamente.");
+          localStorage.removeItem('taller_locked');
+          supabase.auth.signOut();
+          setIsLocked(false);
+          setPinInput("");
+          setPinError(false);
+          setFailedAttempts(0);
+        } else {
+          // Bloqueamos el lector por medio segundo para que no haga un bucle infinito
+          setPinError(true);
+          setTimeout(() => {
+            setPinInput("");
+            setPinError(false); // Liberamos el lector para el próximo intento
+          }, 500);
+        }
+      }
+    }
+  }, [pinInput, masterPin, failedAttempts, pinError]);
+
+  // 4. NUEVO: Soporte para Teclado Físico
+  useEffect(() => {
+    if (!isLocked) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (/^[0-9]$/.test(e.key)) {
+        setPinInput(p => p.length < 4 ? p + e.key : p);
+      } else if (e.key === 'Backspace') {
+        setPinInput(p => p.slice(0, -1));
+      } else if (e.key.toLowerCase() === 'c' || e.key === 'Escape') {
+        setPinInput("");
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLocked]);
 
   useEffect(() => {
     window.alert = (msg) => {
@@ -56,16 +153,27 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const inicializarSesion = async () => {
+      // --- MAGIA SEGURIDAD: SI RECARGÓ ESTANDO BLOQUEADO, LO ECHAMOS ---
+      if (localStorage.getItem('taller_locked') === 'true') {
+        localStorage.removeItem('taller_locked');
+        await supabase.auth.signOut();
+        setIsAuthenticated(false);
+        setUserRole(null);
+        setUserName(null);
+        return; // Cortamos acá, no lo dejamos entrar
+      }
+      // -----------------------------------------------------------------
+
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setIsAuthenticated(true)
         
-        // --- CORRECCIÓN MAGICA: UNA SOLA COMILLA ---
-        const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', session.user.id).single()
+        const { data: perfil } = await supabase.from('perfiles').select('rol, nombre, pin_bloqueo').eq('id', session.user.id).single()
         
         if (perfil) {
           setUserRole(perfil.rol)
-          setUserName(perfil.nombre) 
+          setUserName(perfil.nombre)
+          setMasterPin(perfil.pin_bloqueo || "") 
         }
       } else {
         setIsAuthenticated(false)
@@ -251,12 +359,12 @@ export default function DashboardPage() {
         
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          
-          // --- CORRECCIÓN MAGICA: UNA SOLA COMILLA ---
-          const { data: perfil } = await supabase.from('perfiles').select('rol, nombre').eq('id', session.user.id).single();
+          // Buscamos el perfil con el PIN incluido
+          const { data: perfil } = await supabase.from('perfiles').select('rol, nombre, pin_bloqueo').eq('id', session.user.id).single();
           
           setUserRole(perfil?.rol || null);
           setUserName(perfil?.nombre || null);
+          setMasterPin(perfil?.pin_bloqueo || ""); // <-- CARGAMOS EL PIN ACÁ
           setIsAuthenticated(true);
         }
       }} />
@@ -265,6 +373,45 @@ export default function DashboardPage() {
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+      {/* --- PANTALLA NEGRA DE BLOQUEO --- */}
+      {isLocked && (
+        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md text-white animate-in fade-in">
+          <Lock className="w-16 h-16 text-emerald-500 mb-6" />
+          <h2 className="text-3xl font-bold mb-2 tracking-wide">Pantalla Bloqueada</h2>
+          <p className="text-slate-400 mb-8">Por seguridad, el sistema se bloqueó tras 5 min de inactividad.</p>
+
+          {/* Los 4 puntitos del PIN */}
+          <div className="flex gap-4 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className={`w-5 h-5 rounded-full border-2 transition-all ${pinInput.length > i ? 'bg-emerald-500 border-emerald-500 scale-110' : 'border-slate-600'}`} />
+            ))}
+          </div>
+
+          {pinError && <p className="text-red-500 font-bold mb-4 animate-bounce">PIN Incorrecto ({5 - failedAttempts} intentos restantes)</p>}
+
+          {/* Teclado numérico táctil */}
+          <div className="grid grid-cols-3 gap-3 w-full max-w-[280px]">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+              <button key={num} onClick={() => setPinInput(p => (p.length < 4 ? p + num : p))} className="h-16 text-2xl font-bold bg-slate-800 rounded-xl hover:bg-slate-700 active:bg-slate-600 transition-colors">
+                {num}
+              </button>
+            ))}
+            <button onClick={() => setPinInput("")} className="h-16 text-xl font-bold bg-slate-800/50 rounded-xl hover:bg-red-500/20 text-red-400 active:bg-red-500/30 transition-colors">
+              C
+            </button>
+            <button onClick={() => setPinInput(p => (p.length < 4 ? p + "0" : p))} className="h-16 text-2xl font-bold bg-slate-800 rounded-xl hover:bg-slate-700 active:bg-slate-600 transition-colors">
+              0
+            </button>
+            <button onClick={() => setPinInput(p => p.slice(0, -1))} className="h-16 text-xl font-bold bg-slate-800/50 rounded-xl hover:bg-amber-500/20 text-amber-400 active:bg-amber-500/30 transition-colors">
+              ⌫
+            </button>
+          </div>
+          
+          <button onClick={async () => { await supabase.auth.signOut(); setIsLocked(false); }} className="mt-12 text-sm text-slate-500 hover:text-white transition-colors underline underline-offset-4">
+            No soy {userName}, Cerrar Sesión
+          </button>
+        </div>
+      )}
       <div className="flex h-screen bg-background">
         <DashboardSidebar 
           activeSection={activeSection} 
