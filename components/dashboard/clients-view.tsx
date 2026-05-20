@@ -62,7 +62,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
   const [formData, setFormData] = useState({
     tipo_cliente: "persona", nombre: "", apellido: "", telefono: "", email: "",
     calle: "", barrio: "", ciudad: "", documento: "", razon_social: "", 
-    condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: ""
+    condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: "", nivel_problema: "Verde"
   })
 
   const fetchClientes = async () => {
@@ -128,7 +128,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
 
   const abrirCrear = () => {
     setEditingId(null)
-    setFormData({ tipo_cliente: "persona", nombre: "", apellido: "", telefono: "", email: "", calle: "", barrio: "", ciudad: "", documento: "", razon_social: "", condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: "" })
+    setFormData({ tipo_cliente: "persona", nombre: "", apellido: "", telefono: "", email: "", calle: "", barrio: "", ciudad: "", documento: "", razon_social: "", condicion_iva: "Consumidor Final", domicilio_fiscal: "", notas: "", nivel_problema: "Verde" })
     setIsModalOpen(true)
   }
 
@@ -148,7 +148,8 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
       razon_social: cliente.razon_social || "",
       condicion_iva: cliente.condicion_iva || "Consumidor Final",
       domicilio_fiscal: cliente.domicilio_fiscal || "",
-      notas: cliente.notas || ""
+      notas: cliente.notas || "",
+      nivel_problema: cliente.nivel_problema || "Verde"
     })
     setIsModalOpen(true)
   }
@@ -317,11 +318,15 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                 clientesFiltrados.map((cliente) => (
                   <TableRow key={cliente.id} className="hover:bg-secondary/50 cursor-pointer" onClick={() => abrirDetalles(cliente)}>
                     <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 relative">
+                        {/* Puntito de color para el Semáforo */}
+                        {cliente.nivel_problema === 'Naranja' && <div className="absolute -left-1 -top-1 w-3 h-3 rounded-full bg-amber-500 border-2 border-background animate-pulse" title="Cliente Difícil"></div>}
+                        {cliente.nivel_problema === 'Rojo' && <div className="absolute -left-1 -top-1 w-3 h-3 rounded-full bg-red-600 border-2 border-background shadow-[0_0_8px_rgba(220,38,38,0.8)] animate-pulse" title="Cliente Muy Problemático"></div>}
+                        
                         <div className="bg-primary/10 p-2 rounded-full shrink-0">
                           {cliente.tipo_cliente === 'empresa' ? <Building2 className="h-4 w-4 text-primary" /> : <User className="h-4 w-4 text-primary" />}
                         </div>
-                        <span className="truncate">
+                        <span className="truncate font-semibold">
                           {cliente.tipo_cliente === 'empresa' ? cliente.razon_social : `${cliente.nombre} ${cliente.apellido || ''}`}
                         </span>
                         
@@ -651,8 +656,38 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
             </section>
 
             <section>
-              <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Interno</h3></div>
-              <div className="space-y-2"><Label>Notas del Taller</Label><Textarea className="bg-slate-50 dark:bg-slate-900 border-border min-h-[80px]" value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} /></div>
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4 flex items-center justify-between">
+                <h3 className="font-bold text-sm text-foreground uppercase">Interno</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Notas del Taller</Label>
+                  <Textarea className="bg-slate-50 dark:bg-slate-900 border-border min-h-[80px]" placeholder="Ej: No acepta presupuestos por WhatsApp, hay que llamarlo..." value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Nivel de Conflictividad</Label>
+                  <Select value={formData.nivel_problema} onValueChange={(val: string) => setFormData({...formData, nivel_problema: val})}>
+                    <SelectTrigger className={`border-2 ${
+                      formData.nivel_problema === 'Rojo' ? 'border-red-500 bg-red-50 dark:bg-red-950/30' : 
+                      formData.nivel_problema === 'Naranja' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30' : 
+                      'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
+                    }`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Verde">
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500"></div> Cliente Normal / Bueno</div>
+                      </SelectItem>
+                      <SelectItem value="Naranja">
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div> Cliente Difícil / Precaución</div>
+                      </SelectItem>
+                      <SelectItem value="Rojo">
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div> Muy Problemático / Cuidado</div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </section>
           </div>
           
