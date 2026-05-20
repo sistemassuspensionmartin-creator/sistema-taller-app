@@ -659,15 +659,11 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
               <div className="border-l-4 border-emerald-600 pl-3 mb-4 flex items-center justify-between">
                 <h3 className="font-bold text-sm text-foreground uppercase">Interno</h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2 md:col-span-2">
-                  <Label>Notas del Taller</Label>
-                  <Textarea className="bg-slate-50 dark:bg-slate-900 border-border min-h-[80px]" placeholder="Ej: No acepta presupuestos por WhatsApp, hay que llamarlo..." value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
-                </div>
+              <div className="flex flex-col gap-4">
                 <div className="space-y-2">
                   <Label>Nivel de Conflictividad</Label>
                   <Select value={formData.nivel_problema} onValueChange={(val: string) => setFormData({...formData, nivel_problema: val})}>
-                    <SelectTrigger className={`border-2 ${
+                    <SelectTrigger className={`border-2 w-full sm:w-1/2 ${
                       formData.nivel_problema === 'Rojo' ? 'border-red-500 bg-red-50 dark:bg-red-950/30' : 
                       formData.nivel_problema === 'Naranja' ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30' : 
                       'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30'
@@ -686,6 +682,10 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Notas del Taller</Label>
+                  <Textarea className="bg-slate-50 dark:bg-slate-900 border-border min-h-[80px]" placeholder="Ej: No acepta presupuestos por WhatsApp, hay que llamarlo..." value={formData.notas} onChange={(e) => setFormData({...formData, notas: e.target.value})} />
                 </div>
               </div>
             </section>

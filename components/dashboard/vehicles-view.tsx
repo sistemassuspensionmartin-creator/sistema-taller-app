@@ -106,7 +106,7 @@ export function VehiclesView({
   const fetchVehiculos = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo )`)
+      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo, nivel_problema )`)
       if (error) throw error
       setVehiculos(data || [])
     } catch (error) {
@@ -118,7 +118,7 @@ export function VehiclesView({
 
   const fetchClientesParaSelect = async () => {
     try {
-      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo').order('nombre')
+      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo, nivel_problema').order('nombre')
       if (error) throw error
       setClientes(data || [])
     } catch (error) {
@@ -620,6 +620,10 @@ export function VehiclesView({
                         <div className="col-span-2">
                           <span className="text-muted-foreground block mb-1">Nombre / Razón Social</span>
                           <div className="flex items-center gap-2">
+                            {/* MAGIA: Puntito titilando si es conflictivo */}
+                            {vehiculoSeleccionado.clientes.nivel_problema === 'Naranja' && <div className="w-3 h-3 rounded-full bg-amber-500 animate-pulse shrink-0" title="Cliente Difícil"></div>}
+                            {vehiculoSeleccionado.clientes.nivel_problema === 'Rojo' && <div className="w-3 h-3 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)] animate-pulse shrink-0" title="Cliente Muy Problemático"></div>}
+                            
                             <p className="font-bold text-lg">
                               {vehiculoSeleccionado.clientes.tipo_cliente === 'empresa' ? vehiculoSeleccionado.clientes.razon_social : `${vehiculoSeleccionado.clientes.nombre} ${vehiculoSeleccionado.clientes.apellido || ''}`}
                             </p>
@@ -798,7 +802,13 @@ export function VehiclesView({
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              <User className="h-3 w-3" />
+                              {v.clientes?.nivel_problema === 'Naranja' ? (
+                                <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" title="Cliente Difícil"></div>
+                              ) : v.clientes?.nivel_problema === 'Rojo' ? (
+                                <div className="w-2.5 h-2.5 rounded-full bg-red-600 animate-pulse shrink-0" title="Cliente Muy Problemático"></div>
+                              ) : (
+                                <User className="h-3 w-3 shrink-0" />
+                              )}
                               <span className={!v.clientes ? 'italic opacity-60' : ''}>{nombreDueno}</span>
                             </div>
                           </TableCell>
