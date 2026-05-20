@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { 
   Eye, EyeOff, TrendingUp, TrendingDown, 
   BarChart3, Wallet, Landmark, Calendar,
-  ArrowUpRight, ArrowDownRight, Activity
+  ArrowUpRight, ArrowDownRight, Activity, CreditCard, Search, ArrowRightLeft, Loader2, Download, Printer
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,12 @@ import {
   ResponsiveContainer, BarChart, Bar
 } from 'recharts'
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+
 export function AdminDashboardView() {
+  const [activeTab, setActiveTab] = useState("kpis") // Control de pestañas
   const [showMoney, setShowMoney] = useState(true)
   const [stats, setStats] = useState({ 
     ingresos: 0, ingresosPrev: 0,
@@ -23,6 +28,50 @@ export function AdminDashboardView() {
   })
   const [dataGrafico, setDataGrafico] = useState<any[]>([])
   const [cajasReales, setCajasReales] = useState<any[]>([])
+
+  // Estados para Auditoría Histórica
+  const [fechaHistorial, setFechaHistorial] = useState(new Date().toISOString().split('T')[0])
+  const [movimientosHistoricos, setMovimientosHistoricos] = useState<any[]>([])
+  const [isLoadingHistorico, setIsLoadingHistorico] = useState(false)
+  const [cierresHistoricos, setCierresHistoricos] = useState<any[]>([])
+
+  // Función para buscar en la máquina del tiempo
+  const buscarHistorial = async (fecha: string) => {
+    setIsLoadingHistorico(true);
+    setFechaHistorial(fecha);
+    try {
+      const fechaInicio = `${fecha}T00:00:00.000Z`;
+      const fechaFin = `${fecha}T23:59:59.999Z`;
+
+      const { data: movData } = await supabase
+        .from('movimientos_caja')
+        .select('*, caja_origen:caja_origen_id(nombre), caja_destino:caja_destino_id(nombre)')
+        .gte('fecha', fechaInicio)
+        .lte('fecha', fechaFin)
+        .order('fecha', { ascending: false });
+
+      setMovimientosHistoricos(movData || []);
+
+      const { data: cierresData } = await supabase
+        .from('cierres_caja')
+        .select('*')
+        .gte('fecha_cierre', fechaInicio)
+        .lte('fecha_cierre', fechaFin)
+        .order('fecha_cierre', { ascending: false });
+
+      setCierresHistoricos(cierresData || []);
+    } catch (error) {
+      console.error("Error al buscar historial:", error);
+    } finally {
+      setIsLoadingHistorico(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "auditoria") {
+      buscarHistorial(fechaHistorial);
+    }
+  }, [activeTab]);
 
   const cargarMetricasBI = async () => {
     try {
@@ -98,18 +147,31 @@ export function AdminDashboardView() {
 
   return (
     <div className="space-y-6 pb-10 font-sans tracking-tight">
-      <div className="flex justify-between items-end border-b border-slate-100 pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-slate-100 pb-4 gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 uppercase tracking-tighter">
             <Activity className="w-5 h-5 text-indigo-600" /> Inteligencia de Negocio
           </h2>
-          <p className="text-xs text-slate-500 font-medium">Reporte consolidado: {new Date().toLocaleDateString()}</p>
+          <p className="text-xs text-slate-500 font-medium">Panel de Control Gerencial</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setShowMoney(!showMoney)} className="text-slate-400 hover:text-indigo-600">
-          {showMoney ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
-          {showMoney ? "Modo Auditor" : "Mostrar Valores"}
-        </Button>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => setShowMoney(!showMoney)} className="text-slate-600 border-slate-200 w-full sm:w-auto">
+            {showMoney ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+            {showMoney ? "Modo Seguro" : "Mostrar Valores"}
+          </Button>
+        </div>
       </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto bg-slate-100/50 p-1 mb-6">
+          <TabsTrigger value="kpis" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm">Tablero General</TabsTrigger>
+          <TabsTrigger value="cajas" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm">Tesorería (Cajas)</TabsTrigger>
+          <TabsTrigger value="auditoria" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">Auditoría / Reportes</TabsTrigger>
+          <TabsTrigger value="gastos" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-sm">Control de Gastos</TabsTrigger>
+        </TabsList>
+
+        {/* PESTAÑA 1: TABLERO GENERAL (Lo que ya tenías) */}
+        <TabsContent value="kpis" className="space-y-6 animate-in fade-in duration-300">
 
       {/* KPI GRID */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -179,6 +241,126 @@ export function AdminDashboardView() {
           </CardContent>
         </Card>
       </div>
+    </TabsContent>
+
+        {/* PESTAÑA 2: TESORERÍA (Las cajas más grandes) */}
+        <TabsContent value="cajas" className="animate-in fade-in duration-300 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {cajasReales.map(c => (
+              <Card key={c.id} className="shadow-sm border-slate-200 bg-white">
+                <CardHeader className="bg-slate-50/50 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                    <Landmark className="w-4 h-4 text-emerald-600"/> {c.nombre}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="text-3xl font-mono font-black text-slate-900">{formatCifra(c.saldo)}</div>
+                  <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">Saldo actual en tiempo real</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* PESTAÑA 3: AUDITORÍA HISTÓRICA */}
+        <TabsContent value="auditoria" className="animate-in fade-in duration-300 space-y-4">
+          <Card className="shadow-none border-slate-200">
+            <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-sm font-black uppercase text-slate-800 flex items-center gap-2">
+                  <Search className="w-4 h-4 text-blue-600"/> Buscador de Movimientos Históricos
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1 font-medium">Elegí una fecha para auditar la cinta de operaciones de la caja.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <input 
+                  type="date" 
+                  className="h-9 px-3 rounded-md border border-slate-300 text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                  value={fechaHistorial} 
+                  onChange={(e) => buscarHistorial(e.target.value)} 
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              
+              {/* Sección de Cierres de ese día */}
+              {cierresHistoricos.length > 0 && (
+                <div className="bg-blue-50/50 border-b border-blue-100 p-4">
+                  <h4 className="text-xs font-bold text-blue-800 uppercase tracking-widest mb-3 flex items-center gap-2"><Printer className="w-4 h-4"/> Reportes de Cierre del Día</h4>
+                  <div className="flex gap-2 flex-wrap">
+                    {cierresHistoricos.map(cierre => (
+                      <Button key={cierre.id} variant="outline" className="bg-white border-blue-200 text-blue-700 hover:bg-blue-100 text-xs">
+                        <Download className="w-3 h-3 mr-2" />
+                        Descargar Cierre ({new Date(cierre.fecha_cierre).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})})
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabla de Movimientos */}
+              <div className="max-h-[500px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="bg-white sticky top-0 shadow-sm z-10">
+                    <TableRow>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider">Hora</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider">Tipo</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider">Detalle</TableHead>
+                      <TableHead className="text-[10px] uppercase font-bold tracking-wider">Método / Caja</TableHead>
+                      <TableHead className="text-right text-[10px] uppercase font-bold tracking-wider">Monto</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoadingHistorico ? (
+                      <TableRow><TableCell colSpan={5} className="h-40 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-300"/></TableCell></TableRow>
+                    ) : movimientosHistoricos.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} className="h-40 text-center text-slate-400 font-medium text-sm">No hay registros de movimientos en esta fecha.</TableCell></TableRow>
+                    ) : (
+                      movimientosHistoricos.map(mov => (
+                        <TableRow key={mov.id} className="hover:bg-slate-50/50">
+                          <TableCell className="text-slate-500 whitespace-nowrap font-mono text-xs">
+                            {new Date(mov.fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                          </TableCell>
+                          <TableCell>
+                            {mov.tipo_movimiento === 'ingreso_cobro' ? <Badge className="bg-emerald-100 text-emerald-800 shadow-none hover:bg-emerald-100"><ArrowDownRight className="w-3 h-3 mr-1"/> Ingreso</Badge> :
+                             mov.tipo_movimiento === 'transferencia_interna' ? <Badge className="bg-blue-100 text-blue-800 shadow-none hover:bg-blue-100"><ArrowRightLeft className="w-3 h-3 mr-1"/> Interno</Badge> :
+                             mov.tipo_movimiento === 'egreso_gasto' ? <Badge className="bg-rose-100 text-rose-800 shadow-none hover:bg-rose-100"><TrendingDown className="w-3 h-3 mr-1"/> Gasto</Badge> :
+                             <Badge variant="secondary" className="bg-slate-200 hover:bg-slate-200 text-slate-700">Ajuste</Badge>}
+                          </TableCell>
+                          <TableCell className="font-semibold text-xs text-slate-700">
+                            {mov.detalle}
+                            {mov.notas && <span className="block text-[10px] text-slate-400 font-normal mt-0.5">{mov.notas}</span>}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 font-medium text-xs text-slate-500"><CreditCard className="w-3 h-3"/> {mov.metodo_pago}</div>
+                            {mov.caja_destino && mov.tipo_movimiento !== 'egreso_gasto' && <div className="text-[9px] text-slate-400 mt-1 font-bold uppercase tracking-wider">Dest. {mov.caja_destino.nombre}</div>}
+                            {mov.caja_origen && mov.tipo_movimiento === 'egreso_gasto' && <div className="text-[9px] text-rose-500/70 mt-1 font-bold uppercase tracking-wider">Sale: {mov.caja_origen.nombre}</div>}
+                          </TableCell>
+                          <TableCell className={`text-right font-mono font-bold text-sm ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : mov.tipo_movimiento === 'egreso_gasto' ? 'text-rose-600' : 'text-slate-700'}`}>
+                            {mov.tipo_movimiento === 'ingreso_cobro' ? '+' : mov.tipo_movimiento === 'egreso_gasto' ? '-' : ''}{formatCifra(Number(mov.monto))}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* PESTAÑA 4: GASTOS (Esqueleto preparado) */}
+        <TabsContent value="gastos" className="animate-in fade-in duration-300">
+          <Card className="shadow-none border-dashed border-2 border-slate-200 bg-slate-50/50">
+            <CardContent className="flex flex-col items-center justify-center py-20 text-center">
+              <TrendingDown className="w-12 h-12 text-slate-300 mb-4" />
+              <h3 className="text-lg font-bold text-slate-700 mb-1">Módulo en construcción</h3>
+              <p className="text-sm text-slate-500 max-w-md">Próximamente podrás ver un desglose automático de todos los egresos del taller agrupados por categoría (Sueldos, Insumos, Impuestos) para controlar fugas de capital.</p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+      </Tabs>
     </div>
   )
 }
