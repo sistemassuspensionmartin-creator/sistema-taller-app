@@ -572,15 +572,15 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
       </Dialog>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-3xl border-border bg-card h-[85vh] flex flex-col p-0">
-          <DialogHeader className="shrink-0 p-6 border-b border-border">
+        <DialogContent className="sm:max-w-4xl w-[95vw] border-border bg-card h-[90vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-8 border-b border-border bg-secondary/10">
             <DialogTitle className="text-2xl text-foreground font-bold">
               {editingId ? "Editar Cliente" : "Registrar Nuevo Cliente"}
             </DialogTitle>
-            <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
+            <p className="text-sm text-muted-foreground mt-1">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-8">
+          <div className="flex-1 overflow-y-auto p-8 space-y-10">
             
             <div className="bg-secondary/30 p-4 rounded-lg flex justify-center border border-border">
               <RadioGroup defaultValue="persona" className="flex space-x-6" value={formData.tipo_cliente} onValueChange={(val: string) => setFormData({...formData, tipo_cliente: val})}>
@@ -691,7 +691,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
             </section>
           </div>
           
-          <DialogFooter className="shrink-0 p-6 border-t border-border bg-card rounded-b-lg">
+          <DialogFooter className="shrink-0 p-8 border-t border-border bg-card rounded-b-lg">
             <div className="flex justify-end gap-2 w-full">
               <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
               <Button onClick={handleGuardarCliente} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
