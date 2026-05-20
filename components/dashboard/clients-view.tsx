@@ -365,15 +365,23 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
       </Card>
 
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
-        <DialogContent className="max-w-3xl border-border bg-card h-[85vh] flex flex-col p-0 gap-0">
+        {/* Ensanchamos la ventana igual que el modal de edición (max-w-4xl) */}
+        <DialogContent className="sm:max-w-4xl w-[95vw] border-border bg-card h-[90vh] flex flex-col p-0 gap-0">
           {clienteSeleccionado && (
             <>
-              <div className="bg-secondary/30 p-6 border-b border-border shrink-0">
+              {/* Aumentamos el padding a p-8 para que respire más */}
+              <div className="bg-secondary/30 p-8 border-b border-border shrink-0">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h2 className="text-2xl font-bold text-foreground">
-                      {clienteSeleccionado.tipo_cliente === 'empresa' ? clienteSeleccionado.razon_social : `${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido || ''}`}
-                    </h2>
+                    <div className="flex items-center gap-3">
+                      {/* Agregamos el puntito de color acá también */}
+                      {clienteSeleccionado.nivel_problema === 'Naranja' && <div className="w-3.5 h-3.5 rounded-full bg-amber-500 animate-pulse shrink-0" title="Cliente Difícil"></div>}
+                      {clienteSeleccionado.nivel_problema === 'Rojo' && <div className="w-3.5 h-3.5 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)] animate-pulse shrink-0" title="Cliente Muy Problemático"></div>}
+                      
+                      <h2 className="text-2xl font-bold text-foreground">
+                        {clienteSeleccionado.tipo_cliente === 'empresa' ? clienteSeleccionado.razon_social : `${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido || ''}`}
+                      </h2>
+                    </div>
                     <p className="text-sm text-muted-foreground mt-1">Información detallada del cliente</p>
                   </div>
                   <Button variant="outline" size="sm" onClick={(e) => { setIsViewModalOpen(false); abrirEditar(clienteSeleccionado, e); }}>
@@ -382,7 +390,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                 </div>
               </div>
 
-              <div className="p-6 flex-1 overflow-y-auto">
+              <div className="p-8 flex-1 overflow-y-auto">
                 <Tabs defaultValue="datos" className="w-full">
                   <TabsList className="mb-6 bg-secondary">
                     <TabsTrigger value="datos">Datos Personales</TabsTrigger>
