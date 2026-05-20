@@ -317,7 +317,6 @@ export function VehiclesView({
   }
 
   const handlePatenteChange = (e: any) => {
-    if (isEditingCar) return; 
     let limpia = e.target.value.replace(/[^A-Za-z0-9]/g, "").toUpperCase()
     if (limpia.length > 7) limpia = limpia.slice(0, 7)
     let formateada = limpia
@@ -348,6 +347,7 @@ export function VehiclesView({
     try {
       if (isEditingCar) {
         const { error } = await supabase.from('vehiculos').update({
+          patente: patenteLimpiaDB, 
           tipo_vehiculo: formData.tipo_vehiculo,
           marca: formData.marca,
           modelo: formData.modelo,
@@ -355,12 +355,13 @@ export function VehiclesView({
           color: formData.color,
           kilometraje: formData.kilometraje ? parseInt(formData.kilometraje) : null,
           cliente_id: formData.cliente_id || null
-        }).eq('patente', vehiculoSeleccionado.patente)
+        }).eq('patente', vehiculoSeleccionado.patente) 
 
         if (error) throw error
 
         setVehiculoSeleccionado({
           ...vehiculoSeleccionado,
+          patente: patenteLimpiaDB,
           tipo_vehiculo: formData.tipo_vehiculo,
           marca: formData.marca,
           modelo: formData.modelo,
@@ -898,11 +899,10 @@ export function VehiclesView({
                   <Label>Patente <span className="text-destructive">*</span></Label>
                   <Input 
                     placeholder="AA 123 AA" 
-                    className="bg-slate-50 dark:bg-slate-900 font-mono text-center uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed" 
+                    className="bg-slate-50 dark:bg-slate-900 font-mono text-center uppercase tracking-widest" 
                     value={formData.patente} 
                     onChange={handlePatenteChange}
                     maxLength={9}
-                    disabled={isEditingCar} 
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-1">
