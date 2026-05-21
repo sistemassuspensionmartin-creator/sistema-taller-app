@@ -30,8 +30,17 @@ export function AdminDashboardView() {
   const [dataGrafico, setDataGrafico] = useState<any[]>([])
   const [cajasReales, setCajasReales] = useState<any[]>([])
 
-  // Estados para Auditoría Histórica
-  const [fechaHistorial, setFechaHistorial] = useState(new Date().toISOString().split('T')[0])
+  // MAGIA: Función interna para calcular la fecha estricta de Argentina
+  const obtenerFechaLocal = () => {
+    const f = new Date();
+    const yyyy = f.getFullYear();
+    const mm = String(f.getMonth() + 1).padStart(2, '0');
+    const dd = String(f.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Estados para Auditoría Histórica (Usando la nueva fecha local corregida)
+  const [fechaHistorial, setFechaHistorial] = useState(obtenerFechaLocal())
   const [movimientosHistoricos, setMovimientosHistoricos] = useState<any[]>([])
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false)
   const [cierresHistoricos, setCierresHistoricos] = useState<any[]>([])
@@ -42,7 +51,6 @@ export function AdminDashboardView() {
 
   // Función para armar el PDF de un cierre viejo
   const handleDescargarCierre = (cierre: any) => {
-    // Filtramos los movimientos que ocurrieron ANTES o en el mismo momento de este cierre puntual
     const movsDelCierre = movimientosHistoricos.filter(m => new Date(m.fecha) <= new Date(cierre.fecha_cierre));
 
     setPrintData({
@@ -59,7 +67,6 @@ export function AdminDashboardView() {
     });
     setPrintType('cierre');
 
-    // Le damos medio segundo a React para que dibuje el PDF oculto y mandamos a imprimir
     setTimeout(() => {
       window.print();
       setPrintType(null);
@@ -67,13 +74,21 @@ export function AdminDashboardView() {
     }, 500);
   }
 
-  // Función para buscar en la máquina del tiempo
+  // Función para buscar en la máquina del tiempo (100% Dinámica con el Huso Horario)
   const buscarHistorial = async (fecha: string) => {
     setIsLoadingHistorico(true);
     setFechaHistorial(fecha);
     try {
-      const fechaInicio = `${fecha}T00:00:00.000Z`;
-      const fechaFin = `${fecha}T23:59:59.999Z`;
+      // MAGIA: Calculamos el huso horario local de la compu en el formato correcto (ej: "-03:00", "+02:00")
+      const offsetMinutos = new Date().getTimezoneOffset();
+      const signo = offsetMinutos > 0 ? "-" : "+";
+      const horasAbs = String(Math.floor(Math.abs(offsetMinutos) / 60)).padStart(2, '0');
+      const minAbs = String(Math.abs(offsetMinutos) % 60).padStart(2, '0');
+      const zonaHorariaLocal = `${signo}${horasAbs}:${minAbs}`;
+
+      // Ahora armamos la fecha inyectando la zona horaria dinámica
+      const fechaInicio = `${fecha}T00:00:00.000${zonaHorariaLocal}`;
+      const fechaFin = `${fecha}T23:59:59.999${zonaHorariaLocal}`;
 
       const { data: movData } = await supabase
         .from('movimientos_caja')
@@ -178,7 +193,8 @@ export function AdminDashboardView() {
   };
 
   return (
-    <div className="space-y-6 pb-10 font-sans tracking-tight print:hidden">
+    <>
+      <div className="space-y-6 pb-10 font-sans tracking-tight print:hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-slate-100 pb-4 gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 uppercase tracking-tighter">
@@ -398,10 +414,12 @@ export function AdminDashboardView() {
         </TabsContent>
 
       </Tabs>
-      {/* ZONA DE IMPRESIÓN OCULTA */}
+      </div>
+
+      {/* ZONA DE IMPRESIÓN OCULTA (Ahora está AFUERA del print:hidden) */}
       <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
         {printType === 'cierre' && <CierreCajaImprimible datos={printData} />}
       </div>
-    </div>
+    </>
   )
 }
