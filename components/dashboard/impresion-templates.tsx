@@ -274,26 +274,33 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
   return (
     <div className="bg-white text-slate-900 p-8 font-sans w-[210mm] min-h-[297mm] mx-auto">
       
-      <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-6">
+      <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-4">
         <div className="flex items-center gap-4">
           <img src="/icon.png" alt="Logo" className="w-16 h-16 object-contain" />
           <div>
-            <h1 className="text-2xl font-black tracking-tighter uppercase">Cierre de Caja</h1>
-            {/* Azul Goodyear */}
-            <p className="text-xs font-black text-[#003087] uppercase tracking-[0.2em]">Suspensión MARTIN</p>
+            <h1 className="text-2xl font-black tracking-tighter uppercase leading-none">Cierre de Caja</h1>
+            <p className="text-xs font-black text-[#003087] uppercase tracking-[0.2em] mt-1">Suspensión MARTIN</p>
+            
+            {/* MAGIA: Fecha original de la auditoría */}
+            {datos.ultimoCierre && (
+              <div className="mt-2 bg-slate-100 border border-slate-300 px-2 py-0.5 inline-block rounded">
+                <p className="text-[10px] font-black text-slate-800 uppercase tracking-widest">
+                  Cierre Original: {new Date(datos.ultimoCierre).toLocaleDateString('es-AR')} a las {new Date(datos.ultimoCierre).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}
+                </p>
+              </div>
+            )}
           </div>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Emisión de Reporte</p>
-          <p className="text-sm font-bold">{new Date().toLocaleString('es-AR')}</p>
-          {/* Azul Goodyear */}
+          <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Copia Impresa El</p>
+          <p className="text-sm font-bold leading-tight">{new Date().toLocaleString('es-AR')}</p>
           <p className="text-[10px] font-black text-[#003087] uppercase mt-1">
             Operador: {datos.usuario || 'Administrador'}
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-white p-5 rounded-2xl border-2 border-slate-800">
           <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-3">Auditoría de Efectivo</h3>
           <div className="space-y-1.5">
@@ -328,14 +335,14 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
           <tbody>
             {datos.movimientos?.map((mov: any, idx: number) => (
               <tr key={idx} className="border-b border-slate-300">
-                <td className="py-3 font-mono text-[11px] text-slate-600 font-bold">
+                <td className="py-1.5 font-mono text-[11px] text-slate-600 font-bold">
                   {new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}
                 </td>
-                <td className="py-3">
-                  <p className="font-bold text-slate-900 text-sm">{mov.detalle}</p>
-                  <p className="text-[9px] font-black text-slate-600 uppercase">{mov.metodo_pago}</p>
+                <td className="py-1.5">
+                  <p className="font-bold text-slate-900 text-sm leading-tight">{mov.detalle}</p>
+                  <p className="text-[9px] font-black text-slate-600 uppercase leading-tight mt-0.5">{mov.metodo_pago}</p>
                 </td>
-                <td className={`py-3 text-right font-mono font-black text-slate-900`}>
+                <td className={`py-1.5 text-right font-mono font-black text-slate-900`}>
                   {mov.tipo_movimiento === 'egreso_gasto' ? '-' : ''}${Number(mov.monto).toLocaleString('es-AR')}
                 </td>
               </tr>
@@ -344,7 +351,7 @@ export function CierreCajaImprimible({ datos }: { datos: any }) {
         </table>
       </div>
 
-      <div className="mt-20 border-t-2 border-slate-800 pt-4">
+      <div className="mt-6 border-t-2 border-slate-800 pt-4">
         <p className="text-[9px] text-slate-600 font-bold uppercase tracking-widest text-center">
           Este documento es un reporte interno de sistema. No posee validez legal.
         </p>
