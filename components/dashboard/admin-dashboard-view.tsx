@@ -7,6 +7,7 @@ import {
   BarChart3, Wallet, Landmark, Calendar,
   ArrowUpRight, ArrowDownRight, Activity, CreditCard, Search, ArrowRightLeft, Loader2, Download, Printer
 } from "lucide-react"
+import { CierreCajaImprimible } from "./impresion-templates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { 
@@ -34,6 +35,37 @@ export function AdminDashboardView() {
   const [movimientosHistoricos, setMovimientosHistoricos] = useState<any[]>([])
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false)
   const [cierresHistoricos, setCierresHistoricos] = useState<any[]>([])
+
+  // Estados para imprimir
+  const [printData, setPrintData] = useState<any>(null)
+  const [printType, setPrintType] = useState<'cierre' | null>(null)
+
+  // Función para armar el PDF de un cierre viejo
+  const handleDescargarCierre = (cierre: any) => {
+    // Filtramos los movimientos que ocurrieron ANTES o en el mismo momento de este cierre puntual
+    const movsDelCierre = movimientosHistoricos.filter(m => new Date(m.fecha) <= new Date(cierre.fecha_cierre));
+
+    setPrintData({
+      ultimoCierre: cierre.fecha_cierre,
+      efectivo_esperado: cierre.saldo_esperado_efectivo,
+      efectivo_real: cierre.saldo_real_efectivo,
+      diferencia: cierre.diferencia,
+      transferencias: cierre.total_transferencias,
+      tarjetas: cierre.total_tarjetas,
+      cheques: cierre.total_cheques,
+      notas: cierre.notas,
+      movimientos: movsDelCierre,
+      usuario: "Auditoría Histórica",
+    });
+    setPrintType('cierre');
+
+    // Le damos medio segundo a React para que dibuje el PDF oculto y mandamos a imprimir
+    setTimeout(() => {
+      window.print();
+      setPrintType(null);
+      setPrintData(null);
+    }, 500);
+  }
 
   // Función para buscar en la máquina del tiempo
   const buscarHistorial = async (fecha: string) => {
@@ -146,7 +178,7 @@ export function AdminDashboardView() {
   };
 
   return (
-    <div className="space-y-6 pb-10 font-sans tracking-tight">
+    <div className="space-y-6 pb-10 font-sans tracking-tight print:hidden">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-slate-100 pb-4 gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 flex items-center gap-2 uppercase tracking-tighter">
@@ -255,7 +287,7 @@ export function AdminDashboardView() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="text-3xl font-mono font-black text-slate-900">{formatCifra(c.saldo)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">Saldo actual en tiempo real</p>
+                  <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">Saldo actual</p>
                 </CardContent>
               </Card>
             ))}
@@ -289,7 +321,12 @@ export function AdminDashboardView() {
                   <h4 className="text-xs font-bold text-blue-800 uppercase tracking-widest mb-3 flex items-center gap-2"><Printer className="w-4 h-4"/> Reportes de Cierre del Día</h4>
                   <div className="flex gap-2 flex-wrap">
                     {cierresHistoricos.map(cierre => (
-                      <Button key={cierre.id} variant="outline" className="bg-white border-blue-200 text-blue-700 hover:bg-blue-100 text-xs">
+                      <Button 
+                        key={cierre.id} 
+                        variant="outline" 
+                        className="bg-white border-blue-200 text-blue-700 hover:bg-blue-100 text-xs"
+                        onClick={() => handleDescargarCierre(cierre)}
+                      >
                         <Download className="w-3 h-3 mr-2" />
                         Descargar Cierre ({new Date(cierre.fecha_cierre).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})})
                       </Button>
@@ -361,6 +398,10 @@ export function AdminDashboardView() {
         </TabsContent>
 
       </Tabs>
+      {/* ZONA DE IMPRESIÓN OCULTA */}
+      <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
+        {printType === 'cierre' && <CierreCajaImprimible datos={printData} />}
+      </div>
     </div>
   )
 }
