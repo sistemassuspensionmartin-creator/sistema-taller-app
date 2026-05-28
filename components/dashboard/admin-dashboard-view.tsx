@@ -30,6 +30,10 @@ export function AdminDashboardView() {
   const [dataGrafico, setDataGrafico] = useState<any[]>([])
   const [cajasReales, setCajasReales] = useState<any[]>([])
 
+  // Estados para el Módulo Fiscal
+  const [ivaVentas, setIvaVentas] = useState(0)
+  const [ivaCompras, setIvaCompras] = useState("")
+
   // MAGIA: Función interna para calcular la fecha estricta de Argentina
   const obtenerFechaLocal = () => {
     const f = new Date();
@@ -160,6 +164,20 @@ export function AdminDashboardView() {
             else egrPrev += monto;
           }
         });
+
+        // --- MAGIA FISCAL: CÁLCULO DE IVA VENTAS (Últimos 30 días) ---
+        const { data: facturados } = await supabase
+          .from('presupuestos')
+          .select('total_final')
+          .eq('estado_facturacion', 'Facturado')
+          .gte('created_at', hace30.toISOString()); 
+        
+        if (facturados) {
+          let totalFacturado = 0;
+          facturados.forEach((p: any) => totalFacturado += Number(p.total_final || 0));
+          const neto = totalFacturado / 1.21; // Desglosamos el Neto
+          setIvaVentas(totalFacturado - neto); // Guardamos solo el monto del IVA (21%)
+        }
 
         setStats({
           ingresos: ingActual, ingresosPrev: ingPrev,
@@ -402,15 +420,97 @@ export function AdminDashboardView() {
           </Card>
         </TabsContent>
 
-        {/* PESTAÑA 4: GASTOS (Esqueleto preparado) */}
-        <TabsContent value="gastos" className="animate-in fade-in duration-300">
-          <Card className="shadow-none border-dashed border-2 border-slate-200 bg-slate-50/50">
-            <CardContent className="flex flex-col items-center justify-center py-20 text-center">
-              <TrendingDown className="w-12 h-12 text-slate-300 mb-4" />
-              <h3 className="text-lg font-bold text-slate-700 mb-1">Módulo en construcción</h3>
-              <p className="text-sm text-slate-500 max-w-md">Próximamente podrás ver un desglose automático de todos los egresos del taller agrupados por categoría (Sueldos, Insumos, Impuestos) para controlar fugas de capital.</p>
-            </CardContent>
-          </Card>
+        {/* PESTAÑA 4: CONTROL DE GASTOS Y POSICIÓN FISCAL */}
+        <TabsContent value="gastos" className="animate-in fade-in duration-300 space-y-8">
+          
+          {/* --- BLOQUE 1: POSICIÓN FISCAL (ARCA/AFIP) --- */}
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <Landmark className="w-4 h-4 text-indigo-600"/> Posición Fiscal (Últimos 30 días)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* TARJETA: IVA VENTAS */}
+              <Card className="shadow-none border-slate-200 bg-white">
+                <CardContent className="p-5">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">IVA Ventas (100% Automático)</p>
+                  <div className="text-2xl font-mono font-black text-slate-900 mb-1">{formatCifra(ivaVentas)}</div>
+                  <p className="text-xs text-slate-500 font-medium">Calculado sobre presupuestos emitidos y cobrados.</p>
+                </CardContent>
+              </Card>
+
+              {/* TARJETA: IVA COMPRAS (Ingreso Manual) */}
+              <Card className="shadow-none border-slate-200 bg-slate-50">
+                <CardContent className="p-5">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                    <span>IVA Compras (Manual)</span>
+                    <span className="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">Borrador</span>
+                  </p>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 font-mono font-bold text-slate-400">$</span>
+                    <input 
+                      type="number" 
+                      className="w-full pl-7 pr-3 py-2 rounded-md border border-slate-300 text-xl font-mono font-black text-slate-900 focus:outline-none focus:border-indigo-500 bg-white transition-colors"
+                      placeholder="0"
+                      value={ivaCompras}
+                      onChange={(e) => setIvaCompras(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium mt-2">Sumá el IVA de tus facturas de insumos/repuestos.</p>
+                </CardContent>
+              </Card>
+
+              {/* TARJETA: SALDO FISCAL (El Semáforo) */}
+              <Card className={`shadow-none border-2 transition-colors ${ivaVentas - Number(ivaCompras || 0) > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500 bg-emerald-50'}`}>
+                <CardContent className="p-5">
+                  <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${ivaVentas - Number(ivaCompras || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    Saldo a favor de {ivaVentas - Number(ivaCompras || 0) > 0 ? 'ARCA (A Pagar)' : 'Tu Taller'}
+                  </p>
+                  <div className={`text-3xl font-mono font-black ${ivaVentas - Number(ivaCompras || 0) > 0 ? 'text-rose-700' : 'text-emerald-700'}`}>
+                    {formatCifra(Math.abs(ivaVentas - Number(ivaCompras || 0)))}
+                  </div>
+                  <p className={`text-[10px] font-bold mt-2 ${ivaVentas - Number(ivaCompras || 0) > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                    {ivaVentas - Number(ivaCompras || 0) > 0 ? 'Tenés que liquidar este monto al contador.' : 'Tenés crédito fiscal disponible.'}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 my-4"></div>
+
+          {/* --- BLOQUE 2: GASTOS OPERATIVOS --- */}
+          <div>
+             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <TrendingDown className="w-4 h-4 text-rose-600"/> Gastos Operativos (Últimos 30 días)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <Card className="shadow-none border-slate-200">
+                <CardContent className="p-5 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Costo Operativo Total</p>
+                    <div className="text-3xl font-mono font-black text-rose-600">{formatCifra(stats.egresos)}</div>
+                    {renderDelta(stats.egresos, stats.egresosPrev)}
+                  </div>
+                  <div className="p-4 bg-rose-50 rounded-full shrink-0">
+                    <TrendingDown className="w-8 h-8 text-rose-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="shadow-none border-slate-200 bg-slate-50">
+                 <CardContent className="p-5 flex flex-col justify-center h-full">
+                    <p className="text-sm font-black text-slate-800 mb-1">Origen de los datos</p>
+                    <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">El total gastado se nutre en tiempo real de todos los retiros registrados como "Egreso/Gasto" desde el mostrador.</p>
+                    <Button variant="outline" onClick={() => setActiveTab("auditoria")} className="w-fit text-xs font-bold border-slate-300 text-slate-700 bg-white">
+                      <Search className="w-3 h-3 mr-2 text-slate-400"/> Auditar detalles en la Cinta
+                    </Button>
+                 </CardContent>
+              </Card>
+
+            </div>
+          </div>
         </TabsContent>
 
       </Tabs>
