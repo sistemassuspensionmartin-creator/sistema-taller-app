@@ -299,167 +299,98 @@ export function AdminDashboardView() {
           <TabsTrigger value="gastos" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-sm">Control de Gastos</TabsTrigger>
         </TabsList>
 
-        {/* PESTAÑA 1: TABLERO GENERAL (Lo que ya tenías) */}
+        {/* ==========================================
+            PESTAÑA 1: TABLERO GENERAL
+        ========================================== */}
         <TabsContent value="kpis" className="space-y-6 animate-in fade-in duration-300">
-
-      {/* KPI GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: "Ventas Netas", val: stats.ingresos, prev: stats.ingresosPrev, color: "indigo" },
-          { label: "Egresos Operativos", val: stats.egresos, prev: stats.egresosPrev, color: "rose" },
-          { label: "Margen de Caja", val: stats.neto, prev: stats.netoPrev, color: "slate" },
-        ].map((kpi, i) => (
-          <Card key={i} className="shadow-none border-slate-100 bg-white">
-            <CardContent className="p-5">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</p>
-              <div className="text-2xl font-mono font-black text-slate-900 mb-2">{formatCifra(kpi.val)}</div>
-              {renderDelta(kpi.val, kpi.prev)}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* GRÁFICO TÉCNICO */}
-        <Card className="lg:col-span-3 shadow-none border-slate-100">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-              <TrendingUp className="w-3 h-3" /> Curva de Ingresos (30d)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px] w-full mt-4">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={dataGrafico}>
-                  <defs>
-                    <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  {/* @ts-ignore */}
-                  <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
-                  {/* @ts-ignore */}
-                  <YAxis hide />
-                  {/* @ts-ignore */}
-                  <Tooltip 
-                    contentStyle={{borderRadius: '8px', border: '1px solid #f1f5f9', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'}}
-                    formatter={(v: any) => [formatCifra(v), "Ingreso"]}
-                  />
-                  {/* @ts-ignore */}
-                  <Area type="monotone" dataKey="valor" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ESTRUCTURA DE ACTIVOS */}
-        <Card className="shadow-none border-slate-100 bg-slate-50/50">
-          <CardHeader>
-            <CardTitle className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Distribución de Activos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {cajasReales.map(c => (
-              <div key={c.id} className="border-b border-white pb-2">
-                <p className="text-[9px] font-bold text-slate-400 uppercase">{c.nombre}</p>
-                <p className="text-sm font-mono font-black text-slate-800">{formatCifra(c.saldo)}</p>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { label: "Ventas Netas", val: stats.ingresos, prev: stats.ingresosPrev, color: "indigo" },
+              { label: "Egresos Operativos", val: stats.egresos, prev: stats.egresosPrev, color: "rose" },
+              { label: "Margen de Caja", val: stats.neto, prev: stats.netoPrev, color: "slate" },
+            ].map((kpi, i) => (
+              <Card key={i} className="shadow-none border-slate-100 bg-white">
+                <CardContent className="p-5">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{kpi.label}</p>
+                  <div className="text-2xl font-mono font-black text-slate-900 mb-2">{formatCifra(kpi.val)}</div>
+                  {renderDelta(kpi.val, kpi.prev)}
+                </CardContent>
+              </Card>
             ))}
-          </CardContent>
-        </Card>
-      </div>
-    </TabsContent>
-
-        {/* --- BLOQUE 2: BALANCE MENSUAL Y GASTOS --- */}
-          <div>
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4 text-slate-600"/> Balance Operativo ({formatearNombreMes(mesSeleccionado)})
-            </h3>
-
-            {/* 4 TARJETAS DE RENTABILIDAD */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <Card className="shadow-none border-slate-200 bg-white">
-                <CardContent className="p-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ingresos Totales</p>
-                  <div className="text-xl font-mono font-black text-indigo-600">{formatCifra(stats.ingresos)}</div>
-                </CardContent>
-              </Card>
-              <Card className="shadow-none border-slate-200 bg-white">
-                <CardContent className="p-4">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gastos Operativos</p>
-                  <div className="text-xl font-mono font-black text-rose-600">{formatCifra(stats.egresos)}</div>
-                </CardContent>
-              </Card>
-              <Card className="shadow-none border-slate-200 bg-emerald-50 border-emerald-100">
-                <CardContent className="p-4">
-                  <p className="text-[10px] font-black text-emerald-600/70 uppercase tracking-widest mb-1">Ganancia Estimada</p>
-                  <div className="text-xl font-mono font-black text-emerald-700">{formatCifra(stats.neto)}</div>
-                </CardContent>
-              </Card>
-              <Card className="shadow-none border-slate-200 bg-slate-50">
-                <CardContent className="p-4">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Promedio Gasto Diario</p>
-                  <div className="text-xl font-mono font-black text-slate-700">{formatCifra(stats.egresos / 30)}</div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* GRÁFICO DE GASTOS Y RANKING */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              
-              {/* LA TORTA */}
-              <Card className="lg:col-span-2 shadow-none border-slate-200 bg-white">
-                <CardHeader className="pb-2 border-b border-slate-100">
-                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest">Distribución de Fugas</CardTitle>
-                </CardHeader>
-                <CardContent className="flex items-center justify-center h-[280px] pt-4">
-                  {gastosPorCategoria.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        {/* @ts-ignore */}
-                        <Pie data={gastosPorCategoria} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={4} dataKey="value">
-                          {gastosPorCategoria.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={['#f43f5e', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#64748b'][index % 6]} />
-                          ))}
-                        </Pie>
-                        {/* @ts-ignore */}
-                        <Tooltip formatter={(value: any) => formatCifra(Number(value))} contentStyle={{borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}/>
-                        {/* @ts-ignore */}
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{fontSize: '11px', fontWeight: 'bold'}}/>
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-xs font-bold text-slate-400 uppercase">No hay gastos registrados en este período.</p>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* LISTA TOP GASTOS */}
-              <Card className="shadow-none border-slate-200 bg-slate-50/50 flex flex-col">
-                 <CardHeader className="pb-2 border-b border-slate-100 bg-white shrink-0">
-                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest">Top Categorías</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0 flex-1 overflow-y-auto">
-                  <div className="divide-y divide-slate-100">
-                    {gastosPorCategoria.sort((a,b) => b.value - a.value).map((cat, i) => (
-                      <div key={i} className="flex justify-between items-center p-4 hover:bg-white transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-3 h-3 rounded-full shadow-sm" style={{backgroundColor: ['#f43f5e', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#64748b'][i % 6]}}></div>
-                          <p className="text-xs font-bold text-slate-700">{cat.name}</p>
-                        </div>
-                        <p className="text-sm font-mono font-black text-slate-900">{formatCifra(cat.value)}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-            </div>
           </div>
 
-        {/* PESTAÑA 3: AUDITORÍA HISTÓRICA */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <Card className="lg:col-span-3 shadow-none border-slate-100">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                  <TrendingUp className="w-3 h-3" /> Curva de Ingresos ({formatearNombreMes(mesSeleccionado)})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px] w-full mt-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dataGrafico}>
+                      <defs>
+                        <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      {/* @ts-ignore */}
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                      {/* @ts-ignore */}
+                      <YAxis hide />
+                      {/* @ts-ignore */}
+                      <Tooltip contentStyle={{borderRadius: '8px', border: '1px solid #f1f5f9', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)'}} formatter={(v: any) => [formatCifra(v), "Ingreso"]} />
+                      {/* @ts-ignore */}
+                      <Area type="monotone" dataKey="valor" stroke="#4f46e5" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-none border-slate-100 bg-slate-50/50">
+              <CardHeader>
+                <CardTitle className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Distribución de Activos</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {cajasReales.map(c => (
+                  <div key={c.id} className="border-b border-white pb-2">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">{c.nombre}</p>
+                    <p className="text-sm font-mono font-black text-slate-800">{formatCifra(c.saldo)}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* ==========================================
+            PESTAÑA 2: TESORERÍA (CAJAS) - ¡Recuperada!
+        ========================================== */}
+        <TabsContent value="cajas" className="animate-in fade-in duration-300 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {cajasReales.map(c => (
+              <Card key={c.id} className="shadow-sm border-slate-200 bg-white">
+                <CardHeader className="bg-slate-50/50 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+                    <Landmark className="w-4 h-4 text-emerald-600"/> {c.nombre}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="text-3xl font-mono font-black text-slate-900">{formatCifra(c.saldo)}</div>
+                  <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">Saldo actual en tiempo real</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* ==========================================
+            PESTAÑA 3: AUDITORÍA HISTÓRICA
+        ========================================== */}
         <TabsContent value="auditoria" className="animate-in fade-in duration-300 space-y-4">
           <Card className="shadow-none border-slate-200">
             <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -480,7 +411,6 @@ export function AdminDashboardView() {
             </CardHeader>
             <CardContent className="p-0">
               
-              {/* Sección de Cierres de ese día */}
               {cierresHistoricos.length > 0 && (
                 <div className="bg-blue-50/50 border-b border-blue-100 p-4">
                   <h4 className="text-xs font-bold text-blue-800 uppercase tracking-widest mb-3 flex items-center gap-2"><Printer className="w-4 h-4"/> Reportes de Cierre del Día</h4>
@@ -500,7 +430,6 @@ export function AdminDashboardView() {
                 </div>
               )}
 
-              {/* Tabla de Movimientos */}
               <div className="max-h-[500px] overflow-y-auto">
                 <Table>
                   <TableHeader className="bg-white sticky top-0 shadow-sm z-10">
@@ -551,17 +480,102 @@ export function AdminDashboardView() {
           </Card>
         </TabsContent>
 
-        {/* PESTAÑA 4: CONTROL DE GASTOS Y POSICIÓN FISCAL */}
+        {/* ==========================================
+            PESTAÑA 4: CONTROL DE GASTOS Y BALANCE
+        ========================================== */}
         <TabsContent value="gastos" className="animate-in fade-in duration-300 space-y-8">
           
-          {/* --- BLOQUE 1: POSICIÓN FISCAL (ARCA/AFIP) --- */}
+          {/* BLOQUE 1: BALANCE OPERATIVO */}
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <PieChartIcon className="w-4 h-4 text-slate-600"/> Balance Operativo ({formatearNombreMes(mesSeleccionado)})
+            </h3>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <Card className="shadow-none border-slate-200 bg-white">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ingresos Totales</p>
+                  <div className="text-xl font-mono font-black text-indigo-600">{formatCifra(stats.ingresos)}</div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-none border-slate-200 bg-white">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gastos Operativos</p>
+                  <div className="text-xl font-mono font-black text-rose-600">{formatCifra(stats.egresos)}</div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-none border-slate-200 bg-emerald-50 border-emerald-100">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-emerald-600/70 uppercase tracking-widest mb-1">Ganancia Estimada</p>
+                  <div className="text-xl font-mono font-black text-emerald-700">{formatCifra(stats.neto)}</div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-none border-slate-200 bg-slate-50">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Promedio Gasto Diario</p>
+                  <div className="text-xl font-mono font-black text-slate-700">{formatCifra(stats.egresos / 30)}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <Card className="lg:col-span-2 shadow-none border-slate-200 bg-white">
+                <CardHeader className="pb-2 border-b border-slate-100">
+                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest">Distribución de Fugas</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center h-[280px] pt-4">
+                  {gastosPorCategoria.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      {/* @ts-ignore */}
+                      <PieChart>
+                        {/* @ts-ignore */}
+                        <Pie data={gastosPorCategoria} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={4} dataKey="value">
+                          {gastosPorCategoria.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={['#f43f5e', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#64748b'][index % 6]} />
+                          ))}
+                        </Pie>
+                        {/* @ts-ignore */}
+                        <Tooltip formatter={(value: any) => formatCifra(Number(value))} contentStyle={{borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}/>
+                        {/* @ts-ignore */}
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{fontSize: '11px', fontWeight: 'bold'}}/>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-xs font-bold text-slate-400 uppercase">No hay gastos registrados en este período.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-none border-slate-200 bg-slate-50/50 flex flex-col">
+                 <CardHeader className="pb-2 border-b border-slate-100 bg-white shrink-0">
+                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest">Top Categorías</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex-1 overflow-y-auto">
+                  <div className="divide-y divide-slate-100">
+                    {gastosPorCategoria.sort((a,b) => b.value - a.value).map((cat, i) => (
+                      <div key={i} className="flex justify-between items-center p-4 hover:bg-white transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full shadow-sm" style={{backgroundColor: ['#f43f5e', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#64748b'][i % 6]}}></div>
+                          <p className="text-xs font-bold text-slate-700">{cat.name}</p>
+                        </div>
+                        <p className="text-sm font-mono font-black text-slate-900">{formatCifra(cat.value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 my-4"></div>
+
+          {/* BLOQUE 2: POSICIÓN FISCAL */}
           <div>
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
               <Landmark className="w-4 h-4 text-indigo-600"/> Posición Fiscal ({formatearNombreMes(mesSeleccionado)})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              {/* TARJETA: IVA VENTAS */}
               <Card className="shadow-none border-slate-200 bg-white">
                 <CardContent className="p-5">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">IVA Ventas (100% Automático)</p>
@@ -570,7 +584,6 @@ export function AdminDashboardView() {
                 </CardContent>
               </Card>
 
-              {/* TARJETA: IVA COMPRAS (Ingreso Manual) */}
               <Card className="shadow-none border-slate-200 bg-slate-50">
                 <CardContent className="p-5">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center justify-between">
@@ -591,7 +604,6 @@ export function AdminDashboardView() {
                 </CardContent>
               </Card>
 
-              {/* TARJETA: SALDO FISCAL (El Semáforo) */}
               <Card className={`shadow-none border-2 transition-colors ${ivaVentas - Number(ivaCompras || 0) > 0 ? 'border-rose-500 bg-rose-50' : 'border-emerald-500 bg-emerald-50'}`}>
                 <CardContent className="p-5">
                   <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${ivaVentas - Number(ivaCompras || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
@@ -607,43 +619,7 @@ export function AdminDashboardView() {
               </Card>
             </div>
           </div>
-
-          <div className="border-t border-slate-200 my-4"></div>
-
-          {/* --- BLOQUE 2: GASTOS OPERATIVOS --- */}
-          <div>
-             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-rose-600"/> Gastos Operativos ({formatearNombreMes(mesSeleccionado)})
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
-              <Card className="shadow-none border-slate-200">
-                <CardContent className="p-5 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Costo Operativo Total</p>
-                    <div className="text-3xl font-mono font-black text-rose-600">{formatCifra(stats.egresos)}</div>
-                    {renderDelta(stats.egresos, stats.egresosPrev)}
-                  </div>
-                  <div className="p-4 bg-rose-50 rounded-full shrink-0">
-                    <TrendingDown className="w-8 h-8 text-rose-500" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="shadow-none border-slate-200 bg-slate-50">
-                 <CardContent className="p-5 flex flex-col justify-center h-full">
-                    <p className="text-sm font-black text-slate-800 mb-1">Origen de los datos</p>
-                    <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">El total gastado se nutre en tiempo real de todos los retiros registrados como "Egreso/Gasto" desde el mostrador.</p>
-                    <Button variant="outline" onClick={() => setActiveTab("auditoria")} className="w-fit text-xs font-bold border-slate-300 text-slate-700 bg-white">
-                      <Search className="w-3 h-3 mr-2 text-slate-400"/> Auditar detalles en la Cinta
-                    </Button>
-                 </CardContent>
-              </Card>
-
-            </div>
-          </div>
         </TabsContent>
-
       </Tabs>
       </div>
 
