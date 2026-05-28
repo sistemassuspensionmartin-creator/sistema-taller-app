@@ -35,6 +35,18 @@ export function AdminDashboardView() {
   const [ivaCompras, setIvaCompras] = useState("")
   const [gastosPorCategoria, setGastosPorCategoria] = useState<any[]>([])
 
+  // Estado para el Mes Seleccionado (Por defecto: Mes Actual)
+  const [mesSeleccionado, setMesSeleccionado] = useState(() => {
+    const f = new Date();
+    return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  // Utilidad para mostrar "MAYO 2026" en los títulos
+  const formatearNombreMes = (mesAnio: string) => {
+    const [a, m] = mesAnio.split('-');
+    return new Date(parseInt(a), parseInt(m) - 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' }).toUpperCase();
+  };
+
   // MAGIA: Función interna para calcular la fecha estricta de Argentina
   const obtenerFechaLocal = () => {
     const f = new Date();
@@ -127,50 +139,75 @@ export function AdminDashboardView() {
 
   const cargarMetricasBI = async () => {
     try {
-      // 1. Traer Cajas
       const { data: cData } = await supabase.from('cajas').select('*').order('nombre');
       if (cData) setCajasReales(cData);
 
-      // 2. Traer Movimientos (Últimos 60 días para comparar)
-      const hoy = new Date();
-      const hace60 = new Date(); hace60.setDate(hoy.getDate() - 60);
-      const hace30 = new Date(); hace30.setDate(hoy.getDate() - 30);
+      // MAGIA: Calculamos el primer y último día del mes seleccionado
+      const [añoStr, mesStr] = mesSeleccionado.split('-');
+      const año = parseInt(añoStr);
+      const mes = parseInt(mesStr) - 1; 
+
+      const fechaInicio = `${mesSeleccionado}-01T00:00:00.000-03:00`;
+      const ultimoDia = new Date(año, mes + 1, 0).getDate();
+      const fechaFin = `${mesSeleccionado}-${String(ultimoDia).padStart(2,'0')}T23:59:59.999-03:00`;
+
+      // Calculamos el mes ANTERIOR para sacar las flechitas verdes/rojas (Deltas)
+      const mesAnt = mes === 0 ? 11 : mes - 1;
+      const añoAnt = mes === 0 ? año - 1 : año;
+      const strMesAnt = `${añoAnt}-${String(mesAnt + 1).padStart(2,'0')}`;
+      const fechaInicioPrev = `${strMesAnt}-01T00:00:00.000-03:00`;
+      const ultimoDiaPrev = new Date(añoAnt, mesAnt + 1, 0).getDate();
+      const fechaFinPrev = `${strMesAnt}-${String(ultimoDiaPrev).padStart(2,'0')}T23:59:59.999-03:00`;
 
       const { data: movs } = await supabase
         .from('movimientos_caja')
         .select('*')
-        .gte('fecha', hace60.toISOString())
+        .gte('fecha', fechaInicioPrev)
+        .lte('fecha', fechaFin)
         .order('fecha', { ascending: true });
 
       if (movs) {
         let ingActual = 0, ingPrev = 0;
         let egrActual = 0, egrPrev = 0;
         const agrupado: any = {};
-        const catGastos: any = {}; // Diccionario para separar gastos por rubro
+        const catGastos: any = {};
 
         movs.forEach((m: any) => {
           const monto = Number(m.monto);
-          const fechaM = new Date(m.fecha);
-          const esMesActual = fechaM >= hace30;
+          // Convertimos las fechas a un número para compararlas exactas
+          const t = new Date(m.fecha).getTime();
+          const esMesActual = t >= new Date(fechaInicio).getTime() && t <= new Date(fechaFin).getTime();
+          const esMesPrevio = t >= new Date(fechaInicioPrev).getTime() && t <= new Date(fechaFinPrev).getTime();
 
           if (m.tipo_movimiento === 'ingreso_cobro') {
             if (esMesActual) {
               ingActual += monto;
-              const label = fechaM.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+              const label = new Date(m.fecha).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
               agrupado[label] = (agrupado[label] || 0) + monto;
-            } else {
+            } else if (esMesPrevio) {
               ingPrev += monto;
             }
           } else if (m.tipo_movimiento === 'egreso_gasto') {
             if (esMesActual) {
               egrActual += monto;
-              // Leemos el detalle del cajero (Ej: "Gasto: Repuestos") y extraemos la categoría
+              
+              // DETECTOR INTELIGENTE DE CATEGORÍAS
               let cat = "Otros";
-              if (m.detalle && m.detalle.startsWith("Gasto: ")) {
-                cat = m.detalle.replace("Gasto: ", "").trim();
+              if (m.detalle) {
+                const detLow = m.detalle.toLowerCase();
+                if (m.detalle.includes("Gasto: ")) {
+                  cat = m.detalle.split("Gasto: ")[1].trim();
+                } else if (detLow.includes("proveedor") || detLow.includes("repuesto") || detLow.includes("insumo") || detLow.includes("fravega")) {
+                  cat = "Proveedores e Insumos";
+                } else if (detLow.includes("sueldo") || detLow.includes("adelanto") || detLow.includes("empleado")) {
+                  cat = "Sueldos y Personal";
+                } else if (detLow.includes("luz") || detLow.includes("agua") || detLow.includes("internet") || detLow.includes("epec")) {
+                  cat = "Servicios Fijos";
+                }
               }
               catGastos[cat] = (catGastos[cat] || 0) + monto;
-            } else {
+
+            } else if (esMesPrevio) {
               egrPrev += monto;
             }
           }
@@ -183,17 +220,15 @@ export function AdminDashboardView() {
         });
 
         setDataGrafico(Object.keys(agrupado).map(k => ({ date: k, valor: agrupado[k] })));
-        
-        // Guardamos las categorías para dibujar la torta
         setGastosPorCategoria(Object.keys(catGastos).map(k => ({ name: k, value: catGastos[k] })));
       }
 
-      // --- CORRECCIÓN IVA VENTAS ---
-      // Buscamos directamente en la tabla 'facturas' generadas en los últimos 30 días
+      // --- IVA VENTAS (Exacto del mes seleccionado) ---
       const { data: facturas } = await supabase
         .from('facturas')
         .select('total_final')
-        .gte('created_at', hace30.toISOString()); 
+        .gte('created_at', fechaInicio)
+        .lte('created_at', fechaFin); 
       
       if (facturas && facturas.length > 0) {
         let totalFacturado = 0;
@@ -206,7 +241,8 @@ export function AdminDashboardView() {
     } catch (e) { console.error(e) }
   }
 
-  useEffect(() => { cargarMetricasBI() }, [])
+  // Ahora escucha los cambios: si tocás el mes, se recarga todo instantáneamente
+  useEffect(() => { cargarMetricasBI() }, [mesSeleccionado])
 
   const calcularDelta = (actual: number, prev: number) => {
     if (prev === 0) return 0;
@@ -236,8 +272,19 @@ export function AdminDashboardView() {
           </h2>
           <p className="text-xs text-slate-500 font-medium">Panel de Control Gerencial</p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <Button variant="outline" size="sm" onClick={() => setShowMoney(!showMoney)} className="text-slate-600 border-slate-200 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          
+          <div className="flex items-center bg-white border border-slate-200 rounded-md px-3 py-1.5 shadow-sm">
+            <Calendar className="w-4 h-4 text-indigo-600 mr-2" />
+            <input 
+              type="month" 
+              className="text-sm font-black text-slate-700 focus:outline-none bg-transparent uppercase tracking-wider cursor-pointer"
+              value={mesSeleccionado}
+              onChange={(e) => setMesSeleccionado(e.target.value)}
+            />
+          </div>
+
+          <Button variant="outline" size="sm" onClick={() => setShowMoney(!showMoney)} className="text-slate-600 border-slate-200 w-full sm:w-auto h-9">
             {showMoney ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
             {showMoney ? "Modo Seguro" : "Mostrar Valores"}
           </Button>
@@ -328,7 +375,7 @@ export function AdminDashboardView() {
         {/* --- BLOQUE 2: BALANCE MENSUAL Y GASTOS --- */}
           <div>
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4 text-slate-600"/> Balance Operativo (Últimos 30 días)
+              <PieChartIcon className="w-4 h-4 text-slate-600"/> Balance Operativo ({formatearNombreMes(mesSeleccionado)})
             </h3>
 
             {/* 4 TARJETAS DE RENTABILIDAD */}
@@ -510,7 +557,7 @@ export function AdminDashboardView() {
           {/* --- BLOQUE 1: POSICIÓN FISCAL (ARCA/AFIP) --- */}
           <div>
             <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <Landmark className="w-4 h-4 text-indigo-600"/> Posición Fiscal (Últimos 30 días)
+              <Landmark className="w-4 h-4 text-indigo-600"/> Posición Fiscal ({formatearNombreMes(mesSeleccionado)})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
@@ -566,7 +613,7 @@ export function AdminDashboardView() {
           {/* --- BLOQUE 2: GASTOS OPERATIVOS --- */}
           <div>
              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-rose-600"/> Gastos Operativos (Últimos 30 días)
+              <TrendingDown className="w-4 h-4 text-rose-600"/> Gastos Operativos ({formatearNombreMes(mesSeleccionado)})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
