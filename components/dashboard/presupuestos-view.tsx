@@ -129,6 +129,9 @@ export function PresupuestosView({
   const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
   const [bancoTarjeta, setBancoTarjeta] = useState("")
   const [infoPago, setInfoPago] = useState({ pagado: 0, restante: 0 })
+  // Estados para el Sistema de Anulación de Cobros
+  const [isAnulacionModalOpen, setIsAnulacionModalOpen] = useState(false)
+  const [anulacionError, setAnulacionError] = useState<{ visible: boolean, titulo: string, mensaje: string }>({ visible: false, titulo: "", mensaje: "" })
 
   const [kmIngreso, setKmIngreso] = useState("")
   const [kmEgreso, setKmEgreso] = useState("")
@@ -1120,6 +1123,109 @@ export function PresupuestosView({
       setIsSaving(false);
     }
   }
+
+  const handleAnularCobro = async () => {
+    if (!editandoId) return;
+    setIsSaving(true);
+
+    try {
+      // 1. Buscamos todos los cobros reales que ingresaron por este presupuesto
+      const { data: movimientos, error: errMovs } = await supabase
+        .from('movimientos_caja')
+        .select('*')
+        .eq('presupuesto_id', editandoId)
+        .eq('tipo_movimiento', 'ingreso_cobro');
+
+      if (errMovs) throw errMovs;
+
+      if (!movimientos || movimientos.length === 0) {
+        setAnulacionError({
+          visible: true,
+          titulo: "No se encontraron cobros",
+          mensaje: "Este presupuesto no registra movimientos de dinero activos en la caja."
+        });
+        setIsSaving(false);
+        return;
+      }
+
+      // 2. CANDADO DE SEGURIDAD: Verificar si los cobros se hicieron HOY
+      const hoy = new Date().toLocaleDateString('es-AR');
+      const tieneCobrosViejos = movimientos.some((m: any) => new Date(m.fecha).toLocaleDateString('es-AR') !== hoy);
+
+      if (tieneCobrosViejos) {
+        setAnulacionError({
+          visible: true,
+          titulo: "Acción Bloqueada por Auditoría",
+          mensaje: "No podés anular el cobro de este trabajo porque se realizó en días anteriores y esa caja ya fue cerrada. Por seguridad contable, solicitá un ajuste al administrador."
+        });
+        setIsSaving(false);
+        return;
+      }
+
+      // 3. ¡PROCESAMOS LA REVERSIÓN AUDITABLE!
+      for (const mov of movimientos) {
+        const montoNum = Number(mov.monto);
+
+        // A) Si afectó a una Caja Física, le restamos el dinero generando el contra-asiento
+        if (mov.caja_destino_id) {
+          const { data: cajaReal } = await supabase.from('cajas').select('saldo').eq('id', mov.caja_destino_id).single();
+          if (cajaReal) {
+            await supabase.from('cajas').update({ saldo: Number(cajaReal.saldo || 0) - montoNum }).eq('id', mov.caja_destino_id);
+          }
+        }
+
+        // B) Si fue a Cuenta Corriente, le restamos la deuda del perfil del cliente
+        if (mov.metodo_pago === 'Cuenta Corriente' && clienteSeleccionado) {
+          const { data: cliReal } = await supabase.from('clientes').select('saldo').eq('id', clienteSeleccionado).single();
+          const nuevoSaldoCli = Number(cliReal?.saldo || 0) - montoNum;
+          
+          await supabase.from('clientes').update({ 
+            saldo: nuevoSaldoCli,
+            tiene_cuenta_corriente: nuevoSaldoCli > 0 
+          }).eq('id', clienteSeleccionado);
+
+          // Registramos la contra-orden en su cuenta corriente
+          await supabase.from('movimientos_clientes').insert([{
+            cliente_id: clienteSeleccionado,
+            monto: -montoNum,
+            tipo: 'pago_abono', // Lo compensamos simulando una entrega/crédito
+            comprobante: `ANUL-PRE-${numeroCorrelativo}`,
+            detalle: `ANULACIÓN: Devolución de cargo por presupuesto PRE-${numeroCorrelativo}`
+          }]);
+        }
+
+        // C) Insertamos el Contra-Movimiento en la caja para la Cinta de Auditoría
+        await supabase.from('movimientos_caja').insert([{
+          tipo_movimiento: 'egreso_gasto',
+          caja_origen_id: mov.caja_destino_id,
+          monto: montoNum,
+          metodo_pago: mov.metodo_pago,
+          presupuesto_id: editandoId,
+          detalle: `REVERSIÓN: Anulación Cobro PRE-${numeroCorrelativo} (${vehiculoSeleccionado})`,
+          notas: `Anulado en mostrador por corrección de cobro.`
+        }]);
+      }
+
+      // 4. Devolvemos el presupuesto al estado "Aprobado"
+      await supabase.from('presupuestos').update({
+        estado: 'Aprobado',
+        estado_pago: null,
+        modificado_por_rol: userRole || 'admin',
+        modificado_por_nombre: userName || 'Usuario'
+      }).eq('id', editandoId);
+
+      setEstado('Aprobado');
+      setIsAnulacionModalOpen(false);
+      alert("¡Cobro anulado con éxito! Las cajas se balancearon y el presupuesto volvió a estar disponible para cobrar.");
+      cargarDatos();
+
+    } catch (error: any) {
+      alert("Error en la base de datos al revertir: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   return (
     <>
       <div className="space-y-6 pb-8 print:hidden">
@@ -1172,6 +1278,17 @@ export function PresupuestosView({
                     {userRole !== 'mecanico' && (
                       <Button variant="outline" onClick={() => setIsAsociarModalOpen(true)} className="border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400">
                         <Link2 className="w-4 h-4 mr-2"/> Asociar
+                      </Button>
+                    )}
+
+                    {/* Botón Quirúrgico: Anular Cobro (Visible solo para presupuestos ya cobrados/facturados) */}
+                    {userRole !== 'mecanico' && (estado === "Cobrado" || estado === "Facturado") && (
+                      <Button 
+                        variant="outline"
+                        onClick={() => setIsAnulacionModalOpen(true)}
+                        className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400 mr-2"
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" /> Anular Cobro / Volver Atrás
                       </Button>
                     )}
 
@@ -1967,6 +2084,65 @@ export function PresupuestosView({
             <Button onClick={handleReingresoGarantia} disabled={isSaving} className="bg-red-600 text-white hover:bg-red-700">
               {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : null}
               Ingresar al Taller
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ============================================================== */}
+      {/* MODALES GERENCIALES: ANULACIÓN DE COBROS Y ADVERTENCIAS CONTABLES */}
+      {/* ============================================================== */}
+      
+      {/* MODAL 1: CONFIRMACIÓN DE ANULACIÓN */}
+      <Dialog open={isAnulacionModalOpen} onOpenChange={setIsAnulacionModalOpen}>
+        <DialogContent className="max-w-md border-rose-200 bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-rose-700 dark:text-rose-500 font-black uppercase tracking-tight">
+              <AlertTriangle className="w-6 h-6 text-rose-600 animate-bounce" /> ¿Anular Cobro del Trabajo?
+            </DialogTitle>
+            <DialogDescription className="text-slate-600 font-medium pt-2">
+              Esta acción dará marcha atrás al flujo de caja del mostrador para el presupuesto <span className="font-mono font-bold text-slate-900">PRE-{numeroCorrelativo}</span>.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="bg-rose-50 dark:bg-rose-950/20 p-4 rounded-xl border border-rose-100 dark:border-rose-900/50 space-y-2.5 my-2">
+            <p className="text-xs text-rose-900 dark:text-rose-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
+              ⚠️ Impacto Contable Automático:
+            </p>
+            <ul className="text-xs text-slate-700 dark:text-slate-300 space-y-1.5 font-medium list-disc pl-4">
+              <li>Se generará un contra-asiento de egreso por <span className="font-bold text-rose-600">${totalFinal.toLocaleString()}</span> para balancear las cajas.</li>
+              <li>El presupuesto volverá al estado <span className="font-bold text-emerald-600">Aprobado</span> listo para ser re-cobrado correctamente.</li>
+              <li>La operación quedará firmada en la cinta de auditoría con tu usuario.</li>
+            </ul>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0 border-t border-slate-100 pt-3 mt-2">
+            <Button variant="ghost" onClick={() => setIsAnulacionModalOpen(false)} disabled={isSaving}>Conservar Cobro</Button>
+            <Button onClick={handleAnularCobro} disabled={isSaving} className="bg-rose-600 text-white hover:bg-rose-700 border-none font-bold">
+              {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <RotateCcw className="w-4 h-4 mr-2"/>} Confirmar Anulación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 2: BLOQUEO POR REGLA DE AUDITORÍA */}
+      <Dialog open={anulacionError.visible} onOpenChange={(open: boolean) => setAnulacionError({ ...anulacionError, visible: open })}>
+        <DialogContent className="max-w-md border-amber-300 bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg flex items-center gap-2 text-amber-700 font-black uppercase tracking-tight">
+              <Lock className="w-5 h-5 text-amber-600" /> {anulacionError.titulo}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-2 flex gap-3 items-start">
+            <div className="p-3 bg-amber-50 rounded-full text-amber-600 shrink-0">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <p className="text-sm text-slate-600 font-semibold leading-relaxed pt-1">
+              {anulacionError.mensaje}
+            </p>
+          </div>
+          <DialogFooter className="border-t border-slate-100 pt-3">
+            <Button className="bg-amber-600 hover:bg-amber-700 border-none text-white font-bold text-xs uppercase tracking-wider" onClick={() => setAnulacionError({ ...anulacionError, visible: false })}>
+              Entendido
             </Button>
           </DialogFooter>
         </DialogContent>
