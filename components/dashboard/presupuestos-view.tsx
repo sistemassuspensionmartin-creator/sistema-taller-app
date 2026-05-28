@@ -1288,7 +1288,7 @@ export function PresupuestosView({
                         onClick={() => setIsAnulacionModalOpen(true)}
                         className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400 mr-2"
                       >
-                        <RotateCcw className="w-4 h-4 mr-2" /> Anular Cobro / Volver Atrás
+                        <RotateCcw className="w-4 h-4 mr-2" /> Anular Cobro
                       </Button>
                     )}
 
