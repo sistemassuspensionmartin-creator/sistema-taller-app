@@ -5,14 +5,14 @@ import { supabase } from "@/lib/supabase"
 import { 
   Eye, EyeOff, TrendingUp, TrendingDown, 
   BarChart3, Wallet, Landmark, Calendar,
-  ArrowUpRight, ArrowDownRight, Activity, CreditCard, Search, ArrowRightLeft, Loader2, Download, Printer
+  ArrowUpRight, ArrowDownRight, Activity, CreditCard, Search, ArrowRightLeft, Loader2, Download, Printer, PieChart as PieChartIcon, 
 } from "lucide-react"
 import { CierreCajaImprimible } from "./impresion-templates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, BarChart, Bar
+  ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend
 } from 'recharts'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -33,6 +33,7 @@ export function AdminDashboardView() {
   // Estados para el Módulo Fiscal
   const [ivaVentas, setIvaVentas] = useState(0)
   const [ivaCompras, setIvaCompras] = useState("")
+  const [gastosPorCategoria, setGastosPorCategoria] = useState<any[]>([])
 
   // MAGIA: Función interna para calcular la fecha estricta de Argentina
   const obtenerFechaLocal = () => {
@@ -145,6 +146,7 @@ export function AdminDashboardView() {
         let ingActual = 0, ingPrev = 0;
         let egrActual = 0, egrPrev = 0;
         const agrupado: any = {};
+        const catGastos: any = {}; // Diccionario para separar gastos por rubro
 
         movs.forEach((m: any) => {
           const monto = Number(m.monto);
@@ -160,24 +162,19 @@ export function AdminDashboardView() {
               ingPrev += monto;
             }
           } else if (m.tipo_movimiento === 'egreso_gasto') {
-            if (esMesActual) egrActual += monto;
-            else egrPrev += monto;
+            if (esMesActual) {
+              egrActual += monto;
+              // Leemos el detalle del cajero (Ej: "Gasto: Repuestos") y extraemos la categoría
+              let cat = "Otros";
+              if (m.detalle && m.detalle.startsWith("Gasto: ")) {
+                cat = m.detalle.replace("Gasto: ", "").trim();
+              }
+              catGastos[cat] = (catGastos[cat] || 0) + monto;
+            } else {
+              egrPrev += monto;
+            }
           }
         });
-
-        // --- MAGIA FISCAL: CÁLCULO DE IVA VENTAS (Últimos 30 días) ---
-        const { data: facturados } = await supabase
-          .from('presupuestos')
-          .select('total_final')
-          .eq('estado_facturacion', 'Facturado')
-          .gte('created_at', hace30.toISOString()); 
-        
-        if (facturados) {
-          let totalFacturado = 0;
-          facturados.forEach((p: any) => totalFacturado += Number(p.total_final || 0));
-          const neto = totalFacturado / 1.21; // Desglosamos el Neto
-          setIvaVentas(totalFacturado - neto); // Guardamos solo el monto del IVA (21%)
-        }
 
         setStats({
           ingresos: ingActual, ingresosPrev: ingPrev,
@@ -186,6 +183,25 @@ export function AdminDashboardView() {
         });
 
         setDataGrafico(Object.keys(agrupado).map(k => ({ date: k, valor: agrupado[k] })));
+        
+        // Guardamos las categorías para dibujar la torta
+        setGastosPorCategoria(Object.keys(catGastos).map(k => ({ name: k, value: catGastos[k] })));
+      }
+
+      // --- CORRECCIÓN IVA VENTAS ---
+      // Buscamos directamente en la tabla 'facturas' generadas en los últimos 30 días
+      const { data: facturas } = await supabase
+        .from('facturas')
+        .select('total_final')
+        .gte('created_at', hace30.toISOString()); 
+      
+      if (facturas && facturas.length > 0) {
+        let totalFacturado = 0;
+        facturas.forEach((f: any) => totalFacturado += Number(f.total_final || 0));
+        const neto = totalFacturado / 1.21;
+        setIvaVentas(totalFacturado - neto);
+      } else {
+        setIvaVentas(0);
       }
     } catch (e) { console.error(e) }
   }
@@ -309,24 +325,92 @@ export function AdminDashboardView() {
       </div>
     </TabsContent>
 
-        {/* PESTAÑA 2: TESORERÍA (Las cajas más grandes) */}
-        <TabsContent value="cajas" className="animate-in fade-in duration-300 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cajasReales.map(c => (
-              <Card key={c.id} className="shadow-sm border-slate-200 bg-white">
-                <CardHeader className="bg-slate-50/50 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
-                    <Landmark className="w-4 h-4 text-emerald-600"/> {c.nombre}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="text-3xl font-mono font-black text-slate-900">{formatCifra(c.saldo)}</div>
-                  <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">Saldo actual</p>
+        {/* --- BLOQUE 2: BALANCE MENSUAL Y GASTOS --- */}
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+              <PieChartIcon className="w-4 h-4 text-slate-600"/> Balance Operativo (Últimos 30 días)
+            </h3>
+
+            {/* 4 TARJETAS DE RENTABILIDAD */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <Card className="shadow-none border-slate-200 bg-white">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ingresos Totales</p>
+                  <div className="text-xl font-mono font-black text-indigo-600">{formatCifra(stats.ingresos)}</div>
                 </CardContent>
               </Card>
-            ))}
+              <Card className="shadow-none border-slate-200 bg-white">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gastos Operativos</p>
+                  <div className="text-xl font-mono font-black text-rose-600">{formatCifra(stats.egresos)}</div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-none border-slate-200 bg-emerald-50 border-emerald-100">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-emerald-600/70 uppercase tracking-widest mb-1">Ganancia Estimada</p>
+                  <div className="text-xl font-mono font-black text-emerald-700">{formatCifra(stats.neto)}</div>
+                </CardContent>
+              </Card>
+              <Card className="shadow-none border-slate-200 bg-slate-50">
+                <CardContent className="p-4">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Promedio Gasto Diario</p>
+                  <div className="text-xl font-mono font-black text-slate-700">{formatCifra(stats.egresos / 30)}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* GRÁFICO DE GASTOS Y RANKING */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              
+              {/* LA TORTA */}
+              <Card className="lg:col-span-2 shadow-none border-slate-200 bg-white">
+                <CardHeader className="pb-2 border-b border-slate-100">
+                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest">Distribución de Fugas</CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center h-[280px] pt-4">
+                  {gastosPorCategoria.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        {/* @ts-ignore */}
+                        <Pie data={gastosPorCategoria} cx="50%" cy="50%" innerRadius={70} outerRadius={100} paddingAngle={4} dataKey="value">
+                          {gastosPorCategoria.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={['#f43f5e', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#64748b'][index % 6]} />
+                          ))}
+                        </Pie>
+                        {/* @ts-ignore */}
+                        <Tooltip formatter={(value: any) => formatCifra(Number(value))} contentStyle={{borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}/>
+                        {/* @ts-ignore */}
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{fontSize: '11px', fontWeight: 'bold'}}/>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-xs font-bold text-slate-400 uppercase">No hay gastos registrados en este período.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* LISTA TOP GASTOS */}
+              <Card className="shadow-none border-slate-200 bg-slate-50/50 flex flex-col">
+                 <CardHeader className="pb-2 border-b border-slate-100 bg-white shrink-0">
+                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest">Top Categorías</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 flex-1 overflow-y-auto">
+                  <div className="divide-y divide-slate-100">
+                    {gastosPorCategoria.sort((a,b) => b.value - a.value).map((cat, i) => (
+                      <div key={i} className="flex justify-between items-center p-4 hover:bg-white transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3 h-3 rounded-full shadow-sm" style={{backgroundColor: ['#f43f5e', '#8b5cf6', '#0ea5e9', '#10b981', '#f59e0b', '#64748b'][i % 6]}}></div>
+                          <p className="text-xs font-bold text-slate-700">{cat.name}</p>
+                        </div>
+                        <p className="text-sm font-mono font-black text-slate-900">{formatCifra(cat.value)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+            </div>
           </div>
-        </TabsContent>
 
         {/* PESTAÑA 3: AUDITORÍA HISTÓRICA */}
         <TabsContent value="auditoria" className="animate-in fade-in duration-300 space-y-4">
