@@ -87,7 +87,7 @@ export function WorkOrdersTable({
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordenes_trabajo' },
-        async (payload) => {
+        async (payload: any) => {
           
           // CASO A: Alguien movió un auto (UPDATE)
           if (payload.eventType === 'UPDATE') {

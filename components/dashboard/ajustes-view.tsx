@@ -57,6 +57,7 @@ export function AjustesView() {
     msj_postventa_wpp: "",
     msj_postventa_email_asunto: "",
     msj_postventa_email_cuerpo: "",
+    msj_recordatorio_turno: "",
     logo_url: ""
   })
 
@@ -383,8 +384,23 @@ export function AjustesView() {
                 <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{taller}}"}</span>
                 <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{cantidad}}"}</span>
                 <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800">{"{{repuesto}}"}</span>
+                {/* Nuevas de turnos: */}
+                <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800 text-purple-600">{"{{fecha}}"}</span>
+                <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800 text-purple-600">{"{{hora}}"}</span>
+                <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800 text-purple-600">{"{{servicio}}"}</span>
+                <span className="bg-white dark:bg-slate-900 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-800 text-purple-600">{"{{ubicacion}}"}</span>
               </div>
             </div>
+
+            <div className="space-y-2">
+                <Label className="font-bold flex items-center gap-2"><MessageSquare className="w-4 h-4 text-purple-600"/> Recordatorio de Turno (WhatsApp)</Label>
+                <Textarea 
+                  className="min-h-[100px]" 
+                  value={config.msj_recordatorio_turno || ""} 
+                  onChange={e => setConfig({...config, msj_recordatorio_turno: e.target.value})} 
+                  placeholder="Hola {{cliente}}, te recordamos tu turno de {{servicio}} para el día {{fecha}} a las {{hora}} hs..." 
+                />
+              </div>
 
             <div className="grid gap-6">
               <div className="space-y-2">
