@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock, Loader2, BookmarkPlus } from "lucide-react"
+import { Plus, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Car, User, Ban, FileText, Search, Phone, ExternalLink, CheckCircle2, XCircle, CalendarClock, Loader2, BookmarkPlus, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -736,10 +736,10 @@ export function TurnosView({
                   {userRole !== 'mecanico' && turnoSeleccionado.estado !== "asistio" && turnoSeleccionado.estado !== "cancelado" && (
                     <Button 
                       onClick={() => enviarRecordatorioWhatsApp(turnoSeleccionado)}
-                      className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2"
+                      className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2 font-bold"
                       size="sm"
                     >
-                      <Phone className="w-4 h-4 mr-2"/> Avisar
+                      <MessageCircle className="w-4 h-4 mr-2" /> WhatsApp
                     </Button>
                   )}
                 </div>
