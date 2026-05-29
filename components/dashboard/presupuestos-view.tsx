@@ -1913,13 +1913,11 @@ export function PresupuestosView({
                         <p className="font-mono font-bold text-lg text-purple-900 dark:text-purple-100">${totalFinal.toLocaleString()}</p>
                       </div>
                       
-                      {/* Esta cajita del medio SOLO aparece si el cliente ya había pagado algo antes */}
-                      {infoPago.pagado > 0 && (
-                        <div className="text-center border-l border-r border-purple-200 px-4 mx-2">
-                          <p className="text-xs text-emerald-600 uppercase tracking-wider font-bold">Ya Pagado</p>
-                          <p className="font-mono font-bold text-lg text-emerald-600">${infoPago.pagado.toLocaleString()}</p>
-                        </div>
-                      )}
+                      {/* Cajita del medio SIEMPRE VISIBLE */}
+                      <div className="text-center border-l border-r border-purple-200 px-4 mx-2 w-1/3">
+                        <p className="text-xs text-emerald-600 uppercase tracking-wider font-bold">Ya Pagado</p>
+                        <p className="font-mono font-bold text-lg text-emerald-600">${infoPago.pagado.toLocaleString()}</p>
+                      </div>
                       
                       <div className="text-right">
                         <p className="text-xs text-red-600/70 uppercase tracking-wider font-bold">Resta Cobrar</p>
