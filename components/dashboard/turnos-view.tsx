@@ -57,6 +57,29 @@ const getLocalDateString = (d: Date) => {
   return `${year}-${month}-${day}`;
 };
 
+// Función para crear textos amigables: "hoy", "mañana", "el jueves 29/05"
+const getFechaAmigable = (fechaStr: string) => {
+  if (!fechaStr) return "";
+  const partes = fechaStr.split('-');
+  const fechaTurno = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+  fechaTurno.setHours(0, 0, 0, 0);
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const mañana = new Date(hoy);
+  mañana.setDate(mañana.getDate() + 1);
+
+  if (fechaTurno.getTime() === hoy.getTime()) return "hoy";
+  if (fechaTurno.getTime() === mañana.getTime()) return "mañana";
+
+  const diaNombre = DIAS_SEMANA[fechaTurno.getDay() === 0 ? 6 : fechaTurno.getDay() - 1].toLowerCase();
+  const diaNum = String(fechaTurno.getDate()).padStart(2, '0');
+  const mesNum = String(fechaTurno.getMonth() + 1).padStart(2, '0');
+  
+  return `el ${diaNombre} ${diaNum}/${mesNum}`;
+};
+
 // --- AGREGAMOS userRole A LAS PROPIEDADES ---
 interface TurnosViewProps {
   turnoAgendarInfo?: any;
@@ -421,6 +444,34 @@ export function TurnosView({
     }
   }
 
+  // Función para enviar el Recordatorio por WhatsApp
+  const enviarRecordatorioWhatsApp = async (turno: any) => {
+    if (!turno.telefono || turno.telefono === "No registrado") {
+      alert("No hay un número de teléfono registrado para este turno.");
+      return;
+    }
+
+    // 1. Buscamos la configuración para traer el texto y la ubicación
+    const { data: config } = await supabase.from('configuracion').select('*').eq('id', 1).single();
+    
+    const telefonoLimpio = turno.telefono.replace(/\D/g, '');
+    const ubicacion = config?.direccion || "nuestro taller";
+    const fechaAmigable = getFechaAmigable(turno.fecha);
+    
+    // Plantilla por defecto, pero si en configuración creaste el campo 'msj_recordatorio_turno', usa ese.
+    let plantilla = config?.msj_recordatorio_turno || "Hola {{cliente}}, te escribimos de Suspensión MARTIN para recordarte tu turno de {{servicio}} para tu {{vehiculo}}.\n\nTe esperamos {{fecha}} a las {{hora}} hs en {{ubicacion}}.\n\n¡Saludos!";
+    
+    let mensaje = plantilla
+      .replace(/{{cliente}}/g, turno.cliente || "cliente")
+      .replace(/{{vehiculo}}/g, turno.auto || "vehículo")
+      .replace(/{{servicio}}/g, turno.servicio || "servicio")
+      .replace(/{{fecha}}/g, fechaAmigable)
+      .replace(/{{hora}}/g, turno.hora || "")
+      .replace(/{{ubicacion}}/g, ubicacion);
+
+    window.open(`https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(mensaje)}`, '_blank');
+  };
+
   const handleValidarIngreso = (turno: any) => {
     const hoyLocal = getLocalDateString(new Date());
 
@@ -681,6 +732,16 @@ export function TurnosView({
                     <p className="font-medium text-foreground flex items-center gap-2 mb-1"><User className="w-4 h-4 text-primary" /> {turnoSeleccionado.cliente}</p>
                     <p className="text-muted-foreground flex items-center gap-2"><Phone className="w-4 h-4" /> {turnoSeleccionado.telefono || "No registrado"}</p>
                   </div>
+                  
+                  {userRole !== 'mecanico' && turnoSeleccionado.estado !== "asistio" && turnoSeleccionado.estado !== "cancelado" && (
+                    <Button 
+                      onClick={() => enviarRecordatorioWhatsApp(turnoSeleccionado)}
+                      className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2"
+                      size="sm"
+                    >
+                      <Phone className="w-4 h-4 mr-2"/> Avisar
+                    </Button>
+                  )}
                 </div>
               </div>
 
