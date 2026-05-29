@@ -564,13 +564,16 @@ export function PresupuestosView({
 
       // Si estamos editando un presupuesto que figuraba como Cobrado o Facturado...
       if (editandoId && (estado === 'Cobrado' || estado === 'Facturado')) {
-        // Vamos a la caja a ver cuánta plata real entró por este trabajo
+        // Vamos a la caja a ver cuánta plata neta entró (Ingresos reales - Anulaciones)
         const { data: pagos } = await supabase.from('movimientos_caja')
-          .select('monto')
-          .eq('presupuesto_id', editandoId)
-          .eq('tipo_movimiento', 'ingreso_cobro');
+          .select('monto, tipo_movimiento')
+          .eq('presupuesto_id', editandoId);
           
-        const pagadoTotal = pagos?.reduce((acc: any, mov: any) => acc + Number(mov.monto), 0) || 0;
+        const pagadoTotal = pagos?.reduce((acc: any, mov: any) => {
+          if (mov.tipo_movimiento === 'ingreso_cobro') return acc + Number(mov.monto);
+          if (mov.tipo_movimiento === 'egreso_gasto') return acc - Number(mov.monto);
+          return acc;
+        }, 0) || 0;
         
         if (totalFinal !== pagadoTotal) {
           estadoCalculado = 'Aprobado'; // Lo bajamos de categoría
@@ -1250,8 +1253,13 @@ export function PresupuestosView({
                       <Button variant="default" onClick={async () => {
                         setIsSaving(true);
                         try {
-                          const { data: pagos } = await supabase.from('movimientos_caja').select('monto').eq('presupuesto_id', editandoId).eq('tipo_movimiento', 'ingreso_cobro');
-                          const pagadoTotal = pagos?.reduce((acc: any, mov: any) => acc + Number(mov.monto), 0) || 0;
+                          // Calculamos el neto real: Cobros menos Anulaciones
+                          const { data: pagos } = await supabase.from('movimientos_caja').select('monto, tipo_movimiento').eq('presupuesto_id', editandoId);
+                          const pagadoTotal = pagos?.reduce((acc: any, mov: any) => {
+                            if (mov.tipo_movimiento === 'ingreso_cobro') return acc + Number(mov.monto);
+                            if (mov.tipo_movimiento === 'egreso_gasto') return acc - Number(mov.monto);
+                            return acc;
+                          }, 0) || 0;
                           const restante = totalFinal - pagadoTotal;
                           
                           setInfoPago({ pagado: pagadoTotal, restante: restante });
