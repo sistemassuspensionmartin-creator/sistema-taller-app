@@ -444,7 +444,7 @@ export function TurnosView({
     }
   }
 
-  // Función para enviar el Recordatorio por WhatsApp
+ // Función para enviar el Recordatorio por WhatsApp
   const enviarRecordatorioWhatsApp = async (turno: any) => {
     if (!turno.telefono || turno.telefono === "No registrado") {
       alert("No hay un número de teléfono registrado para este turno.");
@@ -458,13 +458,15 @@ export function TurnosView({
     const ubicacion = config?.direccion || "nuestro taller";
     const fechaAmigable = getFechaAmigable(turno.fecha);
     
-    // Plantilla por defecto, pero si en configuración creaste el campo 'msj_recordatorio_turno', usa ese.
-    let plantilla = config?.msj_recordatorio_turno || "Hola {{cliente}}, te escribimos de Suspensión MARTIN para recordarte tu turno de {{servicio}} para tu {{vehiculo}}.\n\nTe esperamos {{fecha}} a las {{hora}} hs en {{ubicacion}}.\n\n¡Saludos!";
+    // Plantilla por defecto
+    let plantilla = config?.msj_recordatorio_turno || "Hola {{cliente}}, te escribimos para recordarte tu turno de {{servicio}} para tu {{vehiculo}} ({{patente}}).\n\nTe esperamos {{fecha}} a las {{hora}} hs en {{ubicacion}}.";
     
+    // LA MAGIA: Reemplazamos TODAS las variables una por una
     let mensaje = plantilla
-      .replace(/{{cliente}}/g, turno.cliente || "cliente")
-      .replace(/{{vehiculo}}/g, turno.auto || "vehículo")
-      .replace(/{{servicio}}/g, turno.servicio || "servicio")
+      .replace(/{{cliente}}/g, turno.cliente || "Cliente")
+      .replace(/{{vehiculo}}/g, turno.auto || "Vehículo")
+      .replace(/{{patente}}/g, turno.patente || "Sin Patente") /* <--- ESTA ES LA QUE FALTABA */
+      .replace(/{{servicio}}/g, turno.servicio || "Servicio")
       .replace(/{{fecha}}/g, fechaAmigable)
       .replace(/{{hora}}/g, turno.hora || "")
       .replace(/{{ubicacion}}/g, ubicacion);
