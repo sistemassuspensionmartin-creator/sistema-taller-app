@@ -1,15 +1,14 @@
 import React from "react"
 import { Car, User, Palette, Gauge, Calendar, Tag, Clock } from "lucide-react"
 
-// --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica de Descuento) ---
-// --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica Dinámica) ---
+// --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica Dinámica COMPACTA) ---
 export function PresupuestoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
   return (
-    // Se cambió el borde verde de arriba por borde blanco para mantener el margen sin que se vea
-    <div className="bg-white text-slate-800 p-6 font-sans max-w-[210mm] mx-auto border-t-[8px] border-white">
-      <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-4 mt-2">
+    // ACHICAMOS EL TOP: Cambiamos p-6 por px-6 pb-6 pt-2 y sacamos el borde blanco grueso
+    <div className="bg-white text-slate-800 px-6 pb-6 pt-2 font-sans max-w-[210mm] mx-auto">
+      <div className="flex justify-between items-start border-b-2 border-slate-800 pb-3 mb-3">
         <div className="flex items-center gap-3">
           {datos?.config?.logo_url ? (
             <img src={datos.config.logo_url} alt="Logo" className="w-24 h-24 object-contain" />
@@ -39,7 +38,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         {/* Bordes oscuros para máxima nitidez al imprimir */}
         <div className="border border-slate-800 p-3 rounded-lg bg-white">
           <p className="text-[10px] font-black text-[#003087] uppercase tracking-wider mb-1">Datos del Cliente</p>
@@ -70,7 +69,8 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      <div className="mb-6">
+      {/* ACHICAMOS EL MB-6 a MB-2 PARA PEGARLO AL TOTAL */}
+      <div className="mb-2">
         <div className="flex justify-between items-end border-b-2 border-slate-800 pb-2 mb-2">
           <div className="w-10 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center">Cant.</div>
           <div className="flex-1 text-[10px] font-black text-slate-800 uppercase tracking-wider pl-2">Descripción del Trabajo / Repuesto</div>
@@ -98,9 +98,10 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      <div className="mt-6 pt-4 flex justify-between items-end">
+      {/* ACHICAMOS EL MT-6 y PT-4 PARA ACERCAR LOS TOTALES */}
+      <div className="mt-2 pt-2 flex justify-between items-end">
         {/* LADO IZQUIERDO: DEMORA ESTIMADA Y OBSERVACIONES */}
-        <div className="w-1/2 flex flex-col gap-3">
+        <div className="w-1/2 flex flex-col gap-2">
            {datos.demora_estimada && (
              <div className="border-l-4 border-[#003087] pl-3 py-1.5 bg-[#003087]/5 rounded-r-lg">
                 <p className="text-[9px] font-black text-[#003087] uppercase tracking-widest mb-0.5">Demora Estimada</p>
@@ -120,7 +121,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         <div className="w-[280px]">
           {/* --- MAGIA COMERCIAL: SOLO SE MUESTRA SI HAY DESCUENTO MAYOR A 0 --- */}
           {Number(datos.descuento) > 0 && (
-            <div className="space-y-1 mb-3 px-3">
+            <div className="space-y-1 mb-2 px-3">
               <div className="flex justify-between items-center text-sm">
                 <p className="font-black text-slate-600 uppercase tracking-wider text-xs">Subtotal</p>
                 <p className="font-mono font-black text-slate-800">${Number(datos.subtotal).toLocaleString()}</p>
@@ -141,7 +142,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* TÉRMINOS LEGALES GLOBALES (Desde Configuración) */}
+      {/* TÉRMINOS LEGALES GLOBALES (Desde Configuración) - ACHICADO EL MARGEN */}
       <div className="mt-3 border-t-2 border-slate-800 pt-1.5">
         <p className="text-[9px] text-slate-600 italic font-bold whitespace-pre-wrap leading-tight text-justify">
           {datos.config?.terminos_presupuesto || `* Válido por ${datos.validez_dias || 15} días. Los precios de repuestos pueden sufrir variaciones.`}
