@@ -1063,8 +1063,12 @@ export function PresupuestosView({
       }
 
       if (cajaDestinoId) {
-        const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
-        await supabase.from('cajas').update({ saldo: Number(cajaAfectada.saldo || 0) + montoNum }).eq('id', cajaDestinoId);
+        // CANDADO ANTI-PISADA: Consultamos el saldo REAL en la base de datos en este preciso milisegundo
+        const { data: cajaReal } = await supabase.from('cajas').select('saldo').eq('id', cajaDestinoId).single();
+        
+        if (cajaReal) {
+          await supabase.from('cajas').update({ saldo: Number(cajaReal.saldo || 0) + montoNum }).eq('id', cajaDestinoId);
+        }
       }
 
       // --- MAGIA: SI PASA A CUENTA CORRIENTE, ACTIVAMOS EL INTERRUPTOR Y CREAMOS LA DEUDA ---
