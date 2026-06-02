@@ -819,9 +819,9 @@ export function PresupuestosView({
       items: v_filas,
       total_final: v_total,
       validez_dias: validez,
-      observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente,
+      observaciones_publicas: esHistorico ? datosHistoricos.observaciones_publicas : notasCliente, /* Esta es la nota específica del presupuesto */
       notas_internas: esHistorico ? datosHistoricos.notas_internas : notasInternas,
-      config: configuracion,
+      config: configuracion, /* ACÁ VIAJAN LOS TÉRMINOS LEGALES GLOBALES */
       km_ingreso: esHistorico ? datosHistoricos.km_ingreso : kmIngreso,
       km_egreso: esHistorico ? datosHistoricos.km_egreso : kmEgreso,
       demora_estimada: esHistorico ? datosHistoricos.demora_estimada : demoraEstimada,

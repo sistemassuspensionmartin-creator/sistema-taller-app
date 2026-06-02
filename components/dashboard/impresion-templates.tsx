@@ -2,6 +2,7 @@ import React from "react"
 import { Car, User, Palette, Gauge, Calendar, Tag, Clock } from "lucide-react"
 
 // --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica de Descuento) ---
+// --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica Dinámica) ---
 export function PresupuestoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
@@ -24,7 +25,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
             <p className="text-xs text-slate-800 font-bold">Tel: {datos.config?.telefono || "No configurado"}</p>
             {/* Azul Goodyear fondo clarito */}
             <p className="text-[10px] font-bold text-[#003087] mt-1 border border-[#003087] bg-[#003087]/5 inline-block px-1.5 py-0.5 rounded">
-              Horarios: {datos.config?.horarios || "Lun a Vie 08:00 a 18:00"}
+              Horarios: {datos.config?.horario || "Lun a Vie 08:00 a 18:00"}
             </p>
           </div>
         </div>
@@ -98,12 +99,19 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
       </div>
 
       <div className="mt-6 pt-4 flex justify-between items-end">
-        {/* LADO IZQUIERDO: DEMORA ESTIMADA */}
-        <div className="w-1/2">
+        {/* LADO IZQUIERDO: DEMORA ESTIMADA Y OBSERVACIONES */}
+        <div className="w-1/2 flex flex-col gap-3">
            {datos.demora_estimada && (
-             <div className="border-l-4 border-[#003087] pl-3 py-1 bg-[#003087]/5 rounded-r-lg">
-                <p className="text-[9px] font-black text-[#003087] uppercase tracking-widest mb-0.5">Demora Estimada del Trabajo</p>
+             <div className="border-l-4 border-[#003087] pl-3 py-1.5 bg-[#003087]/5 rounded-r-lg">
+                <p className="text-[9px] font-black text-[#003087] uppercase tracking-widest mb-0.5">Demora Estimada</p>
                 <p className="text-slate-900 font-black text-sm uppercase">{datos.demora_estimada}</p>
+             </div>
+           )}
+           {/* MAGIA: CAJITA DE OBSERVACIONES PARA EL CLIENTE */}
+           {datos.observaciones_publicas && (
+             <div className="border-l-4 border-amber-500 pl-3 py-1.5 bg-amber-50 rounded-r-lg pr-2">
+                <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-0.5">Observaciones Adicionales</p>
+                <p className="text-slate-800 font-bold text-xs whitespace-pre-wrap leading-tight">{datos.observaciones_publicas}</p>
              </div>
            )}
         </div>
@@ -132,9 +140,14 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
           </div>
         </div>
       </div>
-      <p className="text-[10px] text-slate-500 text-right mt-3 italic font-bold">
-        * Válido por {datos.validez_dias || 15} días. Los precios de repuestos pueden sufrir variaciones.
-      </p>
+
+      {/* TÉRMINOS LEGALES GLOBALES (Desde Configuración) */}
+      <div className="mt-8 border-t-2 border-slate-800 pt-3">
+        <p className="text-[9px] text-slate-600 italic font-bold whitespace-pre-wrap leading-tight text-justify">
+          {datos.config?.terminos_presupuesto || `* Válido por ${datos.validez_dias || 15} días. Los precios de repuestos pueden sufrir variaciones.`}
+        </p>
+      </div>
+
     </div>
   )
 }
