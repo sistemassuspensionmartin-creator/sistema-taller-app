@@ -142,7 +142,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
       </div>
 
       {/* TÉRMINOS LEGALES GLOBALES (Desde Configuración) */}
-      <div className="mt-8 border-t-2 border-slate-800 pt-3">
+      <div className="mt-3 border-t-2 border-slate-800 pt-1.5">
         <p className="text-[9px] text-slate-600 italic font-bold whitespace-pre-wrap leading-tight text-justify">
           {datos.config?.terminos_presupuesto || `* Válido por ${datos.validez_dias || 15} días. Los precios de repuestos pueden sufrir variaciones.`}
         </p>
