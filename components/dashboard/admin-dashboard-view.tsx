@@ -753,7 +753,7 @@ export function AdminDashboardView() {
               <div className="text-right">
                 <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Saldo Actual</p>
                 <span className="font-mono text-2xl font-black text-slate-900">
-                  {showMoney ? formatCifra(cajaHistorialSeleccionada?.saldo) : "••••••"}
+                  {showMoney ? formatCifra(Number(cajaHistorialSeleccionada?.saldo || 0)) : "••••••"}
                 </span>
               </div>
             </DialogTitle>
