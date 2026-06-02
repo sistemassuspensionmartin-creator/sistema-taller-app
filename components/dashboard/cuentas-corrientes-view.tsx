@@ -913,7 +913,7 @@ export function CuentasCorrientesView() {
       </Dialog>
 
       {/* --- NUEVO MODAL DE CONFIRMACIÓN DE BORRADO --- */}
-      <Dialog open={confirmDelete.isOpen} onOpenChange={(open) => setConfirmDelete({isOpen: open, mov: null, entidad: null})}>
+      <Dialog open={confirmDelete.isOpen} onOpenChange={(open:any) => setConfirmDelete({isOpen: open, mov: null, entidad: null})}>
         <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl top-[35%] translate-y-[-50%] outline-none">
           <div className="flex flex-col items-center gap-4 text-center">
             <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">

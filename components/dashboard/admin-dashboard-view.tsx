@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase"
 import { 
   Eye, EyeOff, TrendingUp, TrendingDown, 
   BarChart3, Wallet, Landmark, Calendar,
-  ArrowUpRight, ArrowDownRight, Activity, CreditCard, Search, ArrowRightLeft, Loader2, Download, Printer, PieChart as PieChartIcon, Package, 
+  ArrowUpRight, ArrowDownRight, Activity, CreditCard, Search, ArrowRightLeft, Loader2, Download, Printer, PieChart as PieChartIcon, Package, ArrowRight,
 } from "lucide-react"
 import { CierreCajaImprimible } from "./impresion-templates"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 export function AdminDashboardView() {
   const [activeTab, setActiveTab] = useState("kpis") // Control de pestañas
@@ -65,6 +66,43 @@ export function AdminDashboardView() {
   const [movimientosHistoricos, setMovimientosHistoricos] = useState<any[]>([])
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false)
   const [cierresHistoricos, setCierresHistoricos] = useState<any[]>([])
+
+  // Estados para el Historial Individual de Cajas
+  const [cajaHistorialSeleccionada, setCajaHistorialSeleccionada] = useState<any>(null)
+  const [movimientosCajaDetalle, setMovimientosCajaDetalle] = useState<any[]>([])
+  const [isLoadingCajaDetalle, setIsLoadingCajaDetalle] = useState(false)
+
+  const abrirHistorialCaja = async (caja: any) => {
+    setCajaHistorialSeleccionada(caja);
+    setMovimientosCajaDetalle([]);
+    setIsLoadingCajaDetalle(true);
+
+    try {
+      // Filtramos para traer los movimientos SOLO del mes seleccionado en el panel
+      const [añoStr, mesStr] = mesSeleccionado.split('-');
+      const año = parseInt(añoStr);
+      const mes = parseInt(mesStr) - 1; 
+      const fechaInicio = `${mesSeleccionado}-01T00:00:00.000-03:00`;
+      const ultimoDia = new Date(año, mes + 1, 0).getDate();
+      const fechaFin = `${mesSeleccionado}-${String(ultimoDia).padStart(2,'0')}T23:59:59.999-03:00`;
+
+      // Traemos movimientos donde la caja sea ORIGEN (salió plata) o DESTINO (entró plata)
+      const { data, error } = await supabase
+        .from('movimientos_caja')
+        .select('*')
+        .or(`caja_origen_id.eq.${caja.id},caja_destino_id.eq.${caja.id}`)
+        .gte('fecha', fechaInicio)
+        .lte('fecha', fechaFin)
+        .order('fecha', { ascending: false });
+
+      if (error) throw error;
+      setMovimientosCajaDetalle(data || []);
+    } catch (error: any) {
+      alert("Error al cargar el historial de la caja: " + error.message);
+    } finally {
+      setIsLoadingCajaDetalle(false);
+    }
+  }
 
   // Estados para imprimir
   const [printData, setPrintData] = useState<any>(null)
@@ -359,20 +397,31 @@ export function AdminDashboardView() {
         </TabsContent>
 
         {/* ==========================================
-            PESTAÑA 2: TESORERÍA (CAJAS) - ¡Recuperada!
+            PESTAÑA 2: TESORERÍA (CAJAS)
         ========================================== */}
         <TabsContent value="cajas" className="animate-in fade-in duration-300 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {cajasReales.map(c => (
-              <Card key={c.id} className="shadow-sm border-slate-200 bg-white">
-                <CardHeader className="bg-slate-50/50 pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
-                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2">
+              <Card 
+                key={c.id} 
+                className="shadow-sm border-slate-200 bg-white cursor-pointer hover:border-emerald-400 hover:shadow-md transition-all group relative overflow-hidden"
+                onClick={() => abrirHistorialCaja(c)}
+              >
+                <CardHeader className="bg-slate-50/50 pb-3 border-b border-slate-100 flex flex-row items-center justify-between group-hover:bg-emerald-50/30 transition-colors">
+                  <CardTitle className="text-xs font-black uppercase text-slate-500 tracking-widest flex items-center gap-2 group-hover:text-emerald-700">
                     <Landmark className="w-4 h-4 text-emerald-600"/> {c.nombre}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <div className="text-3xl font-mono font-black text-slate-900">{formatCifra(c.saldo)}</div>
+                  <div className="text-3xl font-mono font-black text-slate-900">
+                    {showMoney ? formatCifra(c.saldo) : "••••••"}
+                  </div>
                   <p className="text-[10px] text-muted-foreground mt-1 uppercase font-bold tracking-wider">Saldo actual en tiempo real</p>
+                  
+                  {/* Flechita animada de "Ver Detalle" */}
+                  <div className="absolute right-4 bottom-4 opacity-0 translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+                    <ArrowRight className="w-5 h-5 text-emerald-500" />
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -691,6 +740,79 @@ export function AdminDashboardView() {
         </TabsContent>
       </Tabs>
       </div>
+
+      {/* --- MODAL: HISTORIAL INDIVIDUAL DE CAJA --- */}
+      <Dialog open={!!cajaHistorialSeleccionada} onOpenChange={(open:any) => !open && setCajaHistorialSeleccionada(null)}>
+        <DialogContent className="!max-w-[90vw] w-full lg:max-w-4xl border-border bg-card h-[85vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-6 border-b border-slate-100 bg-slate-50/50">
+            <DialogTitle className="text-xl flex items-center justify-between pr-8">
+              <span className="flex items-center gap-2 text-emerald-800">
+                <Landmark className="w-5 h-5" /> 
+                Historial: {cajaHistorialSeleccionada?.nombre}
+              </span>
+              <div className="text-right">
+                <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Saldo Actual</p>
+                <span className="font-mono text-2xl font-black text-slate-900">
+                  {showMoney ? formatCifra(cajaHistorialSeleccionada?.saldo) : "••••••"}
+                </span>
+              </div>
+            </DialogTitle>
+            <DialogDescription className="text-xs font-medium text-slate-500">
+              Mostrando el libro mayor del mes de {formatearNombreMes(mesSeleccionado)}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+            <div className="border rounded-lg border-slate-200 bg-white overflow-hidden shadow-sm">
+              <Table>
+                <TableHeader className="bg-slate-100/50 sticky top-0 backdrop-blur-sm z-10 shadow-sm">
+                  <TableRow>
+                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Fecha y Hora</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tipo</TableHead>
+                    <TableHead className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Detalle de Operación</TableHead>
+                    <TableHead className="text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Monto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoadingCajaDetalle ? (
+                    <TableRow><TableCell colSpan={4} className="h-32 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-slate-400"/></TableCell></TableRow>
+                  ) : movimientosCajaDetalle.length === 0 ? (
+                    <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500 font-medium text-sm">No hay movimientos en esta caja durante {formatearNombreMes(mesSeleccionado)}.</TableCell></TableRow>
+                  ) : (
+                    movimientosCajaDetalle.map(mov => {
+                      // Lógica Brillante: Determinar si para ESTA caja en particular fue un ingreso o egreso
+                      const esIngreso = mov.caja_destino_id === cajaHistorialSeleccionada?.id;
+                      
+                      return (
+                        <TableRow key={mov.id} className="hover:bg-slate-50/50 transition-colors">
+                          <TableCell className="text-slate-600 font-mono text-xs whitespace-nowrap">
+                            <span className="font-bold">{new Date(mov.fecha).toLocaleDateString('es-AR')}</span><br/>
+                            <span className="text-[10px] text-slate-400">{new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</span>
+                          </TableCell>
+                          <TableCell>
+                            {esIngreso ? (
+                              <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-none shadow-none"><ArrowDownRight className="w-3 h-3 mr-1"/> Entró</Badge>
+                            ) : (
+                              <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 border-none shadow-none"><ArrowUpRight className="w-3 h-3 mr-1"/> Salió</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <p className="font-semibold text-sm text-slate-800">{mov.detalle}</p>
+                            {mov.notas && <p className="text-[10px] text-slate-500 mt-0.5">{mov.notas}</p>}
+                          </TableCell>
+                          <TableCell className={`text-right font-mono font-bold text-base ${esIngreso ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {showMoney ? `${esIngreso ? '+' : '-'}${formatCifra(Number(mov.monto))}` : "••••••"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ZONA DE IMPRESIÓN OCULTA (Ahora está AFUERA del print:hidden) */}
       <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
