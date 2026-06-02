@@ -310,82 +310,6 @@ export function AdminDashboardView() {
             PESTAÑA 1: TABLERO GENERAL
         ========================================== */}
         <TabsContent value="kpis" className="space-y-6 animate-in fade-in duration-300">
-          {/* NUEVO REPORTE FINANCIERO GERENCIAL */}
-          <div className="mb-8">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              
-              {/* TARJETA 1: RENTABILIDAD */}
-              <Card className="shadow-none border-slate-200 bg-white flex flex-col">
-                <CardHeader className="pb-2 border-b border-slate-100 bg-emerald-50/50">
-                  <CardTitle className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1.5"><TrendingUp className="w-3 h-3"/> 1. Rentabilidad Real</CardTitle>
-                </CardHeader>
-                <CardContent className="p-5 flex-1 flex flex-col">
-                  <div className="text-3xl font-mono font-black text-emerald-700 mb-3">${formatCifra(stats.gananciaOperativa)}</div>
-                  <div className="space-y-1.5 text-xs text-slate-600 font-medium pb-4 border-b border-slate-100 mb-3">
-                    <div className="flex justify-between"><span>Ingresos por Ventas:</span><span className="font-bold text-slate-900">${formatCifra(stats.ingresos)}</span></div>
-                    <div className="flex justify-between"><span>Gastos Fijos/Operativos:</span><span className="font-bold text-rose-600">-${formatCifra(stats.gastosFijos)}</span></div>
-                    <div className="flex justify-between"><span>Costo Repuestos Usados:</span><span className="font-bold text-rose-600">-${formatCifra(stats.costoRepuestos)}</span></div>
-                  </div>
-                  <p className="text-[10px] leading-relaxed text-slate-500 mt-auto italic">
-                    <span className="font-bold text-emerald-700">¿Qué significa?</span> Es la ganancia pura del taller. Ignora las compras masivas de mercadería y solo te descuenta el costo de los repuestos que realmente instalaste este mes.
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* TARJETA 2: FLUJO DE CAJA */}
-              <Card className="shadow-none border-slate-200 bg-white flex flex-col">
-                <CardHeader className="pb-2 border-b border-slate-100 bg-blue-50/50">
-                  <CardTitle className="text-[10px] font-black text-blue-700 uppercase tracking-widest flex items-center gap-1.5"><Wallet className="w-3 h-3"/> 2. Flujo de Caja (Liquidez)</CardTitle>
-                </CardHeader>
-                <CardContent className="p-5 flex-1 flex flex-col">
-                  <div className="text-3xl font-mono font-black text-blue-700 mb-3">${formatCifra(stats.flujoCaja)}</div>
-                  <div className="space-y-1.5 text-xs text-slate-600 font-medium pb-4 border-b border-slate-100 mb-3">
-                    <div className="flex justify-between"><span>Ingresos Totales en Caja:</span><span className="font-bold text-slate-900">${formatCifra(stats.ingresos)}</span></div>
-                    <div className="flex justify-between"><span>Gastos Fijos Pagados:</span><span className="font-bold text-rose-600">-${formatCifra(stats.gastosFijos)}</span></div>
-                    <div className="flex justify-between"><span>Pagos a Proveedores:</span><span className="font-bold text-rose-600">-${formatCifra(stats.comprasProveedores)}</span></div>
-                  </div>
-                  <p className="text-[10px] leading-relaxed text-slate-500 mt-auto italic">
-                    <span className="font-bold text-blue-700">¿Qué significa?</span> Es la plata física que te quedó en las manos a fin de mes. Si este número es bajo pero la rentabilidad es alta, significa que la plata está inmovilizada en mercadería.
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* TARJETA 3: VARIACIÓN DE STOCK */}
-              <Card className={`shadow-none border flex flex-col ${stats.variacionStock >= 0 ? 'bg-purple-50/30 border-purple-200' : 'bg-amber-50/30 border-amber-200'}`}>
-                <CardHeader className={`pb-2 border-b ${stats.variacionStock >= 0 ? 'bg-purple-100/50 border-purple-100' : 'bg-amber-100/50 border-amber-100'}`}>
-                  <CardTitle className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${stats.variacionStock >= 0 ? 'text-purple-700' : 'text-amber-700'}`}><Package className="w-3 h-3"/> 3. Variación de Stock</CardTitle>
-                </CardHeader>
-                <CardContent className="p-5 flex-1 flex flex-col">
-                  <div className={`text-3xl font-mono font-black mb-3 ${stats.variacionStock >= 0 ? 'text-purple-700' : 'text-amber-700'}`}>
-                    {stats.variacionStock >= 0 ? '+' : ''}${formatCifra(stats.variacionStock)}
-                  </div>
-                  <div className="space-y-1.5 text-xs text-slate-600 font-medium pb-4 border-b border-slate-200/50 mb-3">
-                    <div className="flex justify-between"><span>Total Comprado (Proveedores):</span><span className="font-bold text-slate-900">${formatCifra(stats.comprasProveedores)}</span></div>
-                    <div className="flex justify-between"><span>Total Instalado (Repuestos):</span><span className="font-bold text-slate-900">-${formatCifra(stats.costoRepuestos)}</span></div>
-                  </div>
-                  
-                  {stats.variacionStock > 0 ? (
-                    <p className="text-[10px] leading-relaxed text-purple-800 mt-auto font-medium">
-                      <span className="font-black uppercase tracking-wider block mb-1">↑ Capitalización de Inventario</span>
-                      Este mes le pagaste a los proveedores más de lo que instalaste en los autos. Aumentaste tu stock físico. ¡Excelente inversión contra la inflación!
-                    </p>
-                  ) : stats.variacionStock < 0 ? (
-                    <p className="text-[10px] leading-relaxed text-amber-800 mt-auto font-medium">
-                      <span className="font-black uppercase tracking-wider block mb-1">↓ Consumo de Reservas</span>
-                      Este mes instalaste más repuestos de los que compraste. Significa que "viviste" de tu stock acumulado. Prestá atención para no quedarte sin mercadería esencial.
-                    </p>
-                  ) : (
-                    <p className="text-[10px] leading-relaxed text-slate-600 mt-auto font-medium">
-                      <span className="font-black uppercase tracking-wider block mb-1">⚖️ Inventario Neutro</span>
-                      Compraste exactamente la misma cantidad de mercadería que consumiste en el taller.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             <Card className="lg:col-span-3 shadow-none border-slate-100">
               <CardHeader className="flex flex-row items-center justify-between">
@@ -552,35 +476,114 @@ export function AdminDashboardView() {
         ========================================== */}
         <TabsContent value="gastos" className="animate-in fade-in duration-300 space-y-8">
           
-          {/* BLOQUE 1: BALANCE OPERATIVO */}
+          {/* --- SECCIÓN 1: REPORTE GERENCIAL --- */}
           <div>
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <PieChartIcon className="w-4 h-4 text-slate-600"/> Balance Operativo ({formatearNombreMes(mesSeleccionado)})
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-indigo-600"/> 1. Reporte Financiero Gerencial
             </h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              
+              {/* RENTABILIDAD */}
+              <Card className="shadow-none border-slate-200 bg-white flex flex-col">
+                <CardHeader className="pb-2 border-b border-slate-100 bg-emerald-50/50">
+                  <CardTitle className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1.5"><TrendingUp className="w-3 h-3"/> Rentabilidad Real</CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 flex-1 flex flex-col">
+                  <div className="text-3xl font-mono font-black text-emerald-700 mb-3">{formatCifra(stats.gananciaOperativa)}</div>
+                  <div className="space-y-1.5 text-xs text-slate-600 font-medium pb-4 border-b border-slate-100 mb-3">
+                    <div className="flex justify-between"><span>Ingresos por Ventas:</span><span className="font-bold text-slate-900">{formatCifra(stats.ingresos)}</span></div>
+                    <div className="flex justify-between"><span>Gastos Fijos/Operativos:</span><span className="font-bold text-rose-600">-{formatCifra(stats.gastosFijos)}</span></div>
+                    <div className="flex justify-between"><span>Costo Repuestos Usados:</span><span className="font-bold text-rose-600">-{formatCifra(stats.costoRepuestos)}</span></div>
+                  </div>
+                  <p className="text-[10px] leading-relaxed text-slate-500 mt-auto italic">
+                    <span className="font-bold text-emerald-700">¿Qué significa?</span> Ganancia pura. Ignora compras de stock y descuenta solo el costo de lo que instalaste este mes.
+                  </p>
+                </CardContent>
+              </Card>
 
+              {/* FLUJO DE CAJA */}
+              <Card className="shadow-none border-slate-200 bg-white flex flex-col">
+                <CardHeader className="pb-2 border-b border-slate-100 bg-blue-50/50">
+                  <CardTitle className="text-[10px] font-black text-blue-700 uppercase tracking-widest flex items-center gap-1.5"><Wallet className="w-3 h-3"/> Flujo de Caja (Liquidez)</CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 flex-1 flex flex-col">
+                  <div className="text-3xl font-mono font-black text-blue-700 mb-3">{formatCifra(stats.flujoCaja)}</div>
+                  <div className="space-y-1.5 text-xs text-slate-600 font-medium pb-4 border-b border-slate-100 mb-3">
+                    <div className="flex justify-between"><span>Ingresos Totales en Caja:</span><span className="font-bold text-slate-900">{formatCifra(stats.ingresos)}</span></div>
+                    <div className="flex justify-between"><span>Gastos Fijos Pagados:</span><span className="font-bold text-rose-600">-{formatCifra(stats.gastosFijos)}</span></div>
+                    <div className="flex justify-between"><span>Pagos a Proveedores:</span><span className="font-bold text-rose-600">-{formatCifra(stats.comprasProveedores)}</span></div>
+                  </div>
+                  <p className="text-[10px] leading-relaxed text-slate-500 mt-auto italic">
+                    <span className="font-bold text-blue-700">¿Qué significa?</span> Plata física que quedó en mano. Si es baja pero la rentabilidad alta, el dinero está en mercadería.
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* VARIACIÓN DE STOCK */}
+              <Card className={`shadow-none border flex flex-col ${stats.variacionStock >= 0 ? 'bg-purple-50/30 border-purple-200' : 'bg-amber-50/30 border-amber-200'}`}>
+                <CardHeader className={`pb-2 border-b ${stats.variacionStock >= 0 ? 'bg-purple-100/50 border-purple-100' : 'bg-amber-100/50 border-amber-100'}`}>
+                  <CardTitle className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${stats.variacionStock >= 0 ? 'text-purple-700' : 'text-amber-700'}`}><Package className="w-3 h-3"/> Variación de Stock</CardTitle>
+                </CardHeader>
+                <CardContent className="p-5 flex-1 flex flex-col">
+                  <div className={`text-3xl font-mono font-black mb-3 ${stats.variacionStock >= 0 ? 'text-purple-700' : 'text-amber-700'}`}>
+                    {stats.variacionStock > 0 ? '+' : ''}{formatCifra(stats.variacionStock)}
+                  </div>
+                  <div className="space-y-1.5 text-xs text-slate-600 font-medium pb-4 border-b border-slate-200/50 mb-3">
+                    <div className="flex justify-between"><span>Total Comprado:</span><span className="font-bold text-slate-900">{formatCifra(stats.comprasProveedores)}</span></div>
+                    <div className="flex justify-between"><span>Total Instalado:</span><span className="font-bold text-slate-900">-{formatCifra(stats.costoRepuestos)}</span></div>
+                  </div>
+                  {stats.variacionStock > 0 ? (
+                    <p className="text-[10px] leading-relaxed text-purple-800 mt-auto font-medium">
+                      <span className="font-black uppercase tracking-wider block mb-1">↑ Capitalización</span>
+                      Compraste más de lo que instalaste. Aumentaste tu stock físico.
+                    </p>
+                  ) : stats.variacionStock < 0 ? (
+                    <p className="text-[10px] leading-relaxed text-amber-800 mt-auto font-medium">
+                      <span className="font-black uppercase tracking-wider block mb-1">↓ Consumo de Reservas</span>
+                      Instalaste más de lo que compraste este mes. Viviste del stock acumulado.
+                    </p>
+                  ) : (
+                    <p className="text-[10px] leading-relaxed text-slate-600 mt-auto font-medium">
+                      <span className="font-black uppercase tracking-wider block mb-1">⚖️ Inventario Neutro</span>
+                      Compraste exactamente lo mismo que consumiste.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-200 my-6"></div>
+
+          {/* --- SECCIÓN 2: DESGLOSE DE EGRESOS --- */}
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <PieChartIcon className="w-5 h-5 text-rose-600"/> 2. Análisis de Egresos y Fugas
+            </h3>
+            
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <Card className="shadow-none border-slate-200 bg-white">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gastos Operativos</p>
-                  <div className="text-xl font-mono font-black text-rose-600">${formatCifra(stats.gastosFijos)}</div>
+                  <div className="text-xl font-mono font-black text-rose-600">{formatCifra(stats.gastosFijos)}</div>
                 </CardContent>
               </Card>
               <Card className="shadow-none border-slate-200 bg-white">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pagos a Proveedores</p>
-                  <div className="text-xl font-mono font-black text-amber-600">${formatCifra(stats.comprasProveedores)}</div>
+                  <div className="text-xl font-mono font-black text-amber-600">{formatCifra(stats.comprasProveedores)}</div>
                 </CardContent>
               </Card>
               <Card className="shadow-none border-slate-200 bg-rose-50 border-rose-100">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-rose-600/70 uppercase tracking-widest mb-1">Total Salidas de Caja</p>
-                  <div className="text-xl font-mono font-black text-rose-700">${formatCifra(stats.gastosFijos + stats.comprasProveedores)}</div>
+                  <div className="text-xl font-mono font-black text-rose-700">{formatCifra(stats.gastosFijos + stats.comprasProveedores)}</div>
                 </CardContent>
               </Card>
               <Card className="shadow-none border-slate-200 bg-slate-50">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Gasto Operativo Diario</p>
-                  <div className="text-xl font-mono font-black text-slate-700">${formatCifra(stats.gastosFijos / 30)}</div>
+                  <div className="text-xl font-mono font-black text-slate-700">{formatCifra(stats.gastosFijos / 30)}</div>
                 </CardContent>
               </Card>
             </div>
@@ -608,7 +611,7 @@ export function AdminDashboardView() {
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <p className="text-xs font-bold text-slate-400 uppercase">No hay gastos registrados en este período.</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase">No hay gastos registrados.</p>
                   )}
                 </CardContent>
               </Card>
@@ -634,20 +637,19 @@ export function AdminDashboardView() {
             </div>
           </div>
 
-          <div className="border-t border-slate-200 my-4"></div>
+          <div className="border-t border-slate-200 my-6"></div>
 
-          {/* BLOQUE 2: POSICIÓN FISCAL */}
+          {/* --- SECCIÓN 3: POSICIÓN FISCAL --- */}
           <div>
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
-              <Landmark className="w-4 h-4 text-indigo-600"/> Posición Fiscal ({formatearNombreMes(mesSeleccionado)})
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <Landmark className="w-5 h-5 text-indigo-600"/> 3. Posición Fiscal de IVA
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
               <Card className="shadow-none border-slate-200 bg-white">
                 <CardContent className="p-5">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">IVA Ventas (100% Automático)</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">IVA Ventas (Automático)</p>
                   <div className="text-2xl font-mono font-black text-slate-900 mb-1">{formatCifra(ivaVentas)}</div>
-                  <p className="text-xs text-slate-500 font-medium">Calculado sobre presupuestos emitidos y cobrados.</p>
+                  <p className="text-xs text-slate-500 font-medium">Sobre presupuestos cobrados.</p>
                 </CardContent>
               </Card>
 
@@ -667,7 +669,6 @@ export function AdminDashboardView() {
                       onChange={(e) => setIvaCompras(e.target.value)}
                     />
                   </div>
-                  <p className="text-[10px] text-slate-500 font-medium mt-2">Sumá el IVA de tus facturas de insumos/repuestos.</p>
                 </CardContent>
               </Card>
 
@@ -680,12 +681,13 @@ export function AdminDashboardView() {
                     {formatCifra(Math.abs(ivaVentas - Number(ivaCompras || 0)))}
                   </div>
                   <p className={`text-[10px] font-bold mt-2 ${ivaVentas - Number(ivaCompras || 0) > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
-                    {ivaVentas - Number(ivaCompras || 0) > 0 ? 'Tenés que liquidar este monto al contador.' : 'Tenés crédito fiscal disponible.'}
+                    {ivaVentas - Number(ivaCompras || 0) > 0 ? 'Liquidar monto al contador.' : 'Crédito fiscal disponible.'}
                   </p>
                 </CardContent>
               </Card>
             </div>
           </div>
+
         </TabsContent>
       </Tabs>
       </div>
