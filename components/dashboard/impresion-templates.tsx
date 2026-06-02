@@ -2,11 +2,11 @@ import React from "react"
 import { Car, User, Palette, Gauge, Calendar, Tag, Clock } from "lucide-react"
 
 // --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica Dinámica COMPACTA) ---
+// --- PLANTILLA 1: EL PRESUPUESTO (Colores Goodyear, Bordes Nítidos y Lógica Dinámica COMPACTA) ---
 export function PresupuestoImprimible({ datos }: { datos: any }) {
   if (!datos) return null;
 
   return (
-    // ACHICAMOS EL TOP: Cambiamos p-6 por px-6 pb-6 pt-2 y sacamos el borde blanco grueso
     <div className="bg-white text-slate-800 px-6 pb-6 pt-2 font-sans max-w-[210mm] mx-auto">
       <div className="flex justify-between items-start border-b-2 border-slate-800 pb-3 mb-3">
         <div className="flex items-center gap-3">
@@ -18,11 +18,9 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
             </div>
           )}
           <div>
-            {/* Azul Goodyear */}
             <h1 className="text-xl font-black tracking-tight text-[#003087]">{datos.config?.nombre_taller || "AUTO TALLER"}</h1>
             <p className="text-xs text-slate-800 font-bold">{datos.config?.direccion || "Dirección no configurada"}</p>
             <p className="text-xs text-slate-800 font-bold">Tel: {datos.config?.telefono || "No configurado"}</p>
-            {/* Azul Goodyear fondo clarito */}
             <p className="text-[10px] font-bold text-[#003087] mt-1 border border-[#003087] bg-[#003087]/5 inline-block px-1.5 py-0.5 rounded">
               Horarios: {datos.config?.horario || "Lun a Vie 08:00 a 18:00"}
             </p>
@@ -30,7 +28,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
         <div className="text-right">
           <h2 className="text-xl font-black text-slate-900 tracking-tight">PRESUPUESTO</h2>
-          {/* Azul Goodyear */}
           <p className="text-[#003087] font-mono text-sm font-bold mt-0.5">#PRE-{datos.numero_correlativo}</p>
           <p className="text-xs text-slate-600 mt-0.5 font-bold">
             Fecha: {new Date(datos.fecha_emision || new Date()).toLocaleDateString('es-AR')}
@@ -39,7 +36,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
-        {/* Bordes oscuros para máxima nitidez al imprimir */}
         <div className="border border-slate-800 p-3 rounded-lg bg-white">
           <p className="text-[10px] font-black text-[#003087] uppercase tracking-wider mb-1">Datos del Cliente</p>
           <p className="font-bold text-slate-900 text-base leading-tight">{datos.cliente_nombre}</p>
@@ -57,7 +53,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
               </div>
             </div>
             
-            {/* KILOMETROS AMPLIADOS Y APILADOS */}
             <div className="text-right pl-3 border-l-2 border-slate-200 flex flex-col justify-center">
               <p className="text-[10px] font-black text-slate-500 uppercase leading-none mb-1">Kilómetros</p>
               <div className="text-xs font-bold text-slate-700 leading-tight space-y-0.5">
@@ -69,7 +64,6 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* ACHICAMOS EL MB-6 a MB-2 PARA PEGARLO AL TOTAL */}
       <div className="mb-2">
         <div className="flex justify-between items-end border-b-2 border-slate-800 pb-2 mb-2">
           <div className="w-10 text-[10px] font-black text-slate-800 uppercase tracking-wider text-center">Cant.</div>
@@ -85,9 +79,7 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
             const subtotalItem = cantidad * precioUnitario;
 
             return (
-              // Borde sutil pero negro/oscuro para separar ítems nítidamente
               <div key={idx} className="flex justify-between items-center text-sm border-b border-slate-300 py-1.5">
-                {/* Azul Goodyear */}
                 <div className="w-10 text-center font-mono font-black text-[#003087]">{cantidad}</div>
                 <div className="flex-1 font-bold text-slate-800 pl-2 pr-2">{item.detalle}</div>
                 <div className="w-24 text-right font-mono font-bold text-slate-600 pr-4">${precioUnitario.toLocaleString()}</div>
@@ -98,9 +90,8 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
         </div>
       </div>
 
-      {/* ACHICAMOS EL MT-6 y PT-4 PARA ACERCAR LOS TOTALES */}
       <div className="mt-2 pt-2 flex justify-between items-end">
-        {/* LADO IZQUIERDO: DEMORA ESTIMADA Y OBSERVACIONES */}
+        {/* LADO IZQUIERDO: DEMORA ESTIMADA Y OBSERVACIONES COMENTADAS */}
         <div className="w-1/2 flex flex-col gap-2">
            {datos.demora_estimada && (
              <div className="border-l-4 border-[#003087] pl-3 py-1.5 bg-[#003087]/5 rounded-r-lg">
@@ -108,43 +99,40 @@ export function PresupuestoImprimible({ datos }: { datos: any }) {
                 <p className="text-slate-900 font-black text-sm uppercase">{datos.demora_estimada}</p>
              </div>
            )}
-           {/* MAGIA: CAJITA DE OBSERVACIONES PARA EL CLIENTE */}
-           {datos.observaciones_publicas && (
+           {/* SE COMENTÓ LA SECCIÓN DE OBSERVACIONES PARA EVITAR QUE SALGA EN IMPRESIÓN, PERO SE MANTIENE EN EL CÓDIGO */}
+           {/* {datos.observaciones_publicas && (
              <div className="border-l-4 border-amber-500 pl-3 py-1.5 bg-amber-50 rounded-r-lg pr-2">
                 <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest mb-0.5">Observaciones Adicionales</p>
                 <p className="text-slate-800 font-bold text-xs whitespace-pre-wrap leading-tight">{datos.observaciones_publicas}</p>
              </div>
-           )}
+           )} */}
         </div>
 
-        {/* LADO DERECHO: TOTALES */}
         <div className="w-[280px]">
-          {/* --- MAGIA COMERCIAL: SOLO SE MUESTRA SI HAY DESCUENTO MAYOR A 0 --- */}
+          {/* --- MAGIA COMERCIAL --- */}
           {Number(datos.descuento) > 0 && (
             <div className="space-y-1 mb-2 px-3">
               <div className="flex justify-between items-center text-sm">
-                <p className="font-black text-slate-600 uppercase tracking-wider text-xs">Subtotal</p>
+                <p className="font-black text-slate-600 tracking-wider text-xs">Subtotal</p>
                 <p className="font-mono font-black text-slate-800">${Number(datos.subtotal).toLocaleString()}</p>
               </div>
               <div className="flex justify-between items-center text-sm">
-                <p className="font-black text-slate-600 uppercase tracking-wider text-xs">Descuento / Atención</p>
+                <p className="font-black text-slate-600 tracking-wider text-xs">Descuento / Atención</p>
                 <p className="font-mono font-black text-slate-800">-${Number(datos.descuento).toLocaleString()}</p>
               </div>
             </div>
           )}
 
-          {/* Borde más grueso y oscuro */}
           <div className="flex justify-between items-center bg-white p-3 rounded-lg border-2 border-slate-800">
             <p className="font-black text-slate-900 text-sm uppercase tracking-wider">Total Final</p>
-            {/* Azul Goodyear */}
             <p className="font-mono font-black text-[#003087] text-xl">${Number(datos.total_final).toLocaleString()}</p>
           </div>
         </div>
       </div>
 
-      {/* TÉRMINOS LEGALES GLOBALES (Desde Configuración) - ACHICADO EL MARGEN */}
+      {/* TÉRMINOS LEGALES GLOBALES (Desde Configuración) - LETRA AGRANDADA A text-[11px] */}
       <div className="mt-3 border-t-2 border-slate-800 pt-1.5">
-        <p className="text-[9px] text-slate-600 italic font-bold whitespace-pre-wrap leading-tight text-justify">
+        <p className="text-[11px] text-slate-600 italic font-bold whitespace-pre-wrap leading-tight text-justify">
           {datos.config?.terminos_presupuesto || `* Válido por ${datos.validez_dias || 15} días. Los precios de repuestos pueden sufrir variaciones.`}
         </p>
       </div>
