@@ -38,7 +38,7 @@ import { supabase } from "@/lib/supabase"
 const MARCAS_NEUMATICOS = [
   "GoodYear", "Gt Radial", "Champiro", "Pirelli", 
   "Fate", "Michelin", "Bridgestone", "Firestone", 
-  "Kumho", "Hankook", "Wanli", "Otra"
+  "Kumho", "Hankook", "Wanli", "Sunny", "Otra"
 ]
 
 export function CatalogoView() {
