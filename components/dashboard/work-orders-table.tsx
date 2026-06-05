@@ -325,25 +325,28 @@ export function WorkOrdersTable({
 
   return (
     <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col">
-      <div>
-        <h2 className="text-2xl font-semibold text-foreground">Control de Taller</h2>
-        <p className="text-sm text-muted-foreground">Flujo de trabajo de los vehículos ingresados.</p>
-      </div>
-
-      <div className="relative w-full sm:w-72">
+      {/* --- CABECERA CON BUSCADOR ALINEADO --- */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
+        <div>
+          <h2 className="text-2xl font-semibold text-foreground">Control de Taller</h2>
+          <p className="text-sm text-muted-foreground">Flujo de trabajo de los vehículos ingresados.</p>
+        </div>
+        
+        <div className="relative w-full sm:w-80">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input 
             placeholder="Buscar por patente o cliente..." 
-            className="pl-9 bg-background border-border shadow-sm" 
+            className="pl-9 bg-background border-border shadow-sm h-10" 
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
           />
           {busqueda && (
-            <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setBusqueda('')}>
+            <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => setBusqueda('')}>
               <X className="w-4 h-4" />
             </Button>
           )}
         </div>
+      </div>
 
       <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-4">
         {COLUMNAS.map(columna => {
