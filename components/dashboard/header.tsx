@@ -33,7 +33,7 @@ export function DashboardHeader({
   const [campanaSuena, setCampanaSuena] = useState(false)
 
   useEffect(() => {
-    if (userRole === 'mecanico' || !userRole) return;
+    if (!userRole) return;
 
     const reproducirSonido = (archivoAudio: string) => {
       try {
@@ -41,7 +41,7 @@ export function DashboardHeader({
         audio.currentTime = 0;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
-          playPromise.catch(e => console.log("Audio bloqueado"));
+          playPromise.catch(e => console.log("Audio bloqueado por el navegador"));
         }
       } catch (error) {}
       setCampanaSuena(true);
@@ -50,69 +50,101 @@ export function DashboardHeader({
 
     const agregarNotif = (nuevaNotif: any) => {
       setNotificaciones(prev => {
-        const existe = prev.find(n => n.referencia_id === nuevaNotif.referencia_id && n.tipo === nuevaNotif.tipo);
+        const existe = prev.find(n => n.referencia_id === nuevaNotif.referencia_id && n.tipo === nuevaNotif.tipo && n.titulo === nuevaNotif.titulo);
         if (existe) return prev;
         return [nuevaNotif, ...prev];
       });
     };
 
+    // --- CANAL 1: MONITOREO DEL TALLER ---
     const canalTaller = supabase.channel('notif-taller')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordenes_trabajo' }, (payload) => {
-        if (payload.new.estado === 'Terminado' && payload.old.estado !== 'Terminado') {
-          reproducirSonido('/listo.mp3'); 
-          agregarNotif({
-            id: Date.now().toString(),
-            referencia_id: payload.new.presupuesto_id || payload.new.id, 
-            tipo: 'taller',
-            titulo: 'Vehículo Terminado',
-            mensaje: `El vehículo ${payload.new.vehiculo_patente} ya fue marcado como listo en el taller.`,
-            hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-            icono: 'Car',
-            color: 'text-emerald-600 dark:text-emerald-400'
-          });
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordenes_trabajo' }, (payload: any) => {
+        // Alerta exclusiva para Admins y Cajeros cuando el mecánico termina un auto
+        if (userRole !== 'mecanico') {
+          if (payload.new.estado === 'Terminado' && payload.old.estado !== 'Terminado') {
+            reproducirSonido('/listo.mp3'); 
+            agregarNotif({
+              id: Date.now().toString(),
+              referencia_id: payload.new.presupuesto_id || payload.new.id, 
+              tipo: 'taller',
+              patente: payload.new.vehiculo_patente, // Guardamos la patente para el ruteo inteligente
+              titulo: 'Vehículo Terminado',
+              mensaje: `El vehículo ${payload.new.vehiculo_patente} ya fue marcado como listo en el taller.`,
+              hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+              icono: 'Car',
+              color: 'text-emerald-600 dark:text-emerald-400'
+            });
+          }
         }
       }).subscribe();
 
+    // --- CANAL 2: MONITOREO DE PRESUPUESTOS (CON DOBLE COMPORTAMIENTO) ---
     const canalPresupuestos = supabase.channel('notif-presupuestos')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload) => {
-        if (payload.new.modificado_por_rol !== 'mecanico') return;
-        reproducirSonido('/ding.mp3');
-        
-        const autor = payload.new.modificado_por_nombre || 'Un mecánico';
-        
-        agregarNotif({
-          id: Date.now().toString(),
-          referencia_id: payload.new.id,
-          tipo: 'presupuesto',
-          titulo: 'Nuevo Diagnóstico',
-          mensaje: `${autor} ha creado un nuevo diagnóstico para la patente ${payload.new.vehiculo_patente}.`,
-          hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-          icono: 'FileText',
-          color: 'text-blue-600 dark:text-blue-400'
-        });
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload) => {
-        if (payload.new.modificado_por_rol !== 'mecanico') return;
-        
-        // --- MAGIA ANTI-REBOTE ---
-        if (payload.new.visto_admin === true && payload.old.visto_admin === false) return;
-
-        if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload: any) => {
+        // Alerta para administración cuando el mecánico crea un diagnóstico nuevo
+        if (userRole !== 'mecanico') {
+          if (payload.new.modificado_por_rol !== 'mecanico') return;
           reproducirSonido('/ding.mp3');
-
+          
           const autor = payload.new.modificado_por_nombre || 'Un mecánico';
-
+          
           agregarNotif({
-            id: Date.now().toString() + Math.random(),
+            id: Date.now().toString(),
             referencia_id: payload.new.id,
             tipo: 'presupuesto',
-            titulo: 'Diagnóstico Modificado',
-            mensaje: `${autor} ha modificado el diagnóstico PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}).`,
+            titulo: 'Nuevo Diagnóstico',
+            mensaje: `${autor} ha creado un nuevo diagnóstico para la patente ${payload.new.vehiculo_patente}.`,
             hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-            icono: 'Pencil',
-            color: 'text-orange-600 dark:text-orange-400'
+            icono: 'FileText',
+            color: 'text-blue-600 dark:text-blue-400'
           });
         }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload: any) => {
+        
+        // COMPORTAMIENTO A: Si el usuario es ADMIN o CAJERO (Saber si el mecánico modificó algo)
+        if (userRole !== 'mecanico') {
+          if (payload.new.modificado_por_rol !== 'mecanico') return;
+          if (payload.new.visto_admin === true && payload.old.visto_admin === false) return;
+
+          if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
+            reproducirSonido('/ding.mp3');
+            const autor = payload.new.modificado_por_nombre || 'Un mecánico';
+
+            agregarNotif({
+              id: Date.now().toString() + Math.random(),
+              referencia_id: payload.new.id,
+              tipo: 'presupuesto',
+              titulo: 'Diagnóstico Modificado',
+              mensaje: `${autor} ha modificado el diagnóstico PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}).`,
+              hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+              icono: 'Pencil',
+              color: 'text-orange-600 dark:text-orange-400'
+            });
+          }
+        }
+        
+        // COMPORTAMIENTO B: Si el usuario es MECÁNICO (Saber si administración le cambió el presupuesto a un auto que está ADENTRO)
+        else if (userRole === 'mecanico') {
+          if (payload.new.modificado_por_rol !== 'mecanico' && payload.new.ingresado_al_taller === true) {
+            if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
+              reproducirSonido('/ding.mp3');
+              const autor = payload.new.modificado_por_nombre || 'Administración';
+
+              agregarNotif({
+                id: Date.now().toString() + Math.random(),
+                referencia_id: payload.new.id,
+                tipo: 'presupuesto',
+                titulo: 'Presupuesto Modificado',
+                mensaje: `${autor} modificó el presupuesto del vehículo ${payload.new.vehiculo_patente} que tenés en taller.`,
+                hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+                icono: 'Pencil',
+                color: 'text-rose-600 dark:text-rose-400'
+              });
+            }
+          }
+        }
+
       }).subscribe();
 
     return () => {
@@ -122,7 +154,7 @@ export function DashboardHeader({
   }, [userRole]);
 
   const handleCerrarSesion = async () => {
-    await supabase.auth.signOut()
+    await (supabase.auth as any).signOut()
     window.location.reload()
   }
 
@@ -133,10 +165,19 @@ export function DashboardHeader({
 
   const ejecutarAccionNotificacion = (notif: any) => {
     setNotificaciones(prev => prev.filter(n => n.id !== notif.id));
+    
     if (notif.tipo === 'taller') {
+      // Si tiene patente, la inyectamos en la memoria para que el buscador del Taller la filtre automáticamente
+      if (notif.patente) {
+        localStorage.setItem("filtro_taller_patente", notif.patente);
+      }
       if (onSectionChange) onSectionChange("Taller");
     } else if (notif.tipo === 'presupuesto') {
-      if (onNavigateToPresupuesto) onNavigateToPresupuesto(notif.referencia_id);
+      // Lleva al presupuesto tanto al Admin como al Mecánico
+      if (onSectionChange) onSectionChange("Presupuestos");
+      setTimeout(() => {
+        if (onNavigateToPresupuesto) onNavigateToPresupuesto(notif.referencia_id);
+      }, 100);
     }
   }
 
@@ -198,7 +239,7 @@ export function DashboardHeader({
                     <p className="text-sm text-foreground leading-snug">{notif.mensaje}</p>
                     <div className="flex gap-2 mt-1">
                       <Button size="sm" onClick={() => ejecutarAccionNotificacion(notif)} className={`flex-1 h-8 text-white text-xs shadow-sm ${notif.tipo === 'taller' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
-                        Abrir Documento <ArrowRight className="w-3 h-3 ml-1" />
+                        Ver en Pantalla <ArrowRight className="w-3 h-3 ml-1" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={(e) => descartarNotificacion(notif.id, e)} className="h-8 text-xs text-muted-foreground hover:text-red-600 hover:bg-red-50">Ocultar</Button>
                     </div>

@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabase"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Clock, Wrench, CheckCircle2, Flag, ArrowRight, User, FileText, Loader2, MessageCircle, Star, Mail, Gauge} from "lucide-react"
+import { Clock, Wrench, CheckCircle2, Flag, ArrowRight, User, FileText, Loader2, MessageCircle, Star, Mail, Gauge, Search, X} from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,17 @@ export function WorkOrdersTable({
   const [ordenes, setOrdenes] = useState<any[]>([])
   const [configuracion, setConfiguracion] = useState<any>({})
   const [isLoading, setIsLoading] = useState(true)
+
+  // --- NUEVO: ESTADO PARA EL BUSCADOR Y LECTURA DE NOTIFICACIÓN ---
+  const [busqueda, setBusqueda] = useState("")
+
+  useEffect(() => {
+    const patenteNotif = localStorage.getItem("filtro_taller_patente");
+    if (patenteNotif) {
+      setBusqueda(patenteNotif); // Activa el buscador automáticamente
+      localStorage.removeItem("filtro_taller_patente"); // Borra la memoria
+    }
+  }, []);
 
   // Estados para Anular Ingreso
   const [isAnularModalOpen, setIsAnularModalOpen] = useState(false);
@@ -318,6 +330,21 @@ export function WorkOrdersTable({
         <p className="text-sm text-muted-foreground">Flujo de trabajo de los vehículos ingresados.</p>
       </div>
 
+      <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input 
+            placeholder="Buscar por patente o cliente..." 
+            className="pl-9 bg-background border-border shadow-sm" 
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+          />
+          {busqueda && (
+            <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => setBusqueda('')}>
+              <X className="w-4 h-4" />
+            </Button>
+          )}
+        </div>
+
       <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-4">
         {COLUMNAS.map(columna => {
           const Icono = columna.icono
@@ -325,6 +352,15 @@ export function WorkOrdersTable({
           let ordenesEnColumna = ordenes.filter(o => o.estado === columna.id)
           if (columna.id === "Entregado") {
             ordenesEnColumna = ordenesEnColumna.filter(o => o.fecha_entrega === hoyLocal)
+          }
+
+          // --- MAGIA: FILTRO EN VIVO DE PATENTE ---
+          if (busqueda) {
+            const b = busqueda.toLowerCase();
+            ordenesEnColumna = ordenesEnColumna.filter(o => 
+              (o.vehiculo_patente && o.vehiculo_patente.toLowerCase().includes(b)) || 
+              (o.cliente_nombre && o.cliente_nombre.toLowerCase().includes(b))
+            );
           }
 
           return (
