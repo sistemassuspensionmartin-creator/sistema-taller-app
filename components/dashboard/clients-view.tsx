@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Search, User, Phone, Mail, Edit, Loader2, Save, Building2, Copy, MapPin, FileText, Car, Calendar, Palette, Gauge, ArrowLeft, AlertTriangle } from "lucide-react"
+import { Plus, Search, User, Phone, Mail, Edit, Loader2, Save, Building2, Copy, MapPin, FileText, Car, Calendar, Palette, Gauge, ArrowLeft, AlertTriangle, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import {
   Table,
@@ -47,6 +48,9 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [busqueda, setBusqueda] = useState("")
+
+  // Estado para controlar la eliminación segura de clientes
+  const [clienteAEliminar, setClienteAEliminar] = useState<any>(null)
 
   const [isModalOpen, setIsModalOpen] = useState(false) 
   const [editingId, setEditingId] = useState<string | null>(null) 
@@ -81,6 +85,34 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
       console.error("Error al cargar:", error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const abrirConfirmarEliminar = (cliente: any, e: any) => {
+    if (e) e.stopPropagation(); // Evita que se abra el modal de detalles de la fila
+    
+    // REGLA ESTRICTA: Solo si el saldo es exactamente 0
+    if (Number(cliente.saldo || 0) !== 0) {
+      return alert(`⚠️ Acción Bloqueada:\n\nNo se puede eliminar a este cliente porque posee un balance activo en su Cuenta Corriente ($${Number(cliente.saldo).toLocaleString()}).\n\nPrimero debe liquidar o ajustar su saldo desde el módulo de Cuentas Corrientes.`);
+    }
+    setClienteAEliminar(cliente);
+  }
+
+  const ejecutarEliminarCliente = async () => {
+    if (!clienteAEliminar) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('clientes').delete().eq('id', clienteAEliminar.id);
+      if (error) throw error;
+
+      alert("¡Cliente eliminado correctamente del directorio!");
+      setClienteAEliminar(null);
+      fetchClientes(); // Recarga la lista en tiempo real
+    } catch (error: any) {
+      console.error(error);
+      alert("⚠️ Error de Restricción Fiscal:\n\nNo se puede eliminar este cliente porque ya cuenta con registros históricos en el taller (como Órdenes de Trabajo o Presupuestos viejos).\n\nPara conservar la integridad de las auditorías, la base de datos impide borrarlo.");
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -351,10 +383,23 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                         <Car className="h-3 w-3" /> {cliente.vehiculos?.length || 0}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => abrirEditar(cliente, e)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex justify-end gap-1">
+                        {/* --- BOTÓN NUEVO: ELIMINAR CLIENTE --- */}
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" 
+                          onClick={(e) => abrirConfirmarEliminar(cliente, e)} 
+                          title="Eliminar Cliente del Directorio"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={(e) => abrirEditar(cliente, e)}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -707,6 +752,30 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
               </Button>
             </div>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* --- MODAL DE CONFIRMACIÓN PARA ELIMINAR CLIENTE --- */}
+      <Dialog open={!!clienteAEliminar} onOpenChange={(open:any) => !open && setClienteAEliminar(null)}>
+        <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl top-[35%] translate-y-[-50%] outline-none">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+              ¿Eliminar Cliente?
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
+              ¿Estás seguro de que querés eliminar a <b>"{clienteAEliminar ? (clienteAEliminar.tipo_cliente === 'empresa' ? clienteAEliminar.razon_social : `${clienteAEliminar.nombre} ${clienteAEliminar.apellido || ''}`) : ''}"</b> del directorio permanentemente?
+            </DialogDescription>
+            <div className="flex gap-3 w-full mt-4">
+              <Button onClick={() => setClienteAEliminar(null)} variant="outline" className="flex-1 h-12 rounded-xl text-base font-bold">
+                Cancelar
+              </Button>
+              <Button onClick={ejecutarEliminarCliente} disabled={isSaving} className="flex-1 h-12 rounded-xl text-base font-bold bg-red-600 hover:bg-red-700 text-white shadow-md">
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : "Eliminar"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
