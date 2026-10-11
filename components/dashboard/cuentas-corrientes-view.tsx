@@ -67,6 +67,9 @@ export function CuentasCorrientesView() {
     isOpen: false, mov: null, entidad: null
   });
 
+  const [provAEliminar, setProvAEliminar] = useState<any>(null)
+  const [isEliminarProvModalOpen, setIsEliminarProvModalOpen] = useState(false)
+
   const cargarDatosBase = async () => {
     setIsLoading(true)
     try {
@@ -137,6 +140,35 @@ export function CuentasCorrientesView() {
     }
   }
 
+  const handleIntentarEliminarProveedor = (prov: any) => {
+    const saldoProv = Number(prov.saldo || 0)
+    if (saldoProv !== 0) {
+      alert(`No se puede eliminar al proveedor "${prov.nombre}". Posee un saldo pendiente de $${saldoProv.toLocaleString('es-AR')}. Para eliminarlo, su saldo debe ser exactamente $0.`)
+      return
+    }
+    setProvAEliminar(prov)
+    setIsEliminarProvModalOpen(true)
+  }
+
+  const ejecutarEliminarProveedor = async () => {
+    if (!provAEliminar) return
+    setIsSaving(true)
+    try {
+      const { error } = await supabase.from('proveedores').delete().eq('id', provAEliminar.id)
+      if (error) {
+        throw new Error("No se pudo eliminar el proveedor. Si tiene facturas o movimientos asociados, debe mantener su registro contable.")
+      }
+      setIsEliminarProvModalOpen(false)
+      setProvAEliminar(null)
+      cargarDatosBase()
+      alert("Proveedor eliminado con éxito.")
+    } catch (error: any) {
+      alert("Error al eliminar proveedor: " + error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const abrirEditarProveedor = (prov: any) => {
     setNuevoProveedor({ id: prov.id, nombre: prov.nombre || "", telefono: prov.telefono || "", cuit: prov.cuit || "", notas: prov.notas || "" });
     setIsNuevoProveedorOpen(true);
@@ -199,11 +231,21 @@ export function CuentasCorrientesView() {
       const nuevoSaldoCaja = Number(cajaSeleccionada.saldo) - montoNum
       await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosPago.caja_origen_id)
 
+      const nombreCajaLower = (cajaSeleccionada.nombre || '').toLowerCase()
+      let metodoPagoDetectado = 'Transferencia'
+      if (nombreCajaLower.includes('efectivo') || nombreCajaLower.includes('mostrador')) {
+        metodoPagoDetectado = 'Efectivo'
+      } else if (nombreCajaLower.includes('cheque')) {
+        metodoPagoDetectado = 'Cheque'
+      } else if (nombreCajaLower.includes('tarjeta')) {
+        metodoPagoDetectado = 'Tarjeta'
+      }
+
       await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'egreso_gasto', 
         caja_origen_id: datosPago.caja_origen_id, 
         monto: montoNum,
-        metodo_pago: cajaSeleccionada.nombre.includes('Efectivo') || cajaSeleccionada.nombre.includes('Mostrador') ? 'Efectivo' : 'Transferencia',
+        metodo_pago: metodoPagoDetectado,
         detalle: `Pago a Proveedor: ${provSeleccionado.nombre}`, 
         notas: `Ref: ${datosPago.comprobante}`
       }])
@@ -547,13 +589,22 @@ export function CuentasCorrientesView() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditarProveedor(prov)} title="Editar Proveedor">
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="sm" variant="outline" className="h-8" onClick={() => abrirLedgerProv(prov)}><Search className="w-3 h-3 mr-1" /> Resumen</Button>
-                          <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => { setProvSeleccionado(prov); setIsFacturaOpen(true); }}><FileText className="w-3 h-3 mr-1" /> Cargar Fra</Button>
-                          <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setProvSeleccionado(prov); setIsPagoOpen(true); }}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
-                        </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => abrirEditarProveedor(prov)} title="Editar Proveedor">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className={`h-8 w-8 ${Number(prov.saldo || 0) === 0 ? 'text-muted-foreground hover:text-red-600 hover:bg-red-50' : 'text-slate-300 cursor-not-allowed'}`} 
+                              onClick={() => handleIntentarEliminarProveedor(prov)} 
+                              title={Number(prov.saldo || 0) === 0 ? "Eliminar Proveedor" : "No se puede eliminar: tiene saldo pendiente"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => abrirLedgerProv(prov)}><Search className="w-3 h-3 mr-1" /> Resumen</Button>
+                            <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => { setProvSeleccionado(prov); setIsFacturaOpen(true); }}><FileText className="w-3 h-3 mr-1" /> Cargar Fra</Button>
+                            <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setProvSeleccionado(prov); setIsPagoOpen(true); }}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -930,6 +981,31 @@ export function CuentasCorrientesView() {
                 Cancelar
               </Button>
               <Button onClick={ejecutarBorrado} disabled={isSaving} className="flex-1 h-12 rounded-xl text-base font-bold bg-red-600 hover:bg-red-700 text-white shadow-md">
+                {isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : "Eliminar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL CONFIRMAR ELIMINACIÓN DE PROVEEDOR --- */}
+      <Dialog open={isEliminarProvModalOpen} onOpenChange={setIsEliminarProvModalOpen}>
+        <DialogContent className="max-w-sm p-6 bg-white dark:bg-slate-900 border-none shadow-2xl rounded-2xl top-[35%] translate-y-[-50%] outline-none">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+              <AlertCircle className="w-7 h-7" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-800 dark:text-slate-100 mt-2">
+              ¿Eliminar Proveedor?
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
+              ¿Estás seguro de que querés eliminar a <strong>{provAEliminar?.nombre}</strong> del directorio? Su saldo es $0. Esta acción no se puede deshacer.
+            </DialogDescription>
+            <div className="flex gap-3 w-full mt-4">
+              <Button onClick={() => setIsEliminarProvModalOpen(false)} variant="outline" className="flex-1 h-12 rounded-xl text-base font-bold">
+                Cancelar
+              </Button>
+              <Button onClick={ejecutarEliminarProveedor} disabled={isSaving} className="flex-1 h-12 rounded-xl text-base font-bold bg-red-600 hover:bg-red-700 text-white shadow-md">
                 {isSaving ? <Loader2 className="w-5 h-5 animate-spin"/> : "Eliminar"}
               </Button>
             </div>

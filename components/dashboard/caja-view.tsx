@@ -122,10 +122,16 @@ export function CajaView({
 
       let transf = 0, tarj = 0, cheq = 0;
       (movData || []).forEach((m: any) => {
-        if (m.tipo_movimiento === 'ingreso_cobro') {
-          if (m.metodo_pago === 'Transferencia') transf += Number(m.monto);
-          if (m.metodo_pago === 'Tarjeta') tarj += Number(m.monto);
-          if (m.metodo_pago === 'Cheque') cheq += Number(m.monto);
+        const montoNum = Number(m.monto || 0);
+        if (m.metodo_pago === 'Transferencia') {
+          if (m.tipo_movimiento === 'ingreso_cobro') transf += montoNum;
+          else if (m.tipo_movimiento === 'egreso_gasto') transf -= montoNum;
+        } else if (m.metodo_pago === 'Tarjeta') {
+          if (m.tipo_movimiento === 'ingreso_cobro') tarj += montoNum;
+          else if (m.tipo_movimiento === 'egreso_gasto') tarj -= montoNum;
+        } else if (m.metodo_pago === 'Cheque') {
+          if (m.tipo_movimiento === 'ingreso_cobro') cheq += montoNum;
+          else if (m.tipo_movimiento === 'egreso_gasto') cheq -= montoNum;
         }
       });
       setTotalesTurno({ transferencias: transf, tarjetas: tarj, cheques: cheq });
@@ -356,11 +362,17 @@ export function CajaView({
       await supabase.from('cajas').update({ saldo: Number(cajaObj.saldo || 0) - monto }).eq('id', cajaEgreso);
       const catNombre = categoriasGasto.find(c => c.id === categoriaEgreso)?.nombre || 'Gasto General';
       
+      const nombreCajaEgreso = (cajaObj?.nombre || '').toLowerCase();
+      let metodoPagoEgreso = 'Efectivo';
+      if (nombreCajaEgreso.includes('transferencia')) metodoPagoEgreso = 'Transferencia';
+      else if (nombreCajaEgreso.includes('cheque')) metodoPagoEgreso = 'Cheque';
+      else if (nombreCajaEgreso.includes('tarjeta')) metodoPagoEgreso = 'Tarjeta';
+
       await supabase.from('movimientos_caja').insert([{
         tipo_movimiento: 'egreso_gasto',
         caja_origen_id: cajaEgreso,
         monto: monto,
-        metodo_pago: 'Efectivo', 
+        metodo_pago: metodoPagoEgreso, 
         detalle: `Gasto: ${catNombre}`,
         notas: notasEgreso
       }]);
