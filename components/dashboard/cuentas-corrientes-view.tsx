@@ -150,14 +150,17 @@ export function CuentasCorrientesView() {
     setIsEliminarProvModalOpen(true)
   }
 
-  const ejecutarEliminarProveedor = async () => {
+ const ejecutarEliminarProveedor = async () => {
     if (!provAEliminar) return
     setIsSaving(true)
     try {
+      // 1. Limpiamos movimientos asociados si los tuviera (el saldo ya validamos que es 0)
+      await supabase.from('movimientos_proveedores').delete().eq('proveedor_id', provAEliminar.id)
+      
+      // 2. Eliminamos al proveedor
       const { error } = await supabase.from('proveedores').delete().eq('id', provAEliminar.id)
-      if (error) {
-        throw new Error("No se pudo eliminar el proveedor. Si tiene facturas o movimientos asociados, debe mantener su registro contable.")
-      }
+      if (error) throw error
+
       setIsEliminarProvModalOpen(false)
       setProvAEliminar(null)
       cargarDatosBase()

@@ -600,6 +600,12 @@ export function PresupuestosView({
         visto_admin: !isMecanico
       };
 
+      localStorage.setItem("mi_accion_reciente", JSON.stringify({
+        clave: editandoId,
+        patente: patenteParaDB,
+        t: Date.now()
+      }));
+
       if (editandoId) {
         const { error: presError } = await supabase.from('presupuestos').update(datosPresupuesto).eq('id', editandoId)
 
@@ -877,6 +883,11 @@ export function PresupuestosView({
 
       const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
       
+      localStorage.setItem("mi_accion_reciente", JSON.stringify({
+        patente: vehiculoSeleccionado,
+        t: Date.now()
+      }));
+
       const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
         presupuesto_id: editandoId, vehiculo_patente: vehiculoSeleccionado, cliente_nombre: nombreCompleto || "Cliente", estado: 'A Ingresar'
       }]);
@@ -975,6 +986,11 @@ export function PresupuestosView({
     setIsSaving(true);
     try {
       const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
+
+      localStorage.setItem("mi_accion_reciente", JSON.stringify({
+        patente: vehiculoSeleccionado,
+        t: Date.now()
+      }));
 
       const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
         presupuesto_id: editandoId,

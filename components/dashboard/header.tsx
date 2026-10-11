@@ -32,6 +32,20 @@ export function DashboardHeader({
   const [notificaciones, setNotificaciones] = useState<any[]>([])
   const [campanaSuena, setCampanaSuena] = useState(false)
 
+  // FUNCIÓN ANTI-ECO: Comprueba si la acción fue ejecutada por esta misma computadora
+  const esAccionPropia = (clave: string) => {
+    try {
+      const raw = localStorage.getItem("mi_accion_reciente");
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      const pasoMenosDe4Seg = (Date.now() - data.t) < 4000;
+      if (pasoMenosDe4Seg && (data.clave === clave || data.patente === clave)) {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  };
+
   useEffect(() => {
     if (!userRole) return;
 
@@ -41,7 +55,7 @@ export function DashboardHeader({
         audio.currentTime = 0;
         const playPromise = audio.play();
         if (playPromise !== undefined) {
-          playPromise.catch(e => console.log("Audio bloqueado por el navegador"));
+          playPromise.catch(() => console.log("Audio bloqueado por directiva del navegador"));
         }
       } catch (error) {}
       setCampanaSuena(true);
@@ -56,18 +70,39 @@ export function DashboardHeader({
       });
     };
 
-    // --- CANAL 1: MONITOREO DEL TALLER ---
-    const canalTaller = supabase.channel('notif-taller')
+    // --- CANAL 1: MONITOREO DEL TALLER (ordenes_trabajo) ---
+    const canalTaller = supabase.channel('notif-taller-' + (userRole || 'user'))
+      // EVENTO A: OFICINA ➔ TALLER (Nuevo auto ingresado al taller)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ordenes_trabajo' }, (payload: any) => {
+        if (userRole === 'mecanico') {
+          if (esAccionPropia(payload.new.vehiculo_patente)) return; // Cero eco
+
+          reproducirSonido('/listo.mp3'); // Campana en taller
+          agregarNotif({
+            id: Date.now().toString(),
+            referencia_id: payload.new.presupuesto_id || payload.new.id,
+            tipo: 'taller',
+            patente: payload.new.vehiculo_patente,
+            titulo: 'Nuevo Auto en Taller',
+            mensaje: `Administración ingresó el vehículo ${payload.new.vehiculo_patente} (${payload.new.cliente_nombre}).`,
+            hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+            icono: 'Car',
+            color: 'text-blue-600 dark:text-blue-400'
+          });
+        }
+      })
+      // EVENTO B: TALLER ➔ OFICINA (Mecánico pasa un auto a Terminado)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordenes_trabajo' }, (payload: any) => {
-        // Alerta exclusiva para Admins y Cajeros cuando el mecánico termina un auto
         if (userRole !== 'mecanico') {
           if (payload.new.estado === 'Terminado' && payload.old.estado !== 'Terminado') {
-            reproducirSonido('/listo.mp3'); 
+            if (esAccionPropia(payload.new.vehiculo_patente)) return; // Cero eco
+
+            reproducirSonido('/listo.mp3'); // Sonido listo en oficina
             agregarNotif({
               id: Date.now().toString(),
               referencia_id: payload.new.presupuesto_id || payload.new.id, 
               tipo: 'taller',
-              patente: payload.new.vehiculo_patente, // Guardamos la patente para el ruteo inteligente
+              patente: payload.new.vehiculo_patente,
               titulo: 'Vehículo Terminado',
               mensaje: `El vehículo ${payload.new.vehiculo_patente} ya fue marcado como listo en el taller.`,
               hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
@@ -78,14 +113,14 @@ export function DashboardHeader({
         }
       }).subscribe();
 
-    // --- CANAL 2: MONITOREO DE PRESUPUESTOS (CON DOBLE COMPORTAMIENTO) ---
-    const canalPresupuestos = supabase.channel('notif-presupuestos')
+    // --- CANAL 2: MONITOREO DE PRESUPUESTOS (presupuestos) ---
+    const canalPresupuestos = supabase.channel('notif-presupuestos-' + (userRole || 'user'))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload: any) => {
-        // Alerta para administración cuando el mecánico crea un diagnóstico nuevo
-        if (userRole !== 'mecanico') {
-          if (payload.new.modificado_por_rol !== 'mecanico') return;
+        // Alerta para oficina cuando el mecánico crea un diagnóstico nuevo
+        if (userRole !== 'mecanico' && payload.new.modificado_por_rol === 'mecanico') {
+          if (esAccionPropia(payload.new.id)) return; // Cero eco
+
           reproducirSonido('/ding.mp3');
-          
           const autor = payload.new.modificado_por_nombre || 'Un mecánico';
           
           agregarNotif({
@@ -93,7 +128,7 @@ export function DashboardHeader({
             referencia_id: payload.new.id,
             tipo: 'presupuesto',
             titulo: 'Nuevo Diagnóstico',
-            mensaje: `${autor} ha creado un nuevo diagnóstico para la patente ${payload.new.vehiculo_patente}.`,
+            mensaje: `${autor} creó un diagnóstico para la patente ${payload.new.vehiculo_patente}.`,
             hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
             icono: 'FileText',
             color: 'text-blue-600 dark:text-blue-400'
@@ -102,21 +137,21 @@ export function DashboardHeader({
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload: any) => {
         
-        // COMPORTAMIENTO A: Si el usuario es ADMIN o CAJERO (Saber si el mecánico modificó algo)
+        // COMPORTAMIENTO A: TALLER ➔ OFICINA (Mecánico solicita modificar presupuesto de auto en taller)
         if (userRole !== 'mecanico') {
-          if (payload.new.modificado_por_rol !== 'mecanico') return;
-          if (payload.new.visto_admin === true && payload.old.visto_admin === false) return;
+          if (payload.new.modificado_por_rol === 'mecanico') {
+            if (payload.new.visto_admin === true && payload.old.visto_admin === false) return;
+            if (esAccionPropia(payload.new.id)) return; // Cero eco
 
-          if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
             reproducirSonido('/ding.mp3');
-            const autor = payload.new.modificado_por_nombre || 'Un mecánico';
+            const autor = payload.new.modificado_por_nombre || 'El mecánico';
 
             agregarNotif({
               id: Date.now().toString() + Math.random(),
               referencia_id: payload.new.id,
               tipo: 'presupuesto',
-              titulo: 'Diagnóstico Modificado',
-              mensaje: `${autor} ha modificado el diagnóstico PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}).`,
+              titulo: 'Solicitud de Modificación',
+              mensaje: `${autor} solicitó modificar el presupuesto PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}).`,
               hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
               icono: 'Pencil',
               color: 'text-orange-600 dark:text-orange-400'
@@ -124,24 +159,24 @@ export function DashboardHeader({
           }
         }
         
-        // COMPORTAMIENTO B: Si el usuario es MECÁNICO (Saber si administración le cambió el presupuesto a un auto que está ADENTRO)
+        // COMPORTAMIENTO B: OFICINA ➔ TALLER (Oficina modifica presupuesto de auto que está en el taller)
         else if (userRole === 'mecanico') {
           if (payload.new.modificado_por_rol !== 'mecanico' && payload.new.ingresado_al_taller === true) {
-            if (payload.new.total_final !== payload.old.total_final || payload.new.updated_at !== payload.old.updated_at) {
-              reproducirSonido('/ding.mp3');
-              const autor = payload.new.modificado_por_nombre || 'Administración';
+            if (esAccionPropia(payload.new.id)) return; // Cero eco
 
-              agregarNotif({
-                id: Date.now().toString() + Math.random(),
-                referencia_id: payload.new.id,
-                tipo: 'presupuesto',
-                titulo: 'Presupuesto Modificado',
-                mensaje: `${autor} modificó el presupuesto del vehículo ${payload.new.vehiculo_patente} que tenés en taller.`,
-                hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-                icono: 'Pencil',
-                color: 'text-rose-600 dark:text-rose-400'
-              });
-            }
+            reproducirSonido('/ding.mp3');
+            const autor = payload.new.modificado_por_nombre || 'Administración';
+
+            agregarNotif({
+              id: Date.now().toString() + Math.random(),
+              referencia_id: payload.new.id,
+              tipo: 'presupuesto',
+              titulo: 'Presupuesto Modificado',
+              mensaje: `${autor} actualizó el presupuesto del auto ${payload.new.vehiculo_patente} en taller.`,
+              hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
+              icono: 'Pencil',
+              color: 'text-rose-600 dark:text-rose-400'
+            });
           }
         }
 
@@ -167,13 +202,13 @@ export function DashboardHeader({
     setNotificaciones(prev => prev.filter(n => n.id !== notif.id));
     
     if (notif.tipo === 'taller') {
-      // Si tiene patente, la inyectamos en la memoria para que el buscador del Taller la filtre automáticamente
       if (notif.patente) {
         localStorage.setItem("filtro_taller_patente", notif.patente);
+        // Emisión en vivo para filtrado inmediato sin importar si ya estaba montado
+        window.dispatchEvent(new CustomEvent("filtrar_patente", { detail: notif.patente }));
       }
       if (onSectionChange) onSectionChange("Taller");
     } else if (notif.tipo === 'presupuesto') {
-      // Lleva al presupuesto tanto al Admin como al Mecánico
       if (onSectionChange) onSectionChange("Presupuestos");
       setTimeout(() => {
         if (onNavigateToPresupuesto) onNavigateToPresupuesto(notif.referencia_id);

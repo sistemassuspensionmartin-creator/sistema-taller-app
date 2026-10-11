@@ -47,11 +47,20 @@ export function WorkOrdersTable({
   const [busqueda, setBusqueda] = useState("")
 
   useEffect(() => {
+    const handleFiltrarEnVivo = (e: any) => {
+      if (e.detail) setBusqueda(e.detail);
+    };
+    window.addEventListener("filtrar_patente", handleFiltrarEnVivo);
+
     const patenteNotif = localStorage.getItem("filtro_taller_patente");
     if (patenteNotif) {
-      setBusqueda(patenteNotif); // Activa el buscador automáticamente
-      localStorage.removeItem("filtro_taller_patente"); // Borra la memoria
+      setBusqueda(patenteNotif);
+      localStorage.removeItem("filtro_taller_patente");
     }
+
+    return () => {
+      window.removeEventListener("filtrar_patente", handleFiltrarEnVivo);
+    };
   }, []);
 
   // Estados para Anular Ingreso
@@ -198,6 +207,12 @@ export function WorkOrdersTable({
 
     setIsSavingKm(true);
     try {
+      // Firma Anti-Eco: esta máquina no debe auto-notificarse
+      localStorage.setItem("mi_accion_reciente", JSON.stringify({
+        patente: ordenParaFinalizar.vehiculo_patente,
+        t: Date.now()
+      }));
+
       // 1. Actualizar Orden de Trabajo
       await supabase.from('ordenes_trabajo').update({ estado: 'Terminado' }).eq('id', ordenParaFinalizar.id);
 
