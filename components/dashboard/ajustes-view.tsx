@@ -133,9 +133,15 @@ export function AjustesView() {
         if (nuevoUsuario.pin_bloqueo && nuevoUsuario.pin_bloqueo.length !== 4) {
           return alert("El PIN debe ser exactamente de 4 números.");
         }
+        const { data: { session } } = await supabase.auth.getSession()
+        const token = session?.access_token
+
         const res = await fetch('/api/usuarios', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` 
+          },
           body: JSON.stringify(nuevoUsuario)
         })
         

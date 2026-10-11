@@ -2,10 +2,18 @@
 
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
-import { Loader2, Mail, Lock, ShieldCheck, AlertCircle } from "lucide-react"
+import { Loader2, Mail, Lock, ShieldCheck, AlertCircle, KeyRound, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
 export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [email, setEmail] = useState("")
@@ -13,13 +21,18 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
   const [isLoading, setIsLoading] = useState(false)
   const [errorMensaje, setErrorMensaje] = useState<string | null>(null)
 
+  // Estados para Recuperación de Contraseña
+  const [isResetOpen, setIsResetOpen] = useState(false)
+  const [resetEmail, setResetEmail] = useState("")
+  const [isSendingReset, setIsSendingReset] = useState(false)
+  const [resetSuccess, setResetSuccess] = useState(false)
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setErrorMensaje(null)
 
     try {
-      // Intentamos iniciar sesión con Supabase
       // @ts-ignore
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -27,7 +40,6 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
       })
 
       if (error) {
-        // Traducimos los errores comunes
         if (error.message.includes("Invalid login credentials")) {
           throw new Error("El email o la contraseña son incorrectos.")
         }
@@ -35,7 +47,6 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
       }
 
       if (data.user) {
-        // ¡Éxito! Le avisamos a la página principal que deje pasar al usuario
         onLoginSuccess()
       }
     } catch (error: any) {
@@ -45,10 +56,30 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
     }
   }
 
+  const handleRecuperarPassword = async () => {
+    if (!resetEmail || !resetEmail.includes("@")) {
+      return alert("Por favor, ingresá un correo electrónico válido.")
+    }
+
+    setIsSendingReset(true)
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
+      })
+
+      if (error) throw error
+      setResetSuccess(true)
+    } catch (err: any) {
+      alert("Error al enviar correo de recuperación: " + err.message)
+    } finally {
+      setIsSendingReset(false)
+    }
+  }
+
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 relative overflow-hidden bg-[url('/login-bg.jpg')] bg-cover bg-center">
       
-      {/* Capa oscura translúcida (El 'Patovica visual') */}
+      {/* Capa oscura translúcida */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] z-0"></div>
 
       <div className="w-full max-w-md z-10 relative animate-in fade-in zoom-in-95 duration-500">
@@ -90,7 +121,20 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Contraseña</Label>
+                <div className="flex justify-between items-center">
+                  <Label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Contraseña</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(email);
+                      setResetSuccess(false);
+                      setIsResetOpen(true);
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-300" />
                   <Input 
@@ -130,6 +174,57 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
           </p>
         </div>
       </div>
+
+      {/* --- MODAL DE RECUPERACIÓN DE CONTRASEÑA --- */}
+      <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+        <DialogContent className="sm:max-w-md bg-white text-slate-900">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900">
+              <KeyRound className="w-6 h-6 text-blue-600" /> Restablecer Contraseña
+            </DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Ingresá tu correo electrónico y te enviaremos un enlace para que crees una nueva contraseña.
+            </DialogDescription>
+          </DialogHeader>
+
+          {resetSuccess ? (
+            <div className="py-6 text-center space-y-3">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="font-bold text-lg text-slate-800">¡Correo enviado!</h3>
+              <p className="text-sm text-slate-600">
+                Revisá tu casilla de correo (incluida la carpeta de spam o correo no deseado) y seguí las instrucciones.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-500 uppercase">Correo Electrónico</Label>
+                <Input 
+                  type="email" 
+                  placeholder="ejemplo@taller.com" 
+                  value={resetEmail} 
+                  onChange={(e) => setResetEmail(e.target.value)} 
+                  autoFocus
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsResetOpen(false)}>
+              {resetSuccess ? "Cerrar" : "Cancelar"}
+            </Button>
+            {!resetSuccess && (
+              <Button onClick={handleRecuperarPassword} disabled={isSendingReset} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {isSendingReset ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Enviar Enlace
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
