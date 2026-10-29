@@ -192,8 +192,13 @@ export default function DashboardPage() {
     
     inicializarSesion()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setIsAuthenticated(!!session)
+      // Entró desde el link de "¿Olvidaste tu contraseña?": le pedimos la clave nueva
+      if (event === 'PASSWORD_RECOVERY') {
+        setActiveSection("Perfil")
+        setIsChangePasswordOpen(true)
+      }
       if (!session) {
         setUserRole(null)
         setUserName(null)
