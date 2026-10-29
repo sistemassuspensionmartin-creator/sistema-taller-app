@@ -1,8 +1,9 @@
 "use client"
 
 import { CierreCajaImprimible, FacturaImprimible } from "./impresion-templates"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
+import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, TIPOS_TARJETA } from "@/lib/operaciones"
 import { 
   Wallet, ArrowRightLeft, FileText, DollarSign, CreditCard, Landmark, 
   Receipt, Search, Plus, Loader2, ArrowUpRight, ArrowDownRight, CheckCircle2, Lock, Printer, Building, Banknote, TrendingDown
@@ -72,7 +73,7 @@ export function CajaView({
   const [metodoPago, setMetodoPago] = useState("Efectivo")
   const [notasCobro, setNotasCobro] = useState("")
   const [bancoOrigen, setBancoOrigen] = useState("")
-  const [tipoTarjeta, setTipoTarjeta] = useState("Crédito")
+  const [tipoTarjeta, setTipoTarjeta] = useState(TIPOS_TARJETA[0])
   const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
   const [bancoTarjeta, setBancoTarjeta] = useState("")
 
@@ -91,6 +92,10 @@ export function CajaView({
   const [movimientosTurnoCierre, setMovimientosTurnoCierre] = useState<any[]>([])
 
   const [printData, setPrintData] = useState<any>(null)
+
+  // Un código por cada vez que se abre un modal: un doble clic no duplica la operación
+  const operacionRef = useRef<string>(nuevaOperacionId())
+  const nuevaOperacion = () => { operacionRef.current = nuevaOperacionId() }
 
   const cargarDatos = async () => {
     setIsLoading(true)
@@ -136,49 +141,19 @@ export function CajaView({
       });
       setTotalesTurno({ transferencias: transf, tarjetas: tarj, cheques: cheq });
 
-      const { data: ordenesData } = await supabase
-        .from('ordenes_trabajo')
-        .select(`vehiculo_patente, cliente_nombre, presupuestos (*)`)
-        .not('presupuesto_id', 'is', null)
+      // La base calcula lo pagado neto de cada presupuesto (cobros menos anulaciones)
+      const { data: presupuestosCaja, error: errPres } = await supabase.rpc('caja_presupuestos', { p_desde: fechaInicio })
+      if (errPres) throw errPres
 
-      const { data: todosLosPagos } = await supabase
-        .from('movimientos_caja')
-        .select('presupuesto_id, monto')
-        .eq('tipo_movimiento', 'ingreso_cobro')
+      const procesadas = (presupuestosCaja || []).map((p: any) => ({
+        ...p,
+        total: Number(p.total || 0),
+        pagado: Number(p.pagado || 0),
+        restante: Number(p.restante || 0),
+      }));
 
-      const presupuestosUnicos = new Map();
-
-      (ordenesData || []).forEach((orden: any) => {
-        const pres = orden.presupuestos;
-        if (!pres || presupuestosUnicos.has(pres.id)) return;
-
-        const pagosDeEstePresupuesto = (todosLosPagos || []).filter((p: any) => p.presupuesto_id === pres.id);
-        const totalPagado = pagosDeEstePresupuesto.reduce((acc: number, p: any) => acc + Number(p.monto || 0), 0);
-        
-        const total = Number(pres.total_final || 0);
-        const restante = total - totalPagado;
-
-        presupuestosUnicos.set(pres.id, {
-          id: pres.id,
-          numero: pres.numero_correlativo,
-          patente: orden.vehiculo_patente,
-          cliente: orden.cliente_nombre || 'Sin registrar',
-          total: total,
-          pagado: totalPagado,
-          restante: restante,
-          estado_pago: pres.estado_pago || 'Pendiente',
-          estado_facturacion: pres.estado_facturacion || 'No Facturado'
-        });
-      });
-
-      const procesadas = Array.from(presupuestosUnicos.values());
-
-      const pendientes = procesadas.filter(p => p.restante > 0).sort((a:any, b:any) => b.numero - a.numero);
-      const cobradosHoy = procesadas.filter(p => {
-        if (p.restante > 0) return false;
-        const pagoEnEsteTurno = (movData || []).some((m: any) => m.presupuesto_id === p.id && m.tipo_movimiento === 'ingreso_cobro');
-        return pagoEnEsteTurno;
-      }).sort((a:any, b:any) => b.numero - a.numero);
+      const pendientes = procesadas.filter((p: any) => p.restante > 0).sort((a:any, b:any) => b.numero - a.numero);
+      const cobradosHoy = procesadas.filter((p: any) => p.restante <= 0 && p.cobrado_en_turno).sort((a:any, b:any) => b.numero - a.numero);
 
       setCuentasPendientes(pendientes);
       setCuentasCobradas(cobradosHoy);
@@ -205,7 +180,8 @@ export function CajaView({
     } else {
       setCajaEgreso("");
     }
-    
+
+    nuevaOperacion();
     setIsEgresoModalOpen(true);
   }
 
@@ -216,125 +192,69 @@ export function CajaView({
     setNotasCobro("");
     setBancoOrigen("");
     setBancoTarjeta("");
+    nuevaOperacion();
     setIsCobrarModalOpen(true);
   }
 
+  const abrirModalMovimiento = () => {
+    nuevaOperacion();
+    setIsMovimientoModalOpen(true);
+  }
+
   const procesarCobro = async () => {
+    if (isSaving) return;
     const monto = parseFloat(montoCobro);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
     if (monto > presupuestoACobrar.restante) return alert("El monto supera la deuda restante.");
 
+    const cajaDestinoId = resolverCajaDestino(cajas, metodoPago, tipoTarjeta);
+    if (!cajaDestinoId && metodoPago !== 'Cuenta Corriente') {
+      return alert("No se encontró la caja destino para este método de pago. Revise los nombres de las cajas.");
+    }
+
+    let detalleMetodo = "";
+    if (metodoPago === 'Transferencia' && bancoOrigen) detalleMetodo = ` [Banco: ${bancoOrigen}]`;
+    if (metodoPago === 'Tarjeta') detalleMetodo = ` [${marcaTarjeta} ${tipoTarjeta}${bancoTarjeta ? ' - ' + bancoTarjeta : ''}]`;
+
     setIsSaving(true);
     try {
-      let cajaDestinoId = null;
-      if (metodoPago === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
-      if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.includes('Transferencia'))?.id;
-      if (metodoPago === 'Tarjeta') cajaDestinoId = cajas.find(c => c.nombre.includes('Tarjeta'))?.id;
-      if (metodoPago === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.includes('Cheque'))?.id;
-
-      if (!cajaDestinoId && metodoPago !== 'Cuenta Corriente') {
-        throw new Error("No se encontró la caja destino para este método de pago. Revise los nombres de las cajas.");
-      }
-
-      if (cajaDestinoId) {
-        const cajaAfectada = cajas.find(c => c.id === cajaDestinoId);
-        const nuevoSaldo = Number(cajaAfectada.saldo || 0) + monto;
-        await supabase.from('cajas').update({ saldo: nuevoSaldo }).eq('id', cajaDestinoId);
-      }
-
-      let detalleMetodo = "";
-      if (metodoPago === 'Transferencia' && bancoOrigen) detalleMetodo = ` [Banco: ${bancoOrigen}]`;
-      if (metodoPago === 'Tarjeta') detalleMetodo = ` [${marcaTarjeta} ${tipoTarjeta}${bancoTarjeta ? ' - ' + bancoTarjeta : ''}]`;
-
-      // --- MAGIA ACTUALIZADA: ENCIENDE LA CUENTA Y CREA LA DEUDA ---
-      if (metodoPago === 'Cuenta Corriente') {
-        // 1. Buscamos a quién pertenece este presupuesto
-        const { data: pData } = await supabase
-          .from('presupuestos')
-          .select('vehiculos(cliente_id)')
-          .eq('id', presupuestoACobrar.id)
-          .single();
-
-        const clienteId = Array.isArray(pData?.vehiculos) 
-          ? pData?.vehiculos[0]?.cliente_id 
-          : (pData?.vehiculos as any)?.cliente_id;
-
-        if (clienteId) {
-          // Buscamos su saldo actual
-          const { data: cliData } = await supabase.from('clientes').select('saldo').eq('id', clienteId).single();
-          const nuevoSaldoCli = Number(cliData?.saldo || 0) + monto;
-
-          // A) Encendemos la cuenta y sumamos el saldo
-          await supabase.from('clientes')
-            .update({ tiene_cuenta_corriente: true, saldo: nuevoSaldoCli })
-            .eq('id', clienteId);
-            
-          // B) Registramos la deuda con el vocabulario de tu base
-          await supabase.from('movimientos_clientes').insert([{
-            cliente_id: clienteId,
-            monto: monto,
-            tipo: 'cargo_deuda',
-            comprobante: `PRE-${presupuestoACobrar.numero}`,
-            detalle: `Deuda por Presupuesto PRE-${presupuestoACobrar.numero}`
-          }]);
-        }
-      }
-      
-      // ---------------------------------------------------------------------------------
-
-      await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'ingreso_cobro',
-        caja_destino_id: cajaDestinoId,
-        monto: monto,
-        metodo_pago: metodoPago,
-        presupuesto_id: presupuestoACobrar.id,
-        detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})${detalleMetodo}`,
-        notas: notasCobro
-      }]);
-
-      const nuevoRestante = presupuestoACobrar.restante - monto;
-      const nuevoEstado = nuevoRestante <= 0 ? 'Cobrado' : 'Parcial';
-      
-      await supabase.from('presupuestos').update({ estado_pago: nuevoEstado }).eq('id', presupuestoACobrar.id);
-      
-      // Mantenida tu lógica intacta
-      if(nuevoEstado === 'Cobrado') {
-          await supabase.from('presupuestos').update({ estado: 'Facturado' }).eq('id', presupuestoACobrar.id);
-      }
+      await ejecutarOperacion('registrar_cobro_presupuesto', {
+        p_operacion: operacionRef.current,
+        p_presupuesto_id: presupuestoACobrar.id,
+        p_monto: monto,
+        p_metodo: metodoPago,
+        p_caja_id: cajaDestinoId,
+        p_detalle: `Cobro PRE-${presupuestoACobrar.numero} (${presupuestoACobrar.patente})${detalleMetodo}`,
+        p_notas: notasCobro
+      });
 
       alert("¡Cobro registrado con éxito!");
       setIsCobrarModalOpen(false);
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      alert("Error al registrar el cobro: " + err.message);
+      cargarDatos();
     } finally {
       setIsSaving(false);
     }
   }
 
   const procesarMovimientoInterno = async () => {
+    if (isSaving) return;
     const monto = parseFloat(montoMovimiento);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
     if (!cajaOrigen || !cajaDestino) return alert("Seleccione caja de origen y destino.");
     if (cajaOrigen === cajaDestino) return alert("La caja de origen y destino no pueden ser la misma.");
 
-    const cajaOrigObj = cajas.find(c => c.id === cajaOrigen);
-    if (Number(cajaOrigObj.saldo || 0) < monto) return alert("No hay saldo suficiente en la caja de origen.");
-
     setIsSaving(true);
     try {
-      await supabase.from('cajas').update({ saldo: Number(cajaOrigObj.saldo || 0) - monto }).eq('id', cajaOrigen);
-      const cajaDestObj = cajas.find(c => c.id === cajaDestino);
-      await supabase.from('cajas').update({ saldo: Number(cajaDestObj.saldo || 0) + monto }).eq('id', cajaDestino);
-
-      await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'transferencia_interna',
-        caja_origen_id: cajaOrigen,
-        caja_destino_id: cajaDestino,
-        monto: monto,
-        metodo_pago: 'Efectivo',
-        detalle: notasMovimiento || "Movimiento interno de fondos"
-      }]);
+      await ejecutarOperacion('transferir_entre_cajas', {
+        p_operacion: operacionRef.current,
+        p_caja_origen_id: cajaOrigen,
+        p_caja_destino_id: cajaDestino,
+        p_monto: monto,
+        p_detalle: notasMovimiento
+      });
 
       alert("Movimiento realizado con éxito.");
       setIsMovimientoModalOpen(false);
@@ -342,40 +262,39 @@ export function CajaView({
       setNotasMovimiento("");
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      alert("Error al mover fondos: " + err.message);
+      cargarDatos();
     } finally {
       setIsSaving(false);
     }
   }
 
   const procesarEgreso = async () => {
+    if (isSaving) return;
     const monto = parseFloat(montoEgreso);
     if (isNaN(monto) || monto <= 0) return alert("Ingrese un monto válido.");
     if (!cajaEgreso) return alert("Seleccione de qué caja sale el dinero.");
     if (!categoriaEgreso) return alert("Seleccione una categoría de gasto.");
 
     const cajaObj = cajas.find(c => c.id === cajaEgreso);
-    if (Number(cajaObj.saldo || 0) < monto) return alert("No hay saldo suficiente en la caja seleccionada.");
+    const catNombre = categoriasGasto.find(c => c.id === categoriaEgreso)?.nombre || 'Gasto General';
+
+    const nombreCajaEgreso = (cajaObj?.nombre || '').toLowerCase();
+    let metodoPagoEgreso = 'Efectivo';
+    if (nombreCajaEgreso.includes('transferencia')) metodoPagoEgreso = 'Transferencia';
+    else if (nombreCajaEgreso.includes('cheque')) metodoPagoEgreso = 'Cheque';
+    else if (nombreCajaEgreso.includes('tarjeta')) metodoPagoEgreso = 'Tarjeta';
 
     setIsSaving(true);
     try {
-      await supabase.from('cajas').update({ saldo: Number(cajaObj.saldo || 0) - monto }).eq('id', cajaEgreso);
-      const catNombre = categoriasGasto.find(c => c.id === categoriaEgreso)?.nombre || 'Gasto General';
-      
-      const nombreCajaEgreso = (cajaObj?.nombre || '').toLowerCase();
-      let metodoPagoEgreso = 'Efectivo';
-      if (nombreCajaEgreso.includes('transferencia')) metodoPagoEgreso = 'Transferencia';
-      else if (nombreCajaEgreso.includes('cheque')) metodoPagoEgreso = 'Cheque';
-      else if (nombreCajaEgreso.includes('tarjeta')) metodoPagoEgreso = 'Tarjeta';
-
-      await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'egreso_gasto',
-        caja_origen_id: cajaEgreso,
-        monto: monto,
-        metodo_pago: metodoPagoEgreso, 
-        detalle: `Gasto: ${catNombre}`,
-        notas: notasEgreso
-      }]);
+      await ejecutarOperacion('registrar_gasto', {
+        p_operacion: operacionRef.current,
+        p_caja_id: cajaEgreso,
+        p_monto: monto,
+        p_metodo: metodoPagoEgreso,
+        p_detalle: `Gasto: ${catNombre}`,
+        p_notas: notasEgreso
+      });
 
       alert("Egreso registrado con éxito.");
       setIsEgresoModalOpen(false);
@@ -383,7 +302,8 @@ export function CajaView({
       setNotasEgreso("");
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      alert("Error al registrar el gasto: " + err.message);
+      cargarDatos();
     } finally {
       setIsSaving(false);
     }
@@ -400,8 +320,14 @@ export function CajaView({
         .order('fecha', { ascending: true }); 
 
       setMovimientosTurnoCierre(movsDesdeCierre || []);
-      setEfectivoContado(saldoMostrador.toString()); 
+
+      // Saldo fresco: otra PC pudo haber cobrado mientras esta pantalla estaba abierta
+      const { data: cajasFrescas } = await supabase.from('cajas').select('*').order('nombre');
+      if (cajasFrescas) setCajas(cajasFrescas);
+      const mostradorFresco = (cajasFrescas || cajas).find((c: any) => c.nombre.toLowerCase().includes('mostrador'));
+      setEfectivoContado(Number(mostradorFresco?.saldo || 0).toString());
       setNotasCierre("");
+      nuevaOperacion();
       setIsCierreModalOpen(true);
     } catch (err) {
       alert("Error al calcular datos.");
@@ -411,44 +337,27 @@ export function CajaView({
   }
 
   const procesarCierre = async () => {
+    if (isSaving) return;
     const real = parseFloat(efectivoContado);
     if (isNaN(real) || real < 0) return alert("Ingrese un monto real válido.");
 
-    const diferencia = real - saldoMostrador;
-
     setIsSaving(true);
     try {
-      const { error } = await supabase.from('cierres_caja').insert([{
-        saldo_esperado_efectivo: saldoMostrador,
-        saldo_real_efectivo: real,
-        diferencia: diferencia,
-        total_tarjetas: totalesTurno.tarjetas,
-        total_transferencias: totalesTurno.transferencias,
-        total_cheques: totalesTurno.cheques,
-        notas: notasCierre
-      }]);
-
-      if (error) throw new Error("No se pudo guardar el reporte de cierre.");
-
-      if (diferencia !== 0) {
-        await supabase.from('cajas').update({ saldo: real }).eq('id', cajaMostrador?.id);
-        await supabase.from('movimientos_caja').insert([{
-          tipo_movimiento: diferencia > 0 ? 'ajuste_sobrante' : 'ajuste_faltante',
-          caja_destino_id: cajaMostrador?.id,
-          monto: Math.abs(diferencia),
-          metodo_pago: 'Efectivo',
-          detalle: `Ajuste automático por cierre de caja. ${diferencia > 0 ? 'Sobrante' : 'Faltante'}.`
-        }]);
-      }
+      // La base toma el saldo esperado y los totales del turno en el mismo instante del cierre
+      const cierre = await ejecutarOperacion('cerrar_caja', {
+        p_operacion: operacionRef.current,
+        p_efectivo_real: real,
+        p_notas: notasCierre
+      });
 
       setPrintData({
         ultimoCierre: ultimoCierre?.fecha_cierre || null,
-        efectivo_esperado: saldoMostrador,
+        efectivo_esperado: Number(cierre.efectivo_esperado),
         efectivo_real: real,
-        diferencia: diferencia,
-        transferencias: totalesTurno.transferencias,
-        tarjetas: totalesTurno.tarjetas,
-        cheques: totalesTurno.cheques,
+        diferencia: Number(cierre.diferencia),
+        transferencias: Number(cierre.transferencias),
+        tarjetas: Number(cierre.tarjetas),
+        cheques: Number(cierre.cheques),
         notas: notasCierre,
         movimientos: movimientosTurnoCierre,
         usuario: "Martin",
@@ -466,7 +375,7 @@ export function CajaView({
       }, 500);
 
     } catch (err: any) {
-      alert(err.message);
+      alert("Error al cerrar la caja: " + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -556,7 +465,7 @@ export function CajaView({
             </Button>
             
             {userRole !== 'cajero' && (
-              <Button onClick={() => setIsMovimientoModalOpen(true)} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
+              <Button onClick={abrirModalMovimiento} variant="outline" className="border-blue-200 text-blue-700 bg-blue-50 hover:bg-blue-100 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-400">
                 <ArrowRightLeft className="mr-2 h-4 w-4" /> Movimiento Interno
               </Button>
             )}
@@ -771,10 +680,10 @@ export function CajaView({
                       <TableCell>
                         <div className="flex items-center gap-1 font-medium text-sm text-muted-foreground"><CreditCard className="w-3 h-3"/> {mov.metodo_pago}</div>
                         {mov.caja_destino && mov.tipo_movimiento !== 'egreso_gasto' && <div className="text-[10px] text-muted-foreground mt-0.5 font-bold uppercase tracking-wider">Destino: {mov.caja_destino.nombre}</div>}
-                        {mov.caja_origen && mov.tipo_movimiento === 'egreso_gasto' && <div className="text-[10px] text-red-600/70 mt-0.5 font-bold uppercase tracking-wider">Salió de: {mov.caja_origen.nombre}</div>}
+                        {mov.caja_origen && (mov.tipo_movimiento === 'egreso_gasto' || mov.tipo_movimiento === 'ajuste_faltante') && <div className="text-[10px] text-red-600/70 mt-0.5 font-bold uppercase tracking-wider">Salió de: {mov.caja_origen.nombre}</div>}
                       </TableCell>
                       <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : mov.tipo_movimiento === 'egreso_gasto' ? 'text-red-600' : 'text-foreground'}`}>
-                        {mov.tipo_movimiento === 'ingreso_cobro' ? '+' : mov.tipo_movimiento === 'egreso_gasto' ? '-' : ''}${Number(mov.monto).toLocaleString()}
+                        {mov.tipo_movimiento === 'ingreso_cobro' || mov.tipo_movimiento === 'ajuste_sobrante' ? '+' : mov.tipo_movimiento === 'egreso_gasto' || mov.tipo_movimiento === 'ajuste_faltante' ? '-' : ''}${Number(mov.monto).toLocaleString()}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -901,8 +810,7 @@ export function CajaView({
                       <Select value={tipoTarjeta} onValueChange={setTipoTarjeta}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Crédito">Crédito</SelectItem>
-                          <SelectItem value="Débito">Débito</SelectItem>
+                          {TIPOS_TARJETA.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                         </SelectContent>
                       </Select>
                     </div>

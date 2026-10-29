@@ -13,7 +13,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { suscribirCanal } from "@/lib/realtime"
+import { destinoDeRol, prepararSonidos, reproducirSonido } from "@/lib/notificaciones"
 
 export function DashboardHeader({ 
   activeSection, 
@@ -31,160 +33,61 @@ export function DashboardHeader({
   
   const [notificaciones, setNotificaciones] = useState<any[]>([])
   const [campanaSuena, setCampanaSuena] = useState(false)
+  const miIdRef = useRef<string | null>(null)
 
-  // FUNCIÓN ANTI-ECO: Comprueba si la acción fue ejecutada por esta misma computadora
-  const esAccionPropia = (clave: string) => {
-    try {
-      const raw = localStorage.getItem("mi_accion_reciente");
-      if (!raw) return false;
-      const data = JSON.parse(raw);
-      const pasoMenosDe4Seg = (Date.now() - data.t) < 4000;
-      if (pasoMenosDe4Seg && (data.clave === clave || data.patente === clave)) {
-        return true;
-      }
-    } catch (e) {}
-    return false;
-  };
+  const destino = destinoDeRol(userRole)
 
   useEffect(() => {
     if (!userRole) return;
+    let activo = true;
+    let desuscribir: (() => void) | null = null;
 
-    const reproducirSonido = (archivoAudio: string) => {
-      try {
-        const audio = new Audio(archivoAudio); 
-        audio.currentTime = 0;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(() => console.log("Audio bloqueado por directiva del navegador"));
-        }
-      } catch (error) {}
-      setCampanaSuena(true);
-      setTimeout(() => setCampanaSuena(false), 3000);
+    prepararSonidos();
+
+    // Las notificaciones viven en la base: al abrir el sistema (o al reconectar)
+    // se traen las pendientes del sector, menos las que generó este usuario.
+    const cargarPendientes = async () => {
+      const { data, error } = await supabase
+        .from('notificaciones')
+        .select('*')
+        .eq('destino', destino)
+        .is('vista_at', null)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (activo && !error) setNotificaciones((data || []).filter(n => n.creado_por !== miIdRef.current));
     };
 
-    const agregarNotif = (nuevaNotif: any) => {
-      setNotificaciones(prev => {
-        const existe = prev.find(n => n.referencia_id === nuevaNotif.referencia_id && n.tipo === nuevaNotif.tipo && n.titulo === nuevaNotif.titulo);
-        if (existe) return prev;
-        return [nuevaNotif, ...prev];
-      });
+    const iniciar = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      miIdRef.current = session?.user.id ?? null;
+      if (!activo) return;
+      await cargarPendientes();
+      if (!activo) return;
+
+      desuscribir = suscribirCanal('notificaciones-' + destino, canal => canal
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notificaciones', filter: `destino=eq.${destino}` }, (payload: any) => {
+          const nueva = payload.new;
+          // Quien generó la acción no recibe su propio aviso ni escucha el sonido
+          if (nueva.creado_por && nueva.creado_por === miIdRef.current) return;
+          setNotificaciones(prev => prev.some(n => n.id === nueva.id) ? prev : [nueva, ...prev]);
+          reproducirSonido(nueva.tipo === 'auto_terminado' || nueva.tipo === 'auto_ingresado' ? 'listo' : 'ding');
+          setCampanaSuena(true);
+          setTimeout(() => setCampanaSuena(false), 3000);
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'notificaciones', filter: `destino=eq.${destino}` }, (payload: any) => {
+          // Otro compañero del sector ya la vio: desaparece en todas las PCs
+          if (payload.new.vista_at) setNotificaciones(prev => prev.filter(n => n.id !== payload.new.id));
+        }),
+        cargarPendientes,
+        { intervaloMs: 120000 }
+      );
     };
 
-    // --- CANAL 1: MONITOREO DEL TALLER (ordenes_trabajo) ---
-    const canalTaller = supabase.channel('notif-taller-' + (userRole || 'user'))
-      // EVENTO A: OFICINA ➔ TALLER (Nuevo auto ingresado al taller)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ordenes_trabajo' }, (payload: any) => {
-        if (userRole === 'mecanico') {
-          if (esAccionPropia(payload.new.vehiculo_patente)) return; // Cero eco
-
-          reproducirSonido('/listo.mp3'); // Campana en taller
-          agregarNotif({
-            id: Date.now().toString(),
-            referencia_id: payload.new.presupuesto_id || payload.new.id,
-            tipo: 'taller',
-            patente: payload.new.vehiculo_patente,
-            titulo: 'Nuevo Auto en Taller',
-            mensaje: `Administración ingresó el vehículo ${payload.new.vehiculo_patente} (${payload.new.cliente_nombre}).`,
-            hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-            icono: 'Car',
-            color: 'text-blue-600 dark:text-blue-400'
-          });
-        }
-      })
-      // EVENTO B: TALLER ➔ OFICINA (Mecánico pasa un auto a Terminado)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordenes_trabajo' }, (payload: any) => {
-        if (userRole !== 'mecanico') {
-          if (payload.new.estado === 'Terminado' && payload.old.estado !== 'Terminado') {
-            if (esAccionPropia(payload.new.vehiculo_patente)) return; // Cero eco
-
-            reproducirSonido('/listo.mp3'); // Sonido listo en oficina
-            agregarNotif({
-              id: Date.now().toString(),
-              referencia_id: payload.new.presupuesto_id || payload.new.id, 
-              tipo: 'taller',
-              patente: payload.new.vehiculo_patente,
-              titulo: 'Vehículo Terminado',
-              mensaje: `El vehículo ${payload.new.vehiculo_patente} ya fue marcado como listo en el taller.`,
-              hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-              icono: 'Car',
-              color: 'text-emerald-600 dark:text-emerald-400'
-            });
-          }
-        }
-      }).subscribe();
-
-    // --- CANAL 2: MONITOREO DE PRESUPUESTOS (presupuestos) ---
-    const canalPresupuestos = supabase.channel('notif-presupuestos-' + (userRole || 'user'))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'presupuestos' }, (payload: any) => {
-        // Alerta para oficina cuando el mecánico crea un diagnóstico nuevo
-        if (userRole !== 'mecanico' && payload.new.modificado_por_rol === 'mecanico') {
-          if (esAccionPropia(payload.new.id)) return; // Cero eco
-
-          reproducirSonido('/ding.mp3');
-          const autor = payload.new.modificado_por_nombre || 'Un mecánico';
-          
-          agregarNotif({
-            id: Date.now().toString(),
-            referencia_id: payload.new.id,
-            tipo: 'presupuesto',
-            titulo: 'Nuevo Diagnóstico',
-            mensaje: `${autor} creó un diagnóstico para la patente ${payload.new.vehiculo_patente}.`,
-            hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-            icono: 'FileText',
-            color: 'text-blue-600 dark:text-blue-400'
-          });
-        }
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'presupuestos' }, (payload: any) => {
-        
-        // COMPORTAMIENTO A: TALLER ➔ OFICINA (Mecánico solicita modificar presupuesto de auto en taller)
-        if (userRole !== 'mecanico') {
-          if (payload.new.modificado_por_rol === 'mecanico') {
-            if (payload.new.visto_admin === true && payload.old.visto_admin === false) return;
-            if (esAccionPropia(payload.new.id)) return; // Cero eco
-
-            reproducirSonido('/ding.mp3');
-            const autor = payload.new.modificado_por_nombre || 'El mecánico';
-
-            agregarNotif({
-              id: Date.now().toString() + Math.random(),
-              referencia_id: payload.new.id,
-              tipo: 'presupuesto',
-              titulo: 'Solicitud de Modificación',
-              mensaje: `${autor} solicitó modificar el presupuesto PRE-${payload.new.numero_correlativo || 'S/N'} (${payload.new.vehiculo_patente}).`,
-              hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-              icono: 'Pencil',
-              color: 'text-orange-600 dark:text-orange-400'
-            });
-          }
-        }
-        
-        // COMPORTAMIENTO B: OFICINA ➔ TALLER (Oficina modifica presupuesto de auto que está en el taller)
-        else if (userRole === 'mecanico') {
-          if (payload.new.modificado_por_rol !== 'mecanico' && payload.new.ingresado_al_taller === true) {
-            if (esAccionPropia(payload.new.id)) return; // Cero eco
-
-            reproducirSonido('/ding.mp3');
-            const autor = payload.new.modificado_por_nombre || 'Administración';
-
-            agregarNotif({
-              id: Date.now().toString() + Math.random(),
-              referencia_id: payload.new.id,
-              tipo: 'presupuesto',
-              titulo: 'Presupuesto Modificado',
-              mensaje: `${autor} actualizó el presupuesto del auto ${payload.new.vehiculo_patente} en taller.`,
-              hora: new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute:'2-digit' }),
-              icono: 'Pencil',
-              color: 'text-rose-600 dark:text-rose-400'
-            });
-          }
-        }
-
-      }).subscribe();
+    iniciar();
 
     return () => {
-      supabase.removeChannel(canalTaller);
-      supabase.removeChannel(canalPresupuestos);
+      activo = false;
+      if (desuscribir) desuscribir();
     }
   }, [userRole]);
 
@@ -193,22 +96,32 @@ export function DashboardHeader({
     window.location.reload()
   }
 
+  const marcarVistas = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setNotificaciones(prev => prev.filter(n => !ids.includes(n.id)));
+    const { error } = await supabase
+      .from('notificaciones')
+      .update({ vista_at: new Date().toISOString(), vista_por: miIdRef.current })
+      .in('id', ids);
+    if (error) console.error("No se pudo marcar la notificación como vista:", error.message);
+  }
+
   const descartarNotificacion = (id: string, e: any) => {
     e.stopPropagation(); 
-    setNotificaciones(prev => prev.filter(n => n.id !== id));
+    marcarVistas([id]);
   }
 
   const ejecutarAccionNotificacion = (notif: any) => {
-    setNotificaciones(prev => prev.filter(n => n.id !== notif.id));
+    marcarVistas([notif.id]);
     
-    if (notif.tipo === 'taller') {
+    if (notif.tipo === 'auto_terminado' || notif.tipo === 'auto_ingresado') {
       if (notif.patente) {
         localStorage.setItem("filtro_taller_patente", notif.patente);
         // Emisión en vivo para filtrado inmediato sin importar si ya estaba montado
         window.dispatchEvent(new CustomEvent("filtrar_patente", { detail: notif.patente }));
       }
       if (onSectionChange) onSectionChange("Taller");
-    } else if (notif.tipo === 'presupuesto') {
+    } else if (notif.referencia_id) {
       if (onSectionChange) onSectionChange("Presupuestos");
       setTimeout(() => {
         if (onNavigateToPresupuesto) onNavigateToPresupuesto(notif.referencia_id);
@@ -216,11 +129,18 @@ export function DashboardHeader({
     }
   }
 
-  const renderIcono = (iconoStr: string) => {
-    if (iconoStr === 'Car') return <Car className="h-4 w-4" />;
-    if (iconoStr === 'FileText') return <FileText className="h-4 w-4" />;
-    if (iconoStr === 'Pencil') return <Pencil className="h-4 w-4" />;
-    return <Bell className="h-4 w-4" />;
+  const ESTILO_NOTIF: Record<string, { icono: any, color: string }> = {
+    auto_ingresado: { icono: Car, color: 'text-blue-600 dark:text-blue-400' },
+    auto_terminado: { icono: Car, color: 'text-emerald-600 dark:text-emerald-400' },
+    presupuesto_nuevo: { icono: FileText, color: 'text-blue-600 dark:text-blue-400' },
+    presupuesto_modificacion: { icono: Pencil, color: 'text-orange-600 dark:text-orange-400' },
+    presupuesto_modificado: { icono: Pencil, color: 'text-rose-600 dark:text-rose-400' },
+  }
+  const estiloNotif = (tipo: string) => ESTILO_NOTIF[tipo] || { icono: Bell, color: 'text-foreground' }
+  const horaNotif = (fecha: string) => {
+    const d = new Date(fecha);
+    const hora = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    return d.toDateString() === new Date().toDateString() ? hora : `${d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })} ${hora}`;
   }
 
   const rolFormat = userRole === 'admin' ? 'Administrador' : 
@@ -259,27 +179,40 @@ export function DashboardHeader({
           <DropdownMenuContent align="end" className="w-80 border-border bg-popover p-0">
             <div className="p-3 border-b border-border bg-secondary/30 flex justify-between items-center">
               <span className="font-bold text-sm text-foreground">Notificaciones</span>
-              {notificaciones.length > 0 && <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{notificaciones.length} nuevas</span>}
+              {notificaciones.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{notificaciones.length} nuevas</span>
+                  <button onClick={(e) => { e.stopPropagation(); marcarVistas(notificaciones.map(n => n.id)); }} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
+                    Marcar todas vistas
+                  </button>
+                </div>
+              )}
             </div>
             <div className="max-h-[350px] overflow-y-auto">
               {notificaciones.length === 0 ? (
                 <div className="p-6 text-center text-sm text-muted-foreground flex flex-col items-center"><CheckCircle2 className="h-8 w-8 mb-2 opacity-20" /><p>Todo al día. No hay novedades.</p></div>
               ) : (
-                notificaciones.map((notif) => (
+                notificaciones.map((notif) => {
+                  const { icono: Icono, color } = estiloNotif(notif.tipo);
+                  const esDelTaller = notif.tipo === 'auto_terminado' || notif.tipo === 'auto_ingresado';
+                  return (
                   <div key={notif.id} className="p-3 border-b border-border/50 hover:bg-secondary/50 transition-colors flex flex-col gap-2 group">
                     <div className="flex justify-between items-start">
-                      <div className={`flex items-center gap-2 font-bold text-sm ${notif.color}`}>{renderIcono(notif.icono)} {notif.titulo}</div>
-                      <span className="text-xs text-muted-foreground">{notif.hora}</span>
+                      <div className={`flex items-center gap-2 font-bold text-sm ${color}`}><Icono className="h-4 w-4" /> {notif.titulo}</div>
+                      <span className="text-xs text-muted-foreground">{horaNotif(notif.created_at)}</span>
                     </div>
                     <p className="text-sm text-foreground leading-snug">{notif.mensaje}</p>
                     <div className="flex gap-2 mt-1">
-                      <Button size="sm" onClick={() => ejecutarAccionNotificacion(notif)} className={`flex-1 h-8 text-white text-xs shadow-sm ${notif.tipo === 'taller' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                      <Button size="sm" onClick={() => ejecutarAccionNotificacion(notif)} className={`flex-1 h-8 text-white text-xs shadow-sm ${esDelTaller ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
                         Ver en Pantalla <ArrowRight className="w-3 h-3 ml-1" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={(e) => descartarNotificacion(notif.id, e)} className="h-8 text-xs text-muted-foreground hover:text-red-600 hover:bg-red-50">Ocultar</Button>
+                      <Button size="sm" variant="ghost" onClick={(e) => descartarNotificacion(notif.id, e)} className="h-8 text-xs text-muted-foreground hover:text-emerald-700 hover:bg-emerald-50">
+                        <CheckCircle2 className="w-3 h-3 mr-1" /> Vista
+                      </Button>
                     </div>
                   </div>
-                ))
+                  )
+                })
               )}
             </div>
           </DropdownMenuContent>

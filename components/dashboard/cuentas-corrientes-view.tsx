@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
-import { 
-  Building2, Users, Plus, FileText, ArrowDownRight, ArrowUpRight, 
-  Wallet, Search, Receipt, Loader2, User, HandCoins, Trash2, AlertCircle, Edit
+import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, TIPOS_TARJETA } from "@/lib/operaciones"
+import {
+  Building2, Users, Plus, FileText, ArrowDownRight, ArrowUpRight,
+  Wallet, Search, Receipt, Loader2, User, HandCoins, Trash2, AlertCircle, Edit, FileMinus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -58,7 +59,7 @@ export function CuentasCorrientesView() {
   // ESTADOS EXTRA PARA COBRO AVANZADO
   const [metodoPagoCliente, setMetodoPagoCliente] = useState("Efectivo")
   const [bancoOrigenCliente, setBancoOrigenCliente] = useState("")
-  const [tipoTarjetaCliente, setTipoTarjetaCliente] = useState("Crédito")
+  const [tipoTarjetaCliente, setTipoTarjetaCliente] = useState(TIPOS_TARJETA[0])
   const [marcaTarjetaCliente, setMarcaTarjetaCliente] = useState("Visa")
   const [bancoTarjetaCliente, setBancoTarjetaCliente] = useState("")
 
@@ -69,6 +70,24 @@ export function CuentasCorrientesView() {
 
   const [provAEliminar, setProvAEliminar] = useState<any>(null)
   const [isEliminarProvModalOpen, setIsEliminarProvModalOpen] = useState(false)
+
+  // ESTADO: NOTA DE CRÉDITO (proveedor o cliente)
+  const [notaCredito, setNotaCredito] = useState<{ isOpen: boolean, entidad: 'cliente' | 'proveedor' | null, registro: any }>({
+    isOpen: false, entidad: null, registro: null
+  })
+  const [datosNotaCredito, setDatosNotaCredito] = useState({ monto: "", comprobante: "", detalle: "" })
+
+  // Un código por cada vez que se abre un modal: un doble clic no duplica la operación
+  const operacionRef = useRef<string>(nuevaOperacionId())
+  const nuevaOperacion = () => { operacionRef.current = nuevaOperacionId() }
+
+  const abrirModal = (abrir: () => void) => { nuevaOperacion(); abrir() }
+
+  const abrirNotaCredito = (entidad: 'cliente' | 'proveedor', registro: any) => {
+    nuevaOperacion()
+    setDatosNotaCredito({ monto: "", comprobante: "", detalle: "" })
+    setNotaCredito({ isOpen: true, entidad, registro })
+  }
 
   const cargarDatosBase = async () => {
     setIsLoading(true)
@@ -100,37 +119,17 @@ export function CuentasCorrientesView() {
 
     setIsSaving(true);
     try {
+      // La base ajusta el saldo de la cuenta y, si el movimiento movió plata, la devuelve a su caja
       if (entidad === 'cliente') {
-        const cli = clientes.find(c => c.id === mov.cliente_id);
-        let nuevoSaldo = Number(cli.saldo || 0);
-        
-        if (mov.tipo === 'cargo_deuda') nuevoSaldo -= Number(mov.monto);
-        if (mov.tipo === 'pago_ingreso') nuevoSaldo += Number(mov.monto);
-
-        await supabase.from('clientes').update({ saldo: nuevoSaldo }).eq('id', mov.cliente_id);
-        await supabase.from('movimientos_clientes').delete().eq('id', mov.id);
-
+        const res = await ejecutarOperacion('cliente_eliminar_movimiento', { p_movimiento_id: mov.id });
         setMovimientosLedger(prev => prev.filter(m => m.id !== mov.id));
-        
-        // MAGIA 2: Actualizamos la "foto" en tiempo real
-        setClienteSeleccionado((prev: any) => ({...prev, saldo: nuevoSaldo}));
-        
+        setClienteSeleccionado((prev: any) => ({...prev, saldo: Number(res.saldo)}));
       } else {
-        const prov = proveedores.find(p => p.id === mov.proveedor_id);
-        let nuevoSaldo = Number(prov.saldo || 0);
-        
-        if (mov.tipo === 'factura_compra') nuevoSaldo -= Number(mov.monto);
-        if (mov.tipo === 'pago_proveedor') nuevoSaldo += Number(mov.monto);
-
-        await supabase.from('proveedores').update({ saldo: nuevoSaldo }).eq('id', mov.proveedor_id);
-        await supabase.from('movimientos_proveedores').delete().eq('id', mov.id);
-
+        const res = await ejecutarOperacion('proveedor_eliminar_movimiento', { p_movimiento_id: mov.id });
         setMovimientosLedger(prev => prev.filter(m => m.id !== mov.id));
-
-        // MAGIA 2: Actualizamos la "foto" en tiempo real
-        setProvSeleccionado((prev: any) => ({...prev, saldo: nuevoSaldo}));
+        setProvSeleccionado((prev: any) => ({...prev, saldo: Number(res.saldo)}));
       }
-      
+
       setConfirmDelete({ isOpen: false, mov: null, entidad: null });
       cargarDatosBase();
     } catch (error: any) {
@@ -201,69 +200,42 @@ export function CuentasCorrientesView() {
   }
 
   const handleCargarFactura = async () => {
+    if (isSaving) return
     const montoNum = parseFloat(datosFactura.monto)
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido")
     setIsSaving(true)
     try {
-      await supabase.from('movimientos_proveedores').insert([{
-        proveedor_id: provSeleccionado.id, 
-        tipo: 'factura_compra', 
-        monto: montoNum,
-        comprobante: datosFactura.comprobante, 
-        detalle: datosFactura.detalle || 'Compra / Ingreso de mercadería'
-      }])
-      const nuevoSaldo = Number(provSeleccionado.saldo || 0) + montoNum
-      await supabase.from('proveedores').update({ saldo: nuevoSaldo }).eq('id', provSeleccionado.id)
+      await ejecutarOperacion('proveedor_registrar_factura', {
+        p_operacion: operacionRef.current,
+        p_proveedor_id: provSeleccionado.id,
+        p_monto: montoNum,
+        p_comprobante: datosFactura.comprobante,
+        p_detalle: datosFactura.detalle
+      })
       setIsFacturaOpen(false)
       setDatosFactura({ monto: "", comprobante: "", detalle: "" })
       cargarDatosBase()
-    } catch (error: any) { alert("Error al cargar factura: " + error.message) } 
+    } catch (error: any) { alert("Error al cargar factura: " + error.message) }
     finally { setIsSaving(false) }
   }
 
   const handleRegistrarPago = async () => {
+    if (isSaving) return
     const montoNum = parseFloat(datosPago.monto)
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido")
     if (!datosPago.caja_origen_id) return alert("Seleccione de qué caja sale el dinero")
 
-    const cajaSeleccionada = cajas.find(c => c.id === datosPago.caja_origen_id)
-    if (Number(cajaSeleccionada.saldo || 0) < montoNum) return alert(`No hay fondos suficientes en la caja ${cajaSeleccionada.nombre}`)
-
     setIsSaving(true)
     try {
-      const nuevoSaldoCaja = Number(cajaSeleccionada.saldo) - montoNum
-      await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', datosPago.caja_origen_id)
-
-      const nombreCajaLower = (cajaSeleccionada.nombre || '').toLowerCase()
-      let metodoPagoDetectado = 'Transferencia'
-      if (nombreCajaLower.includes('efectivo') || nombreCajaLower.includes('mostrador')) {
-        metodoPagoDetectado = 'Efectivo'
-      } else if (nombreCajaLower.includes('cheque')) {
-        metodoPagoDetectado = 'Cheque'
-      } else if (nombreCajaLower.includes('tarjeta')) {
-        metodoPagoDetectado = 'Tarjeta'
-      }
-
-      await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'egreso_gasto', 
-        caja_origen_id: datosPago.caja_origen_id, 
-        monto: montoNum,
-        metodo_pago: metodoPagoDetectado,
-        detalle: `Pago a Proveedor: ${provSeleccionado.nombre}`, 
-        notas: `Ref: ${datosPago.comprobante}`
-      }])
-
-      await supabase.from('movimientos_proveedores').insert([{
-        proveedor_id: provSeleccionado.id, 
-        tipo: 'pago_proveedor', 
-        monto: montoNum, 
-        caja_origen_id: datosPago.caja_origen_id,
-        comprobante: datosPago.comprobante, 
-        detalle: datosPago.detalle || 'Pago a cuenta'
-      }])
-
-      const nuevoSaldoProv = Number(provSeleccionado.saldo || 0) - montoNum
-      await supabase.from('proveedores').update({ saldo: nuevoSaldoProv }).eq('id', provSeleccionado.id)
+      // La base valida los fondos con el saldo real y resta de la caja de forma atómica
+      await ejecutarOperacion('proveedor_registrar_pago', {
+        p_operacion: operacionRef.current,
+        p_proveedor_id: provSeleccionado.id,
+        p_caja_id: datosPago.caja_origen_id,
+        p_monto: montoNum,
+        p_comprobante: datosPago.comprobante,
+        p_detalle: datosPago.detalle
+      })
 
       setIsPagoOpen(false)
       setDatosPago({ monto: "", caja_origen_id: "", comprobante: "", detalle: "" })
@@ -285,19 +257,18 @@ export function CuentasCorrientesView() {
   const getNombreCliente = (c: any) => c.tipo_cliente === 'empresa' ? c.razon_social : `${c.nombre} ${c.apellido || ''}`.trim()
 
   const handleSumarDeudaCliente = async () => {
+    if (isSaving) return
     const montoNum = parseFloat(datosCargoCliente.monto)
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido")
     setIsSaving(true)
     try {
-      await supabase.from('movimientos_clientes').insert([{
-        cliente_id: clienteSeleccionado.id, 
-        tipo: 'cargo_deuda', 
-        monto: montoNum,
-        comprobante: datosCargoCliente.comprobante, 
-        detalle: datosCargoCliente.detalle || 'Cargo / Trabajo realizado'
-      }])
-      const nuevoSaldo = Number(clienteSeleccionado.saldo || 0) + montoNum
-      await supabase.from('clientes').update({ saldo: nuevoSaldo }).eq('id', clienteSeleccionado.id)
+      await ejecutarOperacion('cliente_registrar_cargo', {
+        p_operacion: operacionRef.current,
+        p_cliente_id: clienteSeleccionado.id,
+        p_monto: montoNum,
+        p_comprobante: datosCargoCliente.comprobante,
+        p_detalle: datosCargoCliente.detalle
+      })
       setIsCargoClienteOpen(false)
       setDatosCargoCliente({ monto: "", comprobante: "", detalle: "" })
       cargarDatosBase()
@@ -306,61 +277,35 @@ export function CuentasCorrientesView() {
   }
 
   const handleCobrarCliente = async () => {
+    if (isSaving) return
     const montoNum = parseFloat(datosCobroCliente.monto)
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido")
 
-    // 1. Ruteo Automático de Cajas (Sin perder tu lógica de búsqueda)
-    const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
-    let cajaDestinoId = null;
-    
-    if (metodoPagoCliente === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
-    if (metodoPagoCliente === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.includes('Transferencia'))?.id;
-    if (metodoPagoCliente === 'Tarjeta') cajaDestinoId = cajas.find(c => c.nombre.includes('Tarjeta'))?.id;
-    if (metodoPagoCliente === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.includes('Cheque'))?.id;
-
+    const cajaDestinoId = resolverCajaDestino(cajas, metodoPagoCliente, tipoTarjetaCliente);
     if (!cajaDestinoId) {
       return alert(`No se encontró una caja específica para ${metodoPagoCliente}. Verificá los nombres de tus cajas.`);
     }
 
-    const cajaSeleccionada = cajas.find(c => c.id === cajaDestinoId)
+    let detalleExtra = "";
+    if (metodoPagoCliente === 'Transferencia' && bancoOrigenCliente) detalleExtra = ` [${bancoOrigenCliente}]`;
+    if (metodoPagoCliente === 'Tarjeta') detalleExtra = ` [${marcaTarjetaCliente} ${tipoTarjetaCliente}]`;
+
     setIsSaving(true)
-    
+
     try {
-      // 2. Actualizar Saldo de Caja
-      const nuevoSaldoCaja = Number(cajaSeleccionada.saldo || 0) + montoNum
-      await supabase.from('cajas').update({ saldo: nuevoSaldoCaja }).eq('id', cajaDestinoId)
+      // La base suma a la caja, registra ambos movimientos y descuenta la deuda, todo junto
+      const res = await ejecutarOperacion('cliente_registrar_pago', {
+        p_operacion: operacionRef.current,
+        p_cliente_id: clienteSeleccionado.id,
+        p_caja_id: cajaDestinoId,
+        p_metodo: metodoPagoCliente,
+        p_monto: montoNum,
+        p_comprobante: datosCobroCliente.comprobante,
+        p_detalle: datosCobroCliente.detalle || `Pago recibido en ${metodoPagoCliente}${detalleExtra}`,
+        p_detalle_caja: `Cobro a Cuenta Corriente: ${getNombreCliente(clienteSeleccionado)}${detalleExtra}`
+      })
 
-      // 3. Preparar detalles extra (Bancos/Tarjetas)
-      let detalleExtra = "";
-      if (metodoPagoCliente === 'Transferencia' && bancoOrigenCliente) detalleExtra = ` [${bancoOrigenCliente}]`;
-      if (metodoPagoCliente === 'Tarjeta') detalleExtra = ` [${marcaTarjetaCliente} ${tipoTarjetaCliente}]`;
-
-      // 4. Registro en Movimientos de Caja
-      await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'ingreso_cobro', 
-        caja_destino_id: cajaDestinoId, 
-        monto: montoNum,
-        metodo_pago: metodoPagoCliente,
-        detalle: `Cobro a Cuenta Corriente: ${getNombreCliente(clienteSeleccionado)}${detalleExtra}`, 
-        notas: `Ref: ${datosCobroCliente.comprobante || 'S/N'}`
-      }])
-
-      // 5. Registro en Movimientos de Clientes (Tu tabla de historial de cuenta)
-      await supabase.from('movimientos_clientes').insert([{
-        cliente_id: clienteSeleccionado.id, 
-        tipo: 'pago_ingreso', 
-        monto: montoNum, 
-        caja_destino_id: cajaDestinoId,
-        comprobante: datosCobroCliente.comprobante, 
-        detalle: datosCobroCliente.detalle || `Pago recibido en ${metodoPagoCliente}${detalleExtra}`
-      }])
-
-      // 6. Actualizar Saldo del Cliente
-      const nuevoSaldoCli = Number(clienteSeleccionado.saldo || 0) - montoNum
-      await supabase.from('clientes').update({ saldo: nuevoSaldoCli }).eq('id', clienteSeleccionado.id)
-
-      // 7. Actualización de la "Foto" local para que el cambio sea instantáneo en pantalla
-      setClienteSeleccionado((prev: any) => ({...prev, saldo: nuevoSaldoCli}));
+      setClienteSeleccionado((prev: any) => ({...prev, saldo: Number(res.saldo)}));
 
       // 8. Limpieza y cierre
       setIsCobroClienteOpen(false)
@@ -380,6 +325,37 @@ export function CuentasCorrientesView() {
     }
   }
   
+  // Nota de crédito: descuenta deuda sin mover plata de ninguna caja
+  const handleGuardarNotaCredito = async () => {
+    if (isSaving) return
+    const { entidad, registro } = notaCredito
+    const montoNum = parseFloat(datosNotaCredito.monto)
+    if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido")
+    setIsSaving(true)
+    try {
+      const parametros = {
+        p_operacion: operacionRef.current,
+        p_monto: montoNum,
+        p_comprobante: datosNotaCredito.comprobante,
+        p_detalle: datosNotaCredito.detalle
+      }
+      if (entidad === 'proveedor') {
+        const res = await ejecutarOperacion('proveedor_nota_credito', { ...parametros, p_proveedor_id: registro.id })
+        if (provSeleccionado?.id === registro.id) setProvSeleccionado((prev: any) => ({ ...prev, saldo: Number(res.saldo) }))
+      } else {
+        const res = await ejecutarOperacion('cliente_nota_credito', { ...parametros, p_cliente_id: registro.id })
+        if (clienteSeleccionado?.id === registro.id) setClienteSeleccionado((prev: any) => ({ ...prev, saldo: Number(res.saldo) }))
+      }
+      setNotaCredito({ isOpen: false, entidad: null, registro: null })
+      cargarDatosBase()
+      alert("¡Nota de crédito registrada con éxito!")
+    } catch (error: any) {
+      alert("Error al registrar la nota de crédito: " + error.message)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const abrirLedgerCliente = async (cli: any) => {
     setClienteSeleccionado(cli)
     setIsLedgerClienteOpen(true)
@@ -509,12 +485,16 @@ export function CuentasCorrientesView() {
                               <Button size="sm" variant="outline" className="h-8" onClick={() => abrirLedgerCliente(cli)}>
                                 <Search className="w-3 h-3 mr-1" /> Ficha
                               </Button>
-                              <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" 
-                                onClick={() => { setClienteSeleccionado(cli); setIsCargoClienteOpen(true); }}>
+                              <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700"
+                                onClick={() => abrirModal(() => { setClienteSeleccionado(cli); setIsCargoClienteOpen(true); })}>
                                 <FileText className="w-3 h-3 mr-1" /> Cargar Deuda
                               </Button>
-                              <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-white" 
-                                onClick={() => { setClienteSeleccionado(cli); setIsCobroClienteOpen(true); }}>
+                              <Button size="sm" variant="outline" className="h-8 text-amber-700 border-amber-200 hover:bg-amber-50"
+                                onClick={() => abrirNotaCredito('cliente', cli)}>
+                                <FileMinus className="w-3 h-3 mr-1" /> Nota Crédito
+                              </Button>
+                              <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={() => abrirModal(() => { setClienteSeleccionado(cli); setIsCobroClienteOpen(true); })}>
                                 <HandCoins className="w-3 h-3 mr-1" /> Ingresar Pago
                               </Button>
                             </div>
@@ -605,8 +585,9 @@ export function CuentasCorrientesView() {
                               <Trash2 className="h-4 w-4" />
                             </Button>
                             <Button size="sm" variant="outline" className="h-8" onClick={() => abrirLedgerProv(prov)}><Search className="w-3 h-3 mr-1" /> Resumen</Button>
-                            <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => { setProvSeleccionado(prov); setIsFacturaOpen(true); }}><FileText className="w-3 h-3 mr-1" /> Cargar Fra</Button>
-                            <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { setProvSeleccionado(prov); setIsPagoOpen(true); }}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
+                            <Button size="sm" variant="secondary" className="h-8 bg-slate-100 hover:bg-slate-200 text-slate-700" onClick={() => abrirModal(() => { setProvSeleccionado(prov); setIsFacturaOpen(true); })}><FileText className="w-3 h-3 mr-1" /> Cargar Fra</Button>
+                            <Button size="sm" variant="outline" className="h-8 text-amber-700 border-amber-200 hover:bg-amber-50" onClick={() => abrirNotaCredito('proveedor', prov)}><FileMinus className="w-3 h-3 mr-1" /> Nota Crédito</Button>
+                            <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => abrirModal(() => { setProvSeleccionado(prov); setIsPagoOpen(true); })}><Wallet className="w-3 h-3 mr-1" /> Pagar</Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -707,8 +688,7 @@ export function CuentasCorrientesView() {
                     <Select value={tipoTarjetaCliente} onValueChange={setTipoTarjetaCliente}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Crédito">Crédito</SelectItem>
-                        <SelectItem value="Débito">Débito</SelectItem>
+                        {TIPOS_TARJETA.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -780,7 +760,10 @@ export function CuentasCorrientesView() {
                       <TableRow key={mov.id} className="hover:bg-secondary/20">
                         <TableCell className="text-muted-foreground text-sm font-mono">{new Date(mov.fecha).toLocaleDateString('es-AR')} {new Date(mov.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</TableCell>
                         <TableCell>
-                          {mov.tipo === 'cargo_deuda' ? <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50"><ArrowUpRight className="w-3 h-3 mr-1"/> Cargo</Badge> : <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50"><ArrowDownRight className="w-3 h-3 mr-1"/> Pago</Badge>}
+                          {mov.tipo === 'cargo_deuda' ? <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50"><ArrowUpRight className="w-3 h-3 mr-1"/> Cargo</Badge>
+                            : mov.tipo === 'nota_credito' ? <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50"><FileMinus className="w-3 h-3 mr-1"/> Nota Crédito</Badge>
+                            : mov.tipo === 'anulacion' || mov.tipo === 'pago_abono' ? <Badge variant="outline" className="text-slate-600 border-slate-200 bg-slate-50"><ArrowDownRight className="w-3 h-3 mr-1"/> Anulación</Badge>
+                            : <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50"><ArrowDownRight className="w-3 h-3 mr-1"/> Pago</Badge>}
                         </TableCell>
                         <TableCell>
                           <p className="font-medium text-sm">{mov.detalle}</p>
@@ -790,7 +773,7 @@ export function CuentasCorrientesView() {
                           </div>
                         </TableCell>
                         <TableCell className={`text-right font-mono font-bold ${mov.tipo === 'cargo_deuda' ? 'text-rose-600' : 'text-blue-600'}`}>
-                          {mov.tipo === 'cargo_deuda' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
+                          {mov.tipo === 'cargo_deuda' ? '+' : '-'}${Math.abs(Number(mov.monto)).toLocaleString()}
                         </TableCell>
                         <TableCell>
                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-600 hover:bg-red-50" onClick={() => setConfirmDelete({isOpen: true, mov, entidad: 'cliente'})}>
@@ -931,6 +914,10 @@ export function CuentasCorrientesView() {
                             <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50 shadow-sm">
                               <ArrowUpRight className="w-3 h-3 mr-1"/> Compra
                             </Badge>
+                          ) : mov.tipo === 'nota_credito' ? (
+                            <Badge variant="outline" className="text-amber-700 border-amber-200 bg-amber-50 shadow-sm">
+                              <FileMinus className="w-3 h-3 mr-1"/> Nota Crédito
+                            </Badge>
                           ) : (
                             <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 shadow-sm">
                               <ArrowDownRight className="w-3 h-3 mr-1"/> Pago
@@ -977,7 +964,7 @@ export function CuentasCorrientesView() {
               ¿Eliminar Registro?
             </DialogTitle>
             <DialogDescription className="text-base text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
-              ¿Estás seguro de que querés eliminar este movimiento? El saldo de la cuenta se ajustará automáticamente, pero los saldos de caja NO se verán afectados.
+              ¿Estás seguro de que querés eliminar este movimiento? El saldo de la cuenta se ajustará automáticamente{confirmDelete.mov?.tipo === 'pago_proveedor' || confirmDelete.mov?.tipo === 'pago_ingreso' ? ' y el dinero vuelve a la caja por la que se registró.' : '. Este movimiento no movió dinero de ninguna caja.'}
             </DialogDescription>
             <div className="flex gap-3 w-full mt-4">
               <Button onClick={() => setConfirmDelete({isOpen: false, mov: null, entidad: null})} variant="outline" className="flex-1 h-12 rounded-xl text-base font-bold">
@@ -988,6 +975,50 @@ export function CuentasCorrientesView() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL NOTA DE CRÉDITO (PROVEEDOR O CLIENTE) --- */}
+      <Dialog open={notaCredito.isOpen} onOpenChange={(open: boolean) => !open && setNotaCredito({ isOpen: false, entidad: null, registro: null })}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2 text-amber-700"><FileMinus className="w-5 h-5" /> Registrar Nota de Crédito</DialogTitle>
+            <DialogDescription>
+              Descuenta el monto de la deuda {notaCredito.entidad === 'proveedor' ? 'con el proveedor' : 'del cliente'}. No mueve dinero de ninguna caja.
+            </DialogDescription>
+          </DialogHeader>
+          {notaCredito.registro && (
+            <div className="space-y-4 py-4">
+              <div className="flex justify-between items-center bg-secondary/30 p-3 rounded-lg border border-border">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase font-bold">{notaCredito.entidad === 'proveedor' ? 'Proveedor' : 'Cliente'}</p>
+                  <p className="font-bold text-foreground">{notaCredito.entidad === 'proveedor' ? notaCredito.registro.nombre : getNombreCliente(notaCredito.registro)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground uppercase font-bold">Saldo Actual</p>
+                  <p className="font-mono font-bold text-lg">${Number(notaCredito.registro.saldo || 0).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Monto de la Nota de Crédito ($)</Label>
+                <Input type="number" className="text-lg font-mono font-bold h-12" autoFocus value={datosNotaCredito.monto} onChange={e => setDatosNotaCredito({...datosNotaCredito, monto: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Nº Comprobante (Opcional)</Label>
+                <Input placeholder="Ej: NC-0001-00001234" value={datosNotaCredito.comprobante} onChange={e => setDatosNotaCredito({...datosNotaCredito, comprobante: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Motivo (Opcional)</Label>
+                <Input placeholder="Ej: Devolución de mercadería, bonificación..." value={datosNotaCredito.detalle} onChange={e => setDatosNotaCredito({...datosNotaCredito, detalle: e.target.value})} />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setNotaCredito({ isOpen: false, entidad: null, registro: null })} disabled={isSaving}>Cancelar</Button>
+            <Button onClick={handleGuardarNotaCredito} disabled={isSaving} className="bg-amber-600 hover:bg-amber-700 text-white">
+              {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin"/>} Registrar Nota de Crédito
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { supabase } from "@/lib/supabase"
+import { suscribirCanal } from "@/lib/realtime"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -80,43 +81,51 @@ export function WorkOrdersTable({
 
   const hoyLocal = getLocalDateString(new Date());
 
-  const cargarDatos = async () => {
-    setIsLoading(true)
+  // Solo traemos los autos activos y los entregados hoy (no todo el historial)
+  const consultarOrdenes = () => supabase
+    .from('ordenes_trabajo')
+    .select('*, presupuestos(numero_correlativo, total_final, vehiculos(marca, modelo))')
+    .or(`estado.neq.Entregado,fecha_entrega.eq.${getLocalDateString(new Date())}`)
+    .order('created_at', { ascending: false })
+
+  const cargarDatos = async (silencioso = false) => {
+    if (!silencioso) setIsLoading(true)
     try {
       const [resOrdenes, resConfig] = await Promise.all([
-        supabase.from('ordenes_trabajo').select('*, presupuestos(numero_correlativo, total_final, vehiculos(marca, modelo))').order('created_at', { ascending: false }),
-        supabase.from('configuracion').select('*').eq('id', 1).single()
+        consultarOrdenes(),
+        silencioso ? Promise.resolve({ data: null }) : supabase.from('configuracion').select('*').eq('id', 1).single()
       ])
-      
+
       if (resOrdenes.error) throw resOrdenes.error
       setOrdenes(resOrdenes.data || [])
       if (resConfig.data) setConfiguracion(resConfig.data)
     } catch (error) {
       console.error("Error al cargar datos:", error)
     } finally {
-      setIsLoading(false)
+      if (!silencioso) setIsLoading(false)
     }
   }
 
-  // --- MAGIA EN TIEMPO REAL TOTAL (INGRESOS + AVANCES) ---
+  // --- TIEMPO REAL TOTAL (INGRESOS + AVANCES) ---
   useEffect(() => {
     // 1. Carga inicial
     cargarDatos();
 
-    // 2. Escucha activa de TODO lo que pase en la tabla de órdenes
-    const canalTaller = supabase.channel('sincronizacion-taller')
+    // 2. Escucha activa de TODO lo que pase en la tabla de órdenes. Si la conexión
+    //    se corta (red, reposo, pestaña en segundo plano) se vuelve a sincronizar sola.
+    const desuscribir = suscribirCanal('sincronizacion-taller', canal => canal
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ordenes_trabajo' },
         async (payload: any) => {
-          
+
           // CASO A: Alguien movió un auto (UPDATE)
           if (payload.eventType === 'UPDATE') {
-            setOrdenes(actuales => 
+            setOrdenes(actuales =>
               actuales.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o)
             );
-          } 
-          
+          }
+
           // CASO B: Mostrador ingresó un auto nuevo (INSERT)
           else if (payload.eventType === 'INSERT') {
             const { data: nuevaOrdenConDatos } = await supabase
@@ -128,28 +137,31 @@ export function WorkOrdersTable({
             if (nuevaOrdenConDatos) {
               setOrdenes(actuales => {
                 // FILTRO ANTI-CLONES: Revisamos si ya tenemos esta tarjeta en la pantalla
-                const yaExiste = actuales.some(o => o.id === nuevaOrdenConDatos.id);
-                if (yaExiste) {
-                  return actuales; // Si ya existe, no hacemos nada
-                }
-                // Si no existe, la agregamos al principio de la lista
+                if (actuales.some(o => o.id === nuevaOrdenConDatos.id)) return actuales;
                 return [nuevaOrdenConDatos, ...actuales];
               });
             }
           }
-          
+
           // CASO C: Alguien borró una orden (DELETE)
           else if (payload.eventType === 'DELETE') {
             setOrdenes(actuales => actuales.filter(o => o.id !== payload.old.id));
           }
         }
-      )
-      .subscribe();
+      ),
+      () => cargarDatos(true),
+      { intervaloMs: 60000 }
+    );
 
     return () => {
-      supabase.removeChannel(canalTaller);
+      desuscribir();
     }
   }, []);
+
+  // Cambio inmediato en esta pantalla; si la base rechaza el cambio, se vuelve atrás
+  const actualizarOrdenLocal = (id: string, cambios: any) => {
+    setOrdenes(actuales => actuales.map(o => o.id === id ? { ...o, ...cambios } : o));
+  }
 
   const avanzarEstado = async (id: string, estadoActual: string) => {
     const currentIndex = COLUMNAS.findIndex(c => c.id === estadoActual)
@@ -171,13 +183,13 @@ export function WorkOrdersTable({
       if (orden && orden.presupuesto_id) {
         const { data: presEnVivo } = await supabase
           .from('presupuestos')
-          .select('estado') 
+          .select('estado')
           .eq('id', orden.presupuesto_id)
           .single();
 
         if (presEnVivo && presEnVivo.estado !== 'Cobrado' && presEnVivo.estado !== 'Facturado') {
           alert("⛔ ALERTA DE CAJA: No se puede entregar el vehículo con saldo pendiente.");
-          return; 
+          return;
         }
       }
     }
@@ -187,48 +199,54 @@ export function WorkOrdersTable({
 
   // Función auxiliar para no repetir código de actualización
   const ejecutarCambioEstado = async (id: string, nuevoEstado: string) => {
-    const fechaEntrega = nuevoEstado === "Entregado" ? hoyLocal : null;
-    try {
-      let updatePayload: any = { estado: nuevoEstado };
-      if (fechaEntrega) updatePayload.fecha_entrega = fechaEntrega;
-      await supabase.from('ordenes_trabajo').update(updatePayload).eq('id', id)
-    } catch (error) {
-      alert("Error al mover el vehículo.");
-      cargarDatos();
+    const anterior = ordenes.find(o => o.id === id);
+    let updatePayload: any = { estado: nuevoEstado };
+    if (nuevoEstado === "Entregado") updatePayload.fecha_entrega = hoyLocal;
+
+    actualizarOrdenLocal(id, updatePayload);
+    const { error } = await supabase.from('ordenes_trabajo').update(updatePayload).eq('id', id)
+    if (error) {
+      if (anterior) actualizarOrdenLocal(id, { estado: anterior.estado, fecha_entrega: anterior.fecha_entrega });
+      alert("Error al mover el vehículo: " + error.message);
+      cargarDatos(true);
     }
   }
 
   const confirmarFinalizacionConKm = async () => {
+    if (isSavingKm) return;
     const kmEntrada = parseInt(ordenParaFinalizar.vehiculo_kilometros || ordenParaFinalizar.km_ingreso) || 0;
     const kmSalida = parseInt(kmEgresoInput);
 
     if (!kmEgresoInput || isNaN(kmSalida)) return alert("Por favor, ingrese un kilometraje válido.");
     if (kmSalida < kmEntrada) return alert(`❌ Error: El kilometraje de salida (${kmSalida}) no puede ser menor al de entrada (${kmEntrada}).`);
 
+    const orden = ordenParaFinalizar;
     setIsSavingKm(true);
     try {
-      // Firma Anti-Eco: esta máquina no debe auto-notificarse
-      localStorage.setItem("mi_accion_reciente", JSON.stringify({
-        patente: ordenParaFinalizar.vehiculo_patente,
-        t: Date.now()
-      }));
+      // 1. Movemos la tarjeta al instante y guardamos el estado
+      actualizarOrdenLocal(orden.id, { estado: 'Terminado' });
+      setIsKmModalOpen(false);
 
-      // 1. Actualizar Orden de Trabajo
-      await supabase.from('ordenes_trabajo').update({ estado: 'Terminado' }).eq('id', ordenParaFinalizar.id);
-
-      // 2. Actualizar Presupuesto (km_egreso)
-      if (ordenParaFinalizar.presupuesto_id) {
-        await supabase.from('presupuestos').update({ km_egreso: kmSalida }).eq('id', ordenParaFinalizar.id_presupuesto || ordenParaFinalizar.presupuesto_id);
+      const { error: errOrden } = await supabase.from('ordenes_trabajo').update({ estado: 'Terminado' }).eq('id', orden.id);
+      if (errOrden) {
+        actualizarOrdenLocal(orden.id, { estado: orden.estado });
+        throw errOrden;
       }
 
-      // 3. Actualizar Vehículo (kilometraje actual)
-      await supabase.from('vehiculos').update({ kilometraje: kmSalida.toString() }).eq('patente', ordenParaFinalizar.vehiculo_patente);
-
-      setIsKmModalOpen(false);
-      // No hace falta hacer setOrdenes manual porque el RealTime de Supabase lo detecta solo
-    } catch (error) {
+      // 2. Actualizar Presupuesto (km_egreso) y 3. Vehículo (kilometraje actual)
+      const [resPres, resVeh] = await Promise.all([
+        orden.presupuesto_id
+          ? supabase.from('presupuestos').update({ km_egreso: kmSalida }).eq('id', orden.presupuesto_id)
+          : Promise.resolve({ error: null }),
+        supabase.from('vehiculos').update({ kilometraje: kmSalida }).eq('patente', orden.vehiculo_patente)
+      ]);
+      const errorKm = resPres.error || resVeh.error;
+      if (errorKm) {
+        alert("El vehículo pasó a Terminado, pero no se pudo guardar el kilometraje: " + errorKm.message);
+      }
+    } catch (error: any) {
       console.error(error);
-      alert("Hubo un error al guardar los datos.");
+      alert("Hubo un error al guardar los datos: " + (error?.message || ""));
     } finally {
       setIsSavingKm(false);
     }
@@ -237,15 +255,18 @@ export function WorkOrdersTable({
   const confirmarAnulacion = async () => {
     if (!ordenAAnular) return;
     setIsAnulando(true);
-    
+
     try {
       // 1. Le sacamos el tilde de "ingresado" al presupuesto
       if (ordenAAnular.presupuesto_id) {
-        await supabase.from('presupuestos').update({ ingresado_al_taller: false }).eq('id', ordenAAnular.presupuesto_id);
+        const { error } = await supabase.from('presupuestos').update({ ingresado_al_taller: false }).eq('id', ordenAAnular.presupuesto_id);
+        if (error) throw error;
       }
 
       // 2. Borramos la tarjeta del taller
-      await supabase.from('ordenes_trabajo').delete().eq('id', ordenAAnular.id);
+      const { error: errDelete } = await supabase.from('ordenes_trabajo').delete().eq('id', ordenAAnular.id);
+      if (errDelete) throw errDelete;
+      setOrdenes(actuales => actuales.filter(o => o.id !== ordenAAnular.id));
 
       setIsAnularModalOpen(false);
       setOrdenAAnular(null);
