@@ -1,3 +1,7 @@
 node_modules
 
 .env.local
+# Build de Next.js (se genera en cada compilación)
+.next/
+next-env.d.ts
+*.tsbuildinfo

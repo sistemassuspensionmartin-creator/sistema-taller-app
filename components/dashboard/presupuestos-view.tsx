@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Search, Printer, ArrowLeft, Save, Trash2, Plus, MessageCircle, EyeOff, Eye, FileText, Lock, ClipboardList, Loader2, Car, User, Phone, X, Pencil, CheckCircle, Link2, CalendarDays, Wrench, Package, CircleDashed, PenTool, RotateCcw, Gauge, Clock, Banknote, DollarSign, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,6 +26,9 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
+import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, separarCodigoError, TIPOS_TARJETA } from "@/lib/operaciones"
+import { crearNotificacion, destinoDeRol, marcarVistasDePresupuesto } from "@/lib/notificaciones"
+import { suscribirCanal } from "@/lib/realtime"
 import { PresupuestoImprimible, OrdenTrabajoImprimible, FacturaImprimible } from "./impresion-templates"
 
 const getEstadoColor = (estado: string) => {
@@ -125,7 +128,7 @@ export function PresupuestosView({
   const [metodoPago, setMetodoPago] = useState("Efectivo")
   const [notasCobro, setNotasCobro] = useState("")
   const [bancoOrigen, setBancoOrigen] = useState("")
-  const [tipoTarjeta, setTipoTarjeta] = useState("Crédito")
+  const [tipoTarjeta, setTipoTarjeta] = useState(TIPOS_TARJETA[0])
   const [marcaTarjeta, setMarcaTarjeta] = useState("Visa")
   const [bancoTarjeta, setBancoTarjeta] = useState("")
   const [infoPago, setInfoPago] = useState({ pagado: 0, restante: 0 })
@@ -182,6 +185,16 @@ export function PresupuestosView({
   const [printType, setPrintType] = useState<'presupuesto' | 'orden' | 'factura' | null>(null)
   const [printData, setPrintData] = useState<any>(null)
 
+  // Un código por cada vez que se abre un modal: un doble clic no duplica la operación
+  const operacionRef = useRef<string>(nuevaOperacionId())
+  const nuevaOperacion = () => { operacionRef.current = nuevaOperacionId() }
+
+  // Recarga liviana para el tiempo real: solo la lista de presupuestos, sin spinner
+  const recargarPresupuestos = async () => {
+    const { data, error } = await supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false })
+    if (!error && data) setPresupuestos(data)
+  }
+
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
@@ -234,18 +247,25 @@ export function PresupuestosView({
       setIsEditing(false)
     }
 
-    // --- MAGIA: SUSCRIPCIÓN EN TIEMPO REAL ---
-    const canalPresupuestos = supabase.channel('sincronizacion-presupuestos')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuestos' }, () => {
-         cargarDatos() // Recarga los datos de fondo sin molestar al usuario
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuesto_items' }, () => {
-         cargarDatos()
-      })
-      .subscribe()
+    // --- SUSCRIPCIÓN EN TIEMPO REAL ---
+    // Guardar un presupuesto genera un evento por cada ítem: los agrupamos y
+    // recargamos una sola vez, sin spinner y solo la lista de presupuestos.
+    let temporizador: ReturnType<typeof setTimeout> | null = null
+    const programarRecarga = () => {
+      if (temporizador) clearTimeout(temporizador)
+      temporizador = setTimeout(recargarPresupuestos, 800)
+    }
+
+    const desuscribir = suscribirCanal('sincronizacion-presupuestos', canal => canal
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuestos' }, programarRecarga)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'presupuesto_items' }, programarRecarga),
+      programarRecarga,
+      { minOcultoMs: 30000 }
+    )
 
     return () => {
-      supabase.removeChannel(canalPresupuestos)
+      if (temporizador) clearTimeout(temporizador)
+      desuscribir()
     }
   }, [vista])
 
@@ -451,6 +471,9 @@ export function PresupuestosView({
         limpiarAvisosVisuales(p.id);
       }
 
+      // Al abrir el presupuesto, sus avisos pendientes quedan vistos para el sector
+      marcarVistasDePresupuesto(p.id, destinoDeRol(userRole));
+
     } else {
       setEditandoId(null)
       setNumeroCorrelativo("")
@@ -651,42 +674,61 @@ export function PresupuestosView({
         }
       }
 
+      // --- NOTIFICACIONES AL OTRO SECTOR ---
+      const autor = userName || (isMecanico ? 'Un mecánico' : 'Administración');
+      const presActual = presupuestos.find(p => p.id === editandoId);
+      if (isMecanico && !editandoId) {
+        crearNotificacion({
+          tipo: 'presupuesto_nuevo', destino: 'oficina', titulo: 'Nuevo Diagnóstico',
+          mensaje: `${autor} creó un diagnóstico para la patente ${patenteParaDB || 'S/P'}.`,
+          referencia_id: presId, patente: patenteParaDB, creado_por_rol: userRole
+        });
+      } else if (isMecanico && editandoId) {
+        crearNotificacion({
+          tipo: 'presupuesto_modificacion', destino: 'oficina', titulo: 'Solicitud de Modificación',
+          mensaje: `${autor} solicitó modificar el presupuesto PRE-${numeroCorrelativo || 'S/N'} (${patenteParaDB || 'S/P'}).`,
+          referencia_id: presId, patente: patenteParaDB, creado_por_rol: userRole
+        });
+      } else if (!isMecanico && editandoId && presActual?.ingresado_al_taller) {
+        crearNotificacion({
+          tipo: 'presupuesto_modificado', destino: 'taller', titulo: 'Presupuesto Modificado',
+          mensaje: `${autor} actualizó el presupuesto del auto ${patenteParaDB || 'S/P'} en taller.`,
+          referencia_id: presId, patente: patenteParaDB, creado_por_rol: userRole
+        });
+      }
+
       // --- MAGIA DE STOCK: SINCRONIZACIÓN AL EDITAR ---
-      // Solo si el auto YA ESTÁ en el taller, ajustamos el stock sobre la marcha
-      const yaEstabaEnTaller = presupuestos.find(p => p.id === editandoId)?.ingresado_al_taller;
-      
+      // Solo si el auto YA ESTÁ en el taller, ajustamos el stock sobre la marcha.
+      // La base suma/resta de forma atómica (respeta "controlar stock").
+      const yaEstabaEnTaller = presActual?.ingresado_al_taller;
+
       if (editandoId && yaEstabaEnTaller) {
         // A. Buscamos qué se borró o se redujo
         for (const original of itemsOriginales) {
           if (!original.catalogo_id) continue;
           const filaActual = filas.find(f => f.id === original.id || f.catalogo_id === original.catalogo_id);
-          
+
           // Si ya no está en la lista o está marcado para eliminar: DEVOLVEMOS al stock
           if (!filaActual || filaActual.estado_cambio === 'eliminado') {
-             // CAMBIO: Verificamos si controla stock
-             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock').eq('id', original.catalogo_id).single();
-             if (item && item.controlar_stock !== false) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + (original.cantidad || 0) }).eq('id', original.catalogo_id);
-          } 
+             await ajustarStock(original.catalogo_id, Number(original.cantidad || 0));
+          }
           // Si cambió la cantidad, ajustamos la diferencia
           else if (parseFloat(filaActual.cant) !== original.cantidad) {
              const diferencia = original.cantidad - parseFloat(filaActual.cant);
-             // CAMBIO: Verificamos si controla stock
-             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock').eq('id', original.catalogo_id).single();
-             if (item && item.controlar_stock !== false) await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) + diferencia }).eq('id', original.catalogo_id);
+             await ajustarStock(original.catalogo_id, diferencia);
           }
         }
 
         // B. Buscamos qué hay de NUEVO que no estaba antes: DESCONTAMOS del stock
         for (const fila of filas) {
           if (fila.catalogo_id && !itemsOriginales.some(o => o.id === fila.id)) {
-             // CAMBIO: Verificamos si controla stock
-             const { data: item } = await supabase.from('catalogo').select('stock_actual, controlar_stock, tipo, detalle').eq('id', fila.catalogo_id).single();
-             
+             const { data: item } = await supabase.from('catalogo').select('controlar_stock, tipo, detalle').eq('id', fila.catalogo_id).single();
+
              if (item && item.controlar_stock !== false) {
                  const cantDescontada = parseFloat(fila.cant) || 0;
-                 
+
                  // 1. Descontamos del stock
-                 await supabase.from('catalogo').update({ stock_actual: (item.stock_actual || 0) - cantDescontada }).eq('id', fila.catalogo_id);
+                 await ajustarStock(fila.catalogo_id, -cantDescontada);
                  
                  // 2. --- NUEVO: AUTODISPARADOR AL EDITAR ---
                  if (item.tipo === 'Neumático' || item.tipo === 'Repuesto') {
@@ -850,45 +892,56 @@ export function PresupuestosView({
     }, 300);
   }
 
-  const finalizarIngresoTaller = async (actualizacionesStock: any[], estadoFinal: string) => {
+  // Ajuste atómico de stock: si un artículo falla no se corta el guardado del presupuesto
+  const ajustarStock = async (catalogoId: string, delta: number) => {
+    if (!delta) return;
     try {
-      // APLICAMOS EL DESCUENTO DE STOCK
-      for (const act of actualizacionesStock) {
-        const { error: errStock } = await supabase.from('catalogo').update({ stock_actual: act.nuevoStock }).eq('id', act.id);
-        if (errStock) await supabase.from('catalogo').update({ stock_actual: 0 }).eq('id', act.id); // Plan B
+      await ejecutarOperacion('ajustar_stock', { p_catalogo_id: catalogoId, p_delta: delta });
+    } catch (error) {
+      console.error("No se pudo ajustar el stock del artículo", catalogoId, error);
+    }
+  }
 
-        // --- NUEVO: AUTODISPARADOR DE PEDIDOS AL INGRESAR ---
-        if (act.tipo === 'Neumático' || act.tipo === 'Repuesto') {
-          await supabase.from('pedidos_proveedor').insert([{
-            catalogo_id: act.id,
-            detalle: act.detalle,
-            cantidad: act.cantDescontada,
-            estado: 'Pedir'
-          }]);
-        }
-      }
-      
-      await supabase.from('presupuestos').update({
-        estado: estadoFinal, ingresado_al_taller: true, modificado_por_rol: userRole || 'admin'
-      }).eq('id', editandoId);
-      
+  const finalizarIngresoTaller = async (actualizacionesStock: any[], estadoFinal: string) => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
+
+      // La base descuenta stock, genera pedidos, marca el presupuesto y crea la
+      // tarjeta del tablero en una sola operación (un doble clic no duplica el ingreso)
+      await ejecutarOperacion('ingresar_presupuesto_taller', {
+        p_operacion: operacionRef.current,
+        p_presupuesto_id: editandoId,
+        p_estado_final: estadoFinal,
+        p_vehiculo_patente: vehiculoSeleccionado,
+        p_cliente_nombre: nombreCompleto || "Cliente",
+        p_items: actualizacionesStock.map(act => ({
+          catalogo_id: act.id,
+          cantidad: act.cantDescontada,
+          tipo: act.tipo,
+          detalle: act.detalle
+        }))
+      });
+
       setEstado(estadoFinal);
       setIsAprobarModalOpen(false);
 
-      const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
-      
-      const { error: tallerError } = await supabase.from('ordenes_trabajo').insert([{
-        presupuesto_id: editandoId, vehiculo_patente: vehiculoSeleccionado, cliente_nombre: nombreCompleto || "Cliente", estado: 'A Ingresar'
-      }]);
-
-      if (tallerError) throw tallerError;
-      
       alert("¡Ingreso exitoso! El vehículo ya está en el tablero del taller.");
-      cargarDatos(); 
+      cargarDatos();
       setVista("lista");
       if (onNavigateToTaller) onNavigateToTaller();
-    } catch (error) {
-      alert("Error al finalizar el ingreso.");
+    } catch (error: any) {
+      const { codigo, mensaje } = separarCodigoError(error.message);
+      if (codigo === 'YA_INGRESADO') {
+        setIsAprobarModalOpen(false);
+        alert("⚠️ ATENCIÓN: " + mensaje);
+        cargarDatos();
+      } else {
+        alert("Error al finalizar el ingreso: " + mensaje);
+      }
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -970,8 +1023,9 @@ export function PresupuestosView({
   }
 
   const handleReingresoGarantia = async () => {
+    if (isSaving) return;
     if (!motivoGarantia.trim()) return alert("⚠️ Debe ingresar un motivo o falla para registrar la garantía.");
-    
+
     setIsSaving(true);
     try {
       const nombreCompleto = clienteActual?.tipo_cliente === 'empresa' ? clienteActual.razon_social : `${clienteActual?.nombre || ''} ${clienteActual?.apellido || ''}`.trim();
@@ -1019,207 +1073,69 @@ export function PresupuestosView({
 
 
   const handleRegistrarCobro = async () => {
+    if (isSaving) return;
     const montoNum = parseFloat(montoCobro);
     if (isNaN(montoNum) || montoNum <= 0) return alert("Ingrese un monto válido.");
     
-    // --- CAMBIO 1: Validamos contra lo que RESTA cobrar, no contra el total histórico ---
+    // Validamos contra lo que RESTA cobrar (la base lo vuelve a validar con el dato real)
     if (montoNum > infoPago.restante) return alert("El monto no puede superar lo que resta cobrar.");
 
-    // --- MAGIA: CANDADO ANTI-DESINCRONIZACIÓN ---
-    // Frenamos el proceso 1 segundo para revisar la base de datos real
-    if (editandoId) {
-      const { data: presDB } = await supabase.from('presupuestos').select('total_final, modificado_por_nombre').eq('id', editandoId).single();
-      
-      // Si la diferencia entre lo que la cajera ve y lo que hay en la base es mayor a 1 peso (alguien lo modificó de fondo):
-      if (presDB && Math.abs(Number(presDB.total_final) - totalFinal) > 1) {
-        return alert(`⚠️ ERROR DE COBRO FRENADO:\n\n${presDB.modificado_por_nombre || 'Alguien'} acaba de modificar este presupuesto desde otra computadora mientras lo tenías abierto.\n\nEl total real ahora es $${presDB.total_final}.\nPor favor, cerrá esta ventana y volvé a abrir el presupuesto para actualizar los valores antes de cobrar.`);
-      }
+    const cajaDestinoId = resolverCajaDestino(cajas, metodoPago, tipoTarjeta);
+    if (!cajaDestinoId && metodoPago !== 'Cuenta Corriente') {
+      return alert("Caja destino no encontrada. Verifique que las cajas existan en la base de datos.");
     }
-    // ---------------------------------------------
 
+    // Bloqueamos el botón ANTES de cualquier consulta: así un doble clic no registra dos cobros
     setIsSaving(true);
     try {
-      // 1. Ruteo automático de Cajas 
-      const cajaMostrador = cajas.find(c => c.nombre.toLowerCase().includes('mostrador'));
-      let cajaDestinoId = null;
-      
-      if (metodoPago === 'Efectivo') cajaDestinoId = cajaMostrador?.id;
-      if (metodoPago === 'Transferencia') cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('transferencia'))?.id;
-      if (metodoPago === 'Cheque') cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('cheque'))?.id;
-      
-      // --- MAGIA: RUTEO INTELIGENTE DE TARJETAS ---
-      if (metodoPago === 'Tarjeta') {
-        if (tipoTarjeta === 'Débito (Taller)') {
-          cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('debito taller') || c.nombre.toLowerCase().includes('débito taller'))?.id;
-        } else if (tipoTarjeta === 'Crédito (Neumater)') {
-          cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('neumater') || c.nombre.toLowerCase().includes('neumarter'))?.id;
-        } else if (tipoTarjeta === 'Crédito (Taller)') {
-          cajaDestinoId = cajas.find(c => c.nombre.toLowerCase().includes('credito taller') || c.nombre.toLowerCase().includes('crédito taller'))?.id;
-        }
-      }
-
-      if (!cajaDestinoId && metodoPago !== 'Cuenta Corriente') {
-        throw new Error("Caja destino no encontrada. Verifique que las cajas existan en la base de datos.");
-      }
-
-      if (cajaDestinoId) {
-        // CANDADO ANTI-PISADA: Consultamos el saldo REAL en la base de datos en este preciso milisegundo
-        const { data: cajaReal } = await supabase.from('cajas').select('saldo').eq('id', cajaDestinoId).single();
+      // --- CANDADO ANTI-DESINCRONIZACIÓN ---
+      if (editandoId) {
+        const { data: presDB } = await supabase.from('presupuestos').select('total_final, modificado_por_nombre').eq('id', editandoId).single();
         
-        if (cajaReal) {
-          await supabase.from('cajas').update({ saldo: Number(cajaReal.saldo || 0) + montoNum }).eq('id', cajaDestinoId);
+        // Si la diferencia entre lo que la cajera ve y lo que hay en la base es mayor a 1 peso (alguien lo modificó de fondo):
+        if (presDB && Math.abs(Number(presDB.total_final) - totalFinal) > 1) {
+          return alert(`⚠️ ERROR DE COBRO FRENADO:\n\n${presDB.modificado_por_nombre || 'Alguien'} acaba de modificar este presupuesto desde otra computadora mientras lo tenías abierto.\n\nEl total real ahora es $${presDB.total_final}.\nPor favor, cerrá esta ventana y volvé a abrir el presupuesto para actualizar los valores antes de cobrar.`);
         }
       }
 
-      // --- MAGIA: SI PASA A CUENTA CORRIENTE, ACTIVAMOS EL INTERRUPTOR Y CREAMOS LA DEUDA ---
-      if (metodoPago === 'Cuenta Corriente' && clienteSeleccionado) {
-        // A) Leemos el saldo actual del cliente
-        const { data: cliData } = await supabase.from('clientes').select('saldo').eq('id', clienteSeleccionado).single();
-        const nuevoSaldoCli = Number(cliData?.saldo || 0) + montoNum;
-
-        // B) Encendemos la cuenta y le sumamos la deuda al saldo total
-        await supabase.from('clientes')
-          .update({ tiene_cuenta_corriente: true, saldo: nuevoSaldoCli })
-          .eq('id', clienteSeleccionado);
-          
-        // C) Registramos la deuda real en su historial con el vocabulario correcto
-        await supabase.from('movimientos_clientes').insert([{
-          cliente_id: clienteSeleccionado,
-          monto: montoNum,
-          tipo: 'cargo_deuda',
-          comprobante: `PRE-${numeroCorrelativo}`,
-          detalle: `Deuda por Presupuesto PRE-${numeroCorrelativo}`
-        }]);
-      }
-      // ---------------------------------------------------------------------------------
-
-      // 3. Registro de movimiento en CAJA (INTACTO)
       let detalleExtra = "";
       if (metodoPago === 'Transferencia' && bancoOrigen) detalleExtra = ` [${bancoOrigen}]`;
       if (metodoPago === 'Tarjeta') detalleExtra = ` [${marcaTarjeta} ${tipoTarjeta}]`;
 
-      await supabase.from('movimientos_caja').insert([{
-        tipo_movimiento: 'ingreso_cobro',
-        caja_destino_id: cajaDestinoId,
-        monto: montoNum,
-        metodo_pago: metodoPago,
-        presupuesto_id: editandoId,
-        detalle: `Cobro PRE-${numeroCorrelativo} (${vehiculoSeleccionado})${detalleExtra}`,
-        notas: notasCobro
-      }]);
+      // La base suma a la caja (o a la cuenta corriente), registra el movimiento
+      // y actualiza el estado del presupuesto en una sola operación
+      const resultado = await ejecutarOperacion('registrar_cobro_presupuesto', {
+        p_operacion: operacionRef.current,
+        p_presupuesto_id: editandoId,
+        p_monto: montoNum,
+        p_metodo: metodoPago,
+        p_caja_id: cajaDestinoId,
+        p_detalle: `Cobro PRE-${numeroCorrelativo} (${vehiculoSeleccionado})${detalleExtra}`,
+        p_notas: notasCobro
+      });
 
-      // --- CAMBIO 2: Actualizar presupuesto sumando pagos históricos ---
-      const nuevoPagado = infoPago.pagado + montoNum;
-      
-      // Si lo que pagó antes + lo que paga ahora llega al Total, se marca como Cobrado
-      const nuevoEstado = nuevoPagado >= totalFinal ? "Cobrado" : "Aprobado";
-      
-      await supabase.from('presupuestos').update({ 
-        estado: nuevoEstado, 
-        estado_pago: nuevoEstado === "Cobrado" ? "Cobrado" : "Parcial",
-        modificado_por_rol: userRole || 'admin'
-      }).eq('id', editandoId);
-
-      setEstado(nuevoEstado);
+      setEstado(resultado.estado);
       setIsCobroModalOpen(false);
       alert("¡Cobro registrado! El dinero ya impactó en la caja correspondiente.");
       cargarDatos();
     } catch (err: any) {
-      alert(err.message);
+      alert("Error al registrar el cobro: " + err.message);
     } finally {
       setIsSaving(false);
     }
   }
 
   const handleAnularCobro = async () => {
-    if (!editandoId) return;
+    if (!editandoId || isSaving) return;
     setIsSaving(true);
 
     try {
-      // 1. Buscamos todos los cobros reales que ingresaron por este presupuesto
-      const { data: movimientos, error: errMovs } = await supabase
-        .from('movimientos_caja')
-        .select('*')
-        .eq('presupuesto_id', editandoId)
-        .eq('tipo_movimiento', 'ingreso_cobro');
-
-      if (errMovs) throw errMovs;
-
-      if (!movimientos || movimientos.length === 0) {
-        setAnulacionError({
-          visible: true,
-          titulo: "No se encontraron cobros",
-          mensaje: "Este presupuesto no registra movimientos de dinero activos en la caja."
-        });
-        setIsSaving(false);
-        return;
-      }
-
-      // 2. CANDADO DE SEGURIDAD: Verificar si los cobros se hicieron HOY
-      const hoy = new Date().toLocaleDateString('es-AR');
-      const tieneCobrosViejos = movimientos.some((m: any) => new Date(m.fecha).toLocaleDateString('es-AR') !== hoy);
-
-      if (tieneCobrosViejos) {
-        setAnulacionError({
-          visible: true,
-          titulo: "Acción Bloqueada por Auditoría",
-          mensaje: "No podés anular el cobro de este trabajo porque se realizó en días anteriores y esa caja ya fue cerrada. Por seguridad contable, solicitá un ajuste al administrador."
-        });
-        setIsSaving(false);
-        return;
-      }
-
-      // 3. ¡PROCESAMOS LA REVERSIÓN AUDITABLE!
-      for (const mov of movimientos) {
-        const montoNum = Number(mov.monto);
-
-        // A) Si afectó a una Caja Física, le restamos el dinero generando el contra-asiento
-        if (mov.caja_destino_id) {
-          const { data: cajaReal } = await supabase.from('cajas').select('saldo').eq('id', mov.caja_destino_id).single();
-          if (cajaReal) {
-            await supabase.from('cajas').update({ saldo: Number(cajaReal.saldo || 0) - montoNum }).eq('id', mov.caja_destino_id);
-          }
-        }
-
-        // B) Si fue a Cuenta Corriente, le restamos la deuda del perfil del cliente
-        if (mov.metodo_pago === 'Cuenta Corriente' && clienteSeleccionado) {
-          const { data: cliReal } = await supabase.from('clientes').select('saldo').eq('id', clienteSeleccionado).single();
-          const nuevoSaldoCli = Number(cliReal?.saldo || 0) - montoNum;
-          
-          await supabase.from('clientes').update({ 
-            saldo: nuevoSaldoCli,
-            tiene_cuenta_corriente: nuevoSaldoCli > 0 
-          }).eq('id', clienteSeleccionado);
-
-          // Registramos la contra-orden en su cuenta corriente
-          await supabase.from('movimientos_clientes').insert([{
-            cliente_id: clienteSeleccionado,
-            monto: -montoNum,
-            tipo: 'pago_abono', // Lo compensamos simulando una entrega/crédito
-            comprobante: `ANUL-PRE-${numeroCorrelativo}`,
-            detalle: `ANULACIÓN: Devolución de cargo por presupuesto PRE-${numeroCorrelativo}`
-          }]);
-        }
-
-        // C) Insertamos el Contra-Movimiento en la caja para la Cinta de Auditoría
-        await supabase.from('movimientos_caja').insert([{
-          tipo_movimiento: 'egreso_gasto',
-          caja_origen_id: mov.caja_destino_id,
-          monto: montoNum,
-          metodo_pago: mov.metodo_pago,
-          presupuesto_id: editandoId,
-          detalle: `REVERSIÓN: Anulación Cobro PRE-${numeroCorrelativo} (${vehiculoSeleccionado})`,
-          notas: `Anulado en mostrador por corrección de cobro.`
-        }]);
-      }
-
-      // 4. Devolvemos el presupuesto al estado "Aprobado"
-      await supabase.from('presupuestos').update({
-        estado: 'Aprobado',
-        estado_pago: null,
-        modificado_por_rol: userRole || 'admin',
-        modificado_por_nombre: userName || 'Usuario'
-      }).eq('id', editandoId);
+      // La base revierte solo los cobros vigentes (los del día), devuelve la plata
+      // a cada caja o descuenta la deuda de la cuenta corriente, todo junto
+      await ejecutarOperacion('anular_cobros_presupuesto', {
+        p_operacion: operacionRef.current,
+        p_presupuesto_id: editandoId
+      });
 
       setEstado('Aprobado');
       setIsAnulacionModalOpen(false);
@@ -1227,7 +1143,14 @@ export function PresupuestosView({
       cargarDatos();
 
     } catch (error: any) {
-      alert("Error en la base de datos al revertir: " + error.message);
+      const { codigo, mensaje } = separarCodigoError(error.message);
+      if (codigo === 'SIN_COBROS') {
+        setAnulacionError({ visible: true, titulo: "No se encontraron cobros", mensaje });
+      } else if (codigo === 'COBRO_VIEJO') {
+        setAnulacionError({ visible: true, titulo: "Acción Bloqueada por Auditoría", mensaje });
+      } else {
+        alert("Error en la base de datos al revertir: " + mensaje);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1270,6 +1193,7 @@ export function PresupuestosView({
                           setMontoCobro(restante > 0 ? restante.toString() : "0");
                           setMetodoPago("Efectivo");
                           setNotasCobro("");
+                          nuevaOperacion();
                           setIsCobroModalOpen(true);
                         } catch (e) {
                           alert("Error al verificar cobros previos.");
@@ -1283,7 +1207,7 @@ export function PresupuestosView({
 
                     {/* Botón Ingresar: Desaparece si 'ingresado_al_taller' es TRUE */}
                     {estado !== "Facturado" && userRole !== 'mecanico' && !presupuestos.find(p => p.id === editandoId)?.ingresado_al_taller && (
-                      <Button variant="default" onClick={() => setIsAprobarModalOpen(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
+                      <Button variant="default" onClick={() => { nuevaOperacion(); setIsAprobarModalOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border-none mr-4">
                         <CheckCircle className="w-4 h-4 mr-2"/> {estado === "Cobrado" ? "Ingresar Vehículo al Taller" : "Aprobar sin Cobrar"}
                       </Button>
                     )}
@@ -1297,7 +1221,7 @@ export function PresupuestosView({
                     {userRole !== 'mecanico' && (estado === "Cobrado" || estado === "Facturado") && (
                       <Button 
                         variant="outline"
-                        onClick={() => setIsAnulacionModalOpen(true)}
+                        onClick={() => { nuevaOperacion(); setIsAnulacionModalOpen(true); }}
                         className="border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400 mr-2"
                       >
                         <RotateCcw className="w-4 h-4 mr-2" /> Anular Cobro

@@ -1,7 +1,10 @@
 //@ts-nocheck
 "use client"
 
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { AlertCircle, CheckCircle2, Info, Loader2, User, Car, Settings, Lock} from "lucide-react"
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
@@ -31,6 +34,11 @@ export default function DashboardPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState("Inicio")
+
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
+  const [nuevaPassword, setNuevaPassword] = useState("")
+  const [confirmarPassword, setConfirmarPassword] = useState("")
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
 
   const [customAlert, setCustomAlert] = useState({ isOpen: false, message: "", type: "info" });
   
@@ -184,8 +192,13 @@ export default function DashboardPage() {
     
     inicializarSesion()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setIsAuthenticated(!!session)
+      // Entró desde el link de "¿Olvidaste tu contraseña?": le pedimos la clave nueva
+      if (event === 'PASSWORD_RECOVERY') {
+        setActiveSection("Perfil")
+        setIsChangePasswordOpen(true)
+      }
       if (!session) {
         setUserRole(null)
         setUserName(null)
@@ -197,6 +210,30 @@ export default function DashboardPage() {
     }
   }, [])
 
+  const handleActualizarPassword = async () => {
+    if (nuevaPassword.length < 6) {
+      return alert("La contraseña debe tener al menos 6 caracteres.");
+    }
+    if (nuevaPassword !== confirmarPassword) {
+      return alert("Las contraseñas no coinciden.");
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: nuevaPassword });
+      if (error) throw error;
+
+      alert("¡Contraseña actualizada con éxito!");
+      setIsChangePasswordOpen(false);
+      setNuevaPassword("");
+      setConfirmarPassword("");
+    } catch (err: any) {
+      alert("Error al actualizar contraseña: " + err.message);
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+  
   const renderContent = () => {
     switch (activeSection) {
       case "Inicio":
@@ -308,18 +345,77 @@ export default function DashboardPage() {
       case "Estadísticas":
         return <AdminDashboardView />;
       case "Perfil":
-        return (
-          <div className="flex flex-col items-center justify-center h-[60vh] text-center animate-in fade-in">
-            <div className="bg-emerald-100 p-6 rounded-full mb-4">
-              <User className="w-12 h-12 text-emerald-700" />
-            </div>
-            <h2 className="text-3xl font-bold text-foreground">Mi Perfil</h2>
-            <p className="text-muted-foreground mt-2 text-lg">
-              Sesión iniciada como <span className="font-bold uppercase text-emerald-600">{userName || userRole}</span>
-            </p>
-            <p className="text-sm text-slate-400 mt-1">Suspensión Martín - Panel de Gestión</p>
-          </div>
-        );
+     return (
+       <div className="max-w-xl mx-auto py-8 animate-in fade-in">
+         <div className="border border-border bg-card rounded-2xl p-8 shadow-sm flex flex-col items-center text-center">
+           <div className="bg-emerald-100 dark:bg-emerald-950/40 p-6 rounded-full mb-4">
+             <User className="w-12 h-12 text-emerald-700 dark:text-emerald-400" />
+           </div>
+           <h2 className="text-2xl font-bold text-foreground">Mi Perfil</h2>
+           <p className="text-muted-foreground mt-1">
+             Sesión iniciada como <span className="font-bold uppercase text-emerald-600">{userName || userRole}</span>
+           </p>
+           <Badge variant="outline" className="mt-2 text-xs uppercase tracking-wider font-mono">
+             Rol: {userRole}
+           </Badge>
+
+           <div className="w-full border-t border-border mt-6 pt-6 flex flex-col gap-3">
+             <Button 
+               onClick={() => setIsChangePasswordOpen(true)} 
+               variant="outline" 
+               className="w-full h-12 font-bold flex items-center justify-center gap-2 border-border hover:bg-secondary"
+             >
+               <Lock className="w-4 h-4 text-primary" /> Cambiar Contraseña
+             </Button>
+           </div>
+         </div>
+
+         {/* Modal Cambiar Contraseña */}
+         <Dialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen}>
+           <DialogContent className="max-w-md bg-card border-border">
+             <DialogHeader>
+               <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                 <Lock className="w-5 h-5 text-primary" /> Cambiar Mi Contraseña
+               </DialogTitle>
+               <DialogDescription>
+                 Ingresá tu nueva clave de acceso (mínimo 6 caracteres).
+               </DialogDescription>
+             </DialogHeader>
+
+             <div className="space-y-4 py-4">
+               <div className="space-y-2 text-left">
+                 <Label>Nueva Contraseña</Label>
+                 <Input 
+                   type="password" 
+                   placeholder="••••••••" 
+                   value={nuevaPassword} 
+                   onChange={(e) => setNuevaPassword(e.target.value)} 
+                 />
+               </div>
+               <div className="space-y-2 text-left">
+                 <Label>Confirmar Nueva Contraseña</Label>
+                 <Input 
+                   type="password" 
+                   placeholder="••••••••" 
+                   value={confirmarPassword} 
+                   onChange={(e) => setConfirmarPassword(e.target.value)} 
+                 />
+               </div>
+             </div>
+
+             <DialogFooter>
+               <Button variant="ghost" onClick={() => setIsChangePasswordOpen(false)} disabled={isUpdatingPassword}>
+                 Cancelar
+               </Button>
+               <Button onClick={handleActualizarPassword} disabled={isUpdatingPassword} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
+                 {isUpdatingPassword ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                 Guardar Nueva Contraseña
+               </Button>
+             </DialogFooter>
+           </DialogContent>
+         </Dialog>
+       </div>
+     );
       default:
         return <MetricsCards userRole={userRole} userName={userName}/> 
     }

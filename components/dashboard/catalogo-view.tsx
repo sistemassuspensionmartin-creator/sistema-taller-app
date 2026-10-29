@@ -395,13 +395,10 @@ export function CatalogoView() {
     if (cantRecibida > pedidoIngresando.cantidad) return alert("No podés ingresar más de lo que pediste acá.");
 
     try {
-      // 1. Le sumamos el stock al ítem en el catálogo
+      // 1. Le sumamos el stock al ítem en el catálogo (suma atómica en la base)
       if (pedidoIngresando.catalogo_id) {
-        const { data: itemCat } = await supabase.from('catalogo').select('stock_actual').eq('id', pedidoIngresando.catalogo_id).single();
-        if (itemCat) {
-          const nuevoStock = (itemCat.stock_actual || 0) + cantRecibida;
-          await supabase.from('catalogo').update({ stock_actual: nuevoStock }).eq('id', pedidoIngresando.catalogo_id);
-        }
+        const { error: errStock } = await supabase.rpc('ajustar_stock', { p_catalogo_id: pedidoIngresando.catalogo_id, p_delta: cantRecibida });
+        if (errStock) throw errStock;
       }
 
       // 2. Evaluamos si trajo todo o trajo por la mitad
