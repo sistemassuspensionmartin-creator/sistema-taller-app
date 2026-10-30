@@ -30,6 +30,7 @@ import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, separarCodigo
 import { crearNotificacion, destinoDeRol, marcarVistasDePresupuesto } from "@/lib/notificaciones"
 import { suscribirCanal } from "@/lib/realtime"
 import { PresupuestoImprimible, OrdenTrabajoImprimible, FacturaImprimible } from "./impresion-templates"
+import { FacturacionModal } from "./facturacion-modal"
 
 const getEstadoColor = (estado: string) => {
   switch (estado) {
@@ -632,15 +633,15 @@ export function PresupuestosView({
         await supabase.from('presupuesto_items').delete().eq('presupuesto_id', editandoId);
         
       } else {
-        numAleatorio = Math.floor(1000 + Math.random() * 9000);
+        // El número PRE lo asigna la base en orden (secuencia), sin repetirse
         const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
-          numero_correlativo: numAleatorio,
           ...datosPresupuesto
         }]).select()
 
         if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
         if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
         presId = presData[0].id;
+        numAleatorio = presData[0].numero_correlativo;
       }
 
       const itemsToInsert = filasValidas.map(f => ({
@@ -795,43 +796,16 @@ export function PresupuestosView({
     generarDocumento('presupuesto');
   }
 
-  const handleVerFactura = async (presupuestoId: string) => {
-    try {
-      const { data: factura, error: errFactura } = await supabase
-        .from('facturas')
-        .select('*')
-        .eq('presupuesto_id', presupuestoId)
-        .single();
-
-      if (errFactura || !factura) return alert("No se encontró la factura para este presupuesto.");
-
-      const { data: presFull } = await supabase
-        .from('presupuestos')
-        .select('*, vehiculos(*, clientes(*)), presupuesto_items(*)')
-        .eq('id', presupuestoId)
-        .single();
-
-      const datosParaFactura = {
-        ...factura,
-        config: configuracion,
-        cliente_nombre: presFull.vehiculos?.clientes?.nombre + ' ' + (presFull.vehiculos?.clientes?.apellido || ''),
-        cliente_documento: presFull.vehiculos?.clientes?.documento,
-        items: presFull.presupuesto_items,
-        fecha_emision: factura.created_at
-      };
-
-      setPrintData(datosParaFactura);
-      setPrintType('factura');
-
-      setTimeout(() => {
-        window.print();
-        setPrintData(null);
-        setPrintType(null);
-      }, 500);
-
-    } catch (error) {
-      alert("Error al recuperar la factura.");
-    }
+  // Facturación ARCA (emitir, ver, imprimir y notas de crédito) en la misma ventana que Caja
+  const [presupuestoAFacturar, setPresupuestoAFacturar] = useState<string | null>(null)
+  const imprimirComprobante = (datos: any) => {
+    setPrintData(datos);
+    setPrintType('factura');
+    setTimeout(() => {
+      window.print();
+      setPrintData(null);
+      setPrintType(null);
+    }, 500);
   }
 
   const generarDocumento = async (tipo: 'presupuesto' | 'orden', datosHistoricos?: any, garantiaForzada?: boolean, motivoForzado?: string) => {
@@ -1146,7 +1120,7 @@ export function PresupuestosView({
       const { codigo, mensaje } = separarCodigoError(error.message);
       if (codigo === 'SIN_COBROS') {
         setAnulacionError({ visible: true, titulo: "No se encontraron cobros", mensaje });
-      } else if (codigo === 'COBRO_VIEJO') {
+      } else if (codigo === 'COBRO_VIEJO' || codigo === 'FACTURADO') {
         setAnulacionError({ visible: true, titulo: "Acción Bloqueada por Auditoría", mensaje });
       } else {
         alert("Error en la base de datos al revertir: " + mensaje);
@@ -1271,9 +1245,9 @@ export function PresupuestosView({
                     <Button onClick={handleWhatsApp} className="bg-[#25D366] hover:bg-[#128C7E] text-white shadow-sm border-none ml-2">
                       <MessageCircle className="w-4 h-4 mr-2"/> WhatsApp
                     </Button>
-                    {estado === "Facturado" && editandoId && (
-                      <Button variant="outline" onClick={() => handleVerFactura(editandoId)} className="bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm">
-                        <FileText className="w-4 h-4 mr-2"/> Ver Factura AFE
+                    {userRole !== 'mecanico' && editandoId && (
+                      <Button variant="outline" onClick={() => setPresupuestoAFacturar(editandoId)} className="bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm ml-2">
+                        <FileText className="w-4 h-4 mr-2"/> Facturación ARCA
                       </Button>
                     )}
                   </>
@@ -1820,6 +1794,12 @@ export function PresupuestosView({
 
       {/* ============================================================== */}
       {/* ZONA DE IMPRESIÓN (Solo visible al tocar Ctrl+P o Imprimir)  */}
+      <FacturacionModal
+        presupuestoId={presupuestoAFacturar}
+        onClose={() => setPresupuestoAFacturar(null)}
+        onCambio={() => recargarPresupuestos()}
+        onImprimir={imprimirComprobante}
+      />
       <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">
         {printType === 'presupuesto' && <PresupuestoImprimible datos={printData} />}
         {printType === 'orden' && <OrdenTrabajoImprimible datos={printData} />}

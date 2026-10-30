@@ -269,20 +269,21 @@ export function AdminDashboardView() {
       // (Acá dejá el código del IVA que ya tenías, no lo borres)
 
       // --- IVA VENTAS (Exacto del mes seleccionado) ---
+      // Solo comprobantes reales autorizados por ARCA; las notas de crédito restan
       const { data: facturas } = await supabase
         .from('facturas')
-        .select('total_final')
-        .gte('created_at', fechaInicio)
-        .lte('created_at', fechaFin); 
-      
-      if (facturas && facturas.length > 0) {
-        let totalFacturado = 0;
-        facturas.forEach((f: any) => totalFacturado += Number(f.total_final || 0));
-        const neto = totalFacturado / 1.21;
-        setIvaVentas(totalFacturado - neto);
-      } else {
-        setIvaVentas(0);
-      }
+        .select('cbte_tipo, iva_total, total_final')
+        .eq('ambiente', 'produccion')
+        .eq('estado', 'autorizada')
+        .gte('fecha_cbte', fechaInicio.slice(0, 10))
+        .lte('fecha_cbte', fechaFin.slice(0, 10));
+
+      let ivaDelMes = 0;
+      (facturas || []).forEach((f: any) => {
+        const signo = [3, 8, 13].includes(f.cbte_tipo) ? -1 : 1;
+        ivaDelMes += signo * Number(f.iva_total || 0);
+      });
+      setIvaVentas(ivaDelMes);
     } catch (e) { console.error(e) }
   }
 

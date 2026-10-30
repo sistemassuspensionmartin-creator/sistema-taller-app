@@ -12,3 +12,10 @@ next-env.d.ts
 .env.production
 .env.development
 .vercel
+
+# Certificados y claves de ARCA (nunca al repositorio)
+arca-certificados/
+*.key
+*.csr
+*.crt
+*.pem

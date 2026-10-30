@@ -36,6 +36,19 @@ completo. Hacerlo **después de las 19 h o el fin de semana**, con nadie usando 
 - Hacer los pasos 7 a 10 seguidos: hasta publicar, "eliminar proveedor" de la versión
   vieja da error (ya no puede borrar movimientos directo).
 
+## Etapa 3: facturación electrónica ARCA
+
+| Paso | Qué hacer | Archivo |
+|------|-----------|---------|
+| 11 | Tablas y reglas de facturación | `migrations/20261031000600_facturacion_arca.sql` |
+| 12 | Pruebas de facturación (no guardan nada, no llaman a ARCA) | `pruebas/pruebas_facturacion.sql` |
+| 13 | Volver a correr las pruebas de dinero y de permisos | `pruebas/pruebas_funciones.sql`, `pruebas/pruebas_permisos.sql` |
+| 14 | Publicar la versión nueva (merge a `main` → Vercel) | — |
+
+- Los pasos 12 y 13 tienen que terminar en `PRUEBAS OK`.
+- Hasta cargar el certificado y los datos fiscales, el botón Facturar avisa qué falta; no emite nada.
+- Los trámites en ARCA y la carga del certificado están en `docs/ARCA-facturacion.md`.
+
 ## Deshacer
 
 Cada script tiene su versión para deshacer en `rollback/`, con el mismo nombre. Se corren

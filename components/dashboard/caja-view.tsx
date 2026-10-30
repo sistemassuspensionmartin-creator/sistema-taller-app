@@ -1,6 +1,7 @@
 "use client"
 
 import { CierreCajaImprimible, FacturaImprimible } from "./impresion-templates"
+import { FacturacionModal } from "./facturacion-modal"
 import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, TIPOS_TARJETA } from "@/lib/operaciones"
@@ -381,65 +382,17 @@ export function CajaView({
     }
   }
 
-  const marcarComoFacturado = async (id: string, numero: string) => {
-    if(!confirm(`¿Desea emitir la factura electrónica para el presupuesto PRE-${numero}?`)) return;
+  // Facturación ARCA: abre la ventana con lo cobrado, lo facturado y los comprobantes
+  const [presupuestoAFacturar, setPresupuestoAFacturar] = useState<string | null>(null)
 
-    setIsSaving(true);
-    try {
-      const { data: presFull } = await supabase
-        .from('presupuestos')
-        .select('*, vehiculos(*, clientes(*)), presupuesto_items(*)')
-        .eq('id', id)
-        .single();
-
-      const response = await fetch('/api/afip/facturar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cuit: '20123456789', monto: presFull.total_final })
-      });
-      const afipData = await response.json();
-
-      if (!afipData.success) throw new Error("AFIP rechazó el comprobante");
-
-      const { data: facturaGuardada } = await supabase.from('facturas').insert([{
-        presupuesto_id: id,
-        tipo_factura: 'B', 
-        punto_venta: afipData.punto_venta,
-        numero_factura: afipData.numero_factura,
-        cae: afipData.cae,
-        cae_vencimiento: afipData.cae_vencimiento,
-        total_final: presFull.total_final,
-        es_simulacion: true
-      }]).select().single();
-
-      await supabase.from('presupuestos').update({ estado_facturacion: 'Facturado' }).eq('id', id);
-      
-      const datosParaFactura = {
-        ...facturaGuardada,
-        config: cajas[0]?.id ? { nombre_taller: 'Suspensión Martin', cuit: '20-12345678-9', direccion: 'Av. Argentina 1658' } : {}, 
-        cliente_nombre: presFull.vehiculos?.clientes?.nombre + ' ' + presFull.vehiculos?.clientes?.apellido,
-        cliente_documento: presFull.vehiculos?.clientes?.documento,
-        items: presFull.presupuesto_items,
-        fecha_emision: new Date().toISOString()
-      };
-
-      setPrintData(datosParaFactura);
-      setPrintType('factura'); 
-
-      alert("¡Factura autorizada por AFIP!");
-      cargarDatos();
-
-      setTimeout(() => {
-        window.print();
-        setPrintData(null);
-        setPrintType(null);
-      }, 500);
-
-    } catch (err: any) {
-      alert("Error en facturación: " + err.message);
-    } finally {
-      setIsSaving(false);
-    }
+  const imprimirComprobante = (datos: any) => {
+    setPrintData(datos);
+    setPrintType('factura');
+    setTimeout(() => {
+      window.print();
+      setPrintData(null);
+      setPrintType(null);
+    }, 500);
   }
 
   const filtrarLista = (lista: any[]) => {
@@ -637,8 +590,8 @@ export function CajaView({
                           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Pagado Hoy</Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                           <Button size="sm" variant={cuenta.estado_facturacion === 'Facturado' ? "secondary" : "outline"} disabled={cuenta.estado_facturacion === 'Facturado'} onClick={() => marcarComoFacturado(cuenta.id, cuenta.numero)} className={cuenta.estado_facturacion !== 'Facturado' ? "border-blue-200 text-blue-700 hover:bg-blue-50" : ""}>
-                            {cuenta.estado_facturacion === 'Facturado' ? <><CheckCircle2 className="w-4 h-4 mr-1"/> Facturado</> : <><Receipt className="w-4 h-4 mr-1" /> Facturar</>}
+                           <Button size="sm" variant={cuenta.estado_facturacion === 'Facturado' ? "secondary" : "outline"} onClick={() => setPresupuestoAFacturar(cuenta.id)} className={cuenta.estado_facturacion !== 'Facturado' ? "border-blue-200 text-blue-700 hover:bg-blue-50" : ""}>
+                            {cuenta.estado_facturacion === 'Facturado' ? <><CheckCircle2 className="w-4 h-4 mr-1"/> Facturado</> : cuenta.estado_facturacion === 'Parcial' ? <><Receipt className="w-4 h-4 mr-1" /> Fact. parcial</> : <><Receipt className="w-4 h-4 mr-1" /> Facturar</>}
                           </Button>
                         </TableCell>
                       </TableRow>
@@ -959,6 +912,13 @@ export function CajaView({
           </DialogContent>
         </Dialog>
       </div>
+
+      <FacturacionModal
+        presupuestoId={presupuestoAFacturar}
+        onClose={() => setPresupuestoAFacturar(null)}
+        onCambio={() => cargarDatos()}
+        onImprimir={imprimirComprobante}
+      />
 
       {/* ZONA DE IMPRESIÓN */}
       <div className="hidden print:block fixed inset-0 w-full min-h-screen bg-white z-[9999] overflow-visible">

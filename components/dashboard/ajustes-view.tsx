@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
+import { probarConexionArca } from "@/lib/facturacion"
 import { 
   Save, UploadCloud, Store, FileText, MessageSquare, Image as ImageIcon, 
   Loader2, CheckCircle2, Users, Download, Database,
@@ -223,11 +224,32 @@ export function AjustesView() {
     }
   }
 
+  // Prueba de conexión con ARCA (no emite comprobantes)
+  const [pruebaArca, setPruebaArca] = useState<any>(null)
+  const [probandoArca, setProbandoArca] = useState(false)
+  const handleProbarArca = async () => {
+    setProbandoArca(true)
+    setPruebaArca(null)
+    try {
+      setPruebaArca(await probarConexionArca())
+    } catch (error: any) {
+      setPruebaArca({ ok: false, pasos: [{ paso: "Error", ok: false, detalle: error.message }] })
+    } finally {
+      setProbandoArca(false)
+    }
+  }
+
   // 3. GUARDAR CAMBIOS DE TEXTO
   const handleGuardarConfiguracion = async () => {
     setIsSaving(true)
     try {
-      const payload = { ...config, id: config.id || 1 }
+      const payload = {
+        ...config,
+        id: config.id || 1,
+        inicio_actividades: config.inicio_actividades || null,
+        arca_punto_venta: config.arca_punto_venta ? Number(config.arca_punto_venta) : null,
+      }
+      if (payload.arca_ambiente === 'produccion' && !confirm("Vas a guardar la facturación en PRODUCCIÓN: los comprobantes van a tener validez fiscal. ¿Confirmás?")) return
       const { error } = await supabase.from('configuracion').upsert(payload)
       if (error) throw error
       alert("¡Configuración guardada correctamente!")
@@ -293,6 +315,7 @@ export function AjustesView() {
         <div className="border-b border-border bg-secondary/30 overflow-x-auto">
           <TabsList className="w-full justify-start h-auto p-0 bg-transparent">
             <TabsTrigger value="general" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><Store className="w-4 h-4 mr-2" /> General</TabsTrigger>
+            <TabsTrigger value="arca" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><FileText className="w-4 h-4 mr-2" /> Facturación ARCA</TabsTrigger>
             <TabsTrigger value="logo" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><ImageIcon className="w-4 h-4 mr-2" /> Logo</TabsTrigger>
             <TabsTrigger value="presupuestos" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><FileText className="w-4 h-4 mr-2" /> Presupuestos</TabsTrigger>
             <TabsTrigger value="mensajes" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><MessageSquare className="w-4 h-4 mr-2" /> Mensajería</TabsTrigger>
@@ -333,6 +356,67 @@ export function AjustesView() {
                 <Label>Horarios de Atención</Label>
                 <Input value={config.horario || ""} onChange={e => setConfig({...config, horario: e.target.value})} placeholder="Ej: Lun a Vie de 8:00 a 18:00hs" />
               </div>
+            </div>
+          </TabsContent>
+
+          {/* --- PESTAÑA: FACTURACIÓN ARCA --- */}
+          <TabsContent value="arca" className="m-0 space-y-6">
+            <p className="text-sm text-muted-foreground max-w-4xl">Datos que se imprimen en cada factura y se informan a ARCA. Revisalos con tu contador. El CUIT se toma de la pestaña General.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Razón social (como figura en ARCA)</Label>
+                <Input value={config.razon_social || ""} onChange={e => setConfig({...config, razon_social: e.target.value})} placeholder="Ej: MARTIN JUAN PABLO" />
+              </div>
+              <div className="space-y-2">
+                <Label>Condición frente al IVA del taller</Label>
+                <select className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm" value={config.condicion_iva_emisor || "Responsable Inscripto"} onChange={e => setConfig({...config, condicion_iva_emisor: e.target.value})}>
+                  <option value="Responsable Inscripto">IVA Responsable Inscripto (Factura A y B)</option>
+                  <option value="Monotributo">Responsable Monotributo (Factura C)</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Ingresos Brutos (Rentas Córdoba / Convenio Multilateral)</Label>
+                <Input value={config.iibb || ""} onChange={e => setConfig({...config, iibb: e.target.value})} placeholder="Ej: 280-123456-7" />
+              </div>
+              <div className="space-y-2">
+                <Label>Inicio de actividades</Label>
+                <Input type="date" value={config.inicio_actividades || ""} onChange={e => setConfig({...config, inicio_actividades: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Punto de venta (web service)</Label>
+                <Input type="number" min="1" value={config.arca_punto_venta || ""} onChange={e => setConfig({...config, arca_punto_venta: e.target.value})} placeholder="Ej: 3" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Domicilio fiscal / comercial</Label>
+                <Input value={config.domicilio_fiscal || ""} onChange={e => setConfig({...config, domicilio_fiscal: e.target.value})} placeholder="Ej: Av. Argentina 1658, Villa Allende, Córdoba" />
+              </div>
+              <div className="space-y-2">
+                <Label>Ambiente</Label>
+                <select className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm" value={config.arca_ambiente || "homologacion"} onChange={e => setConfig({...config, arca_ambiente: e.target.value})}>
+                  <option value="homologacion">Pruebas (homologación, sin validez fiscal)</option>
+                  <option value="produccion">Producción (facturas reales)</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Clientes monotributistas</Label>
+                <select className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm" value={config.arca_factura_a_monotributo ? "A" : "B"} onChange={e => setConfig({...config, arca_factura_a_monotributo: e.target.value === "A"})}>
+                  <option value="B">Sugerir Factura B</option>
+                  <option value="A">Sugerir Factura A</option>
+                </select>
+              </div>
+            </div>
+            <div className="max-w-4xl space-y-3">
+              <Button variant="outline" onClick={handleProbarArca} disabled={probandoArca}>
+                {probandoArca ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} Probar conexión con ARCA
+              </Button>
+              <p className="text-xs text-muted-foreground">Guardá los cambios antes de probar. La prueba no emite ningún comprobante.</p>
+              {pruebaArca && (
+                <div className="rounded-xl border border-border p-3 space-y-1 text-sm">
+                  {pruebaArca.pasos.map((p: any, i: number) => (
+                    <p key={i} className={p.ok ? "text-emerald-700" : "text-red-600"}>{p.ok ? "✔" : "✖"} {p.paso}: {p.detalle}</p>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
 
