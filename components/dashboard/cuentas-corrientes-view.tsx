@@ -153,12 +153,8 @@ export function CuentasCorrientesView() {
     if (!provAEliminar) return
     setIsSaving(true)
     try {
-      // 1. Limpiamos movimientos asociados si los tuviera (el saldo ya validamos que es 0)
-      await supabase.from('movimientos_proveedores').delete().eq('proveedor_id', provAEliminar.id)
-      
-      // 2. Eliminamos al proveedor
-      const { error } = await supabase.from('proveedores').delete().eq('id', provAEliminar.id)
-      if (error) throw error
+      // La base controla que el saldo sea $0 y borra sus movimientos junto con el proveedor
+      await ejecutarOperacion('proveedor_eliminar', { p_proveedor_id: provAEliminar.id })
 
       setIsEliminarProvModalOpen(false)
       setProvAEliminar(null)

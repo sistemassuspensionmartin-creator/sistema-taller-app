@@ -166,8 +166,18 @@ export function AjustesView() {
     if (!confirm("¿Estás seguro de que querés eliminar a este usuario del sistema?")) return
     setIsSaving(true)
     try {
-      const { error } = await supabase.from('perfiles').delete().eq('id', id)
-      if (error) throw error
+      // El servidor borra el perfil y también la cuenta de acceso
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/usuarios', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ id })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
       setUsuarios(usuarios.filter(u => u.id !== id))
       alert("Usuario eliminado con éxito.")
     } catch (error: any) {

@@ -326,7 +326,9 @@ export function CatalogoView() {
 
   const handleEliminarProveedor = async (id: string, nombre: string) => {
     if (!confirm(`¿Borrar a ${nombre} de tu agenda?`)) return;
-    await supabase.from('proveedores').delete().eq('id', id);
+    // La base controla que no tenga saldo pendiente en Cuentas Corrientes
+    const { error } = await supabase.rpc('proveedor_eliminar', { p_proveedor_id: id });
+    if (error) alert(error.message);
     fetchProveedores();
   }
 

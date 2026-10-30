@@ -5,3 +5,10 @@ node_modules
 .next/
 next-env.d.ts
 *.tsbuildinfo
+
+# Archivos de claves locales
+.env
+.env*.local
+.env.production
+.env.development
+.vercel
