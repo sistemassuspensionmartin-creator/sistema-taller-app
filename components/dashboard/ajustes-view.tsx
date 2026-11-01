@@ -291,7 +291,7 @@ export function AjustesView() {
       <Tabs defaultValue="general" className="w-full shadow-sm rounded-lg overflow-hidden border border-border bg-card">
         {/* MENÚ DE PESTAÑAS (ANCHO COMPLETO) */}
         <div className="border-b border-border bg-secondary/30 overflow-x-auto">
-          <TabsList className="w-full justify-start h-auto p-0 bg-transparent">
+          <TabsList className="w-full justify-start h-auto p-0 bg-transparent max-lg:grid max-lg:grid-cols-2 sm:max-lg:grid-cols-3 max-lg:[&>button]:justify-start max-lg:[&>button]:px-3 max-lg:[&>button]:whitespace-normal max-lg:[&>button]:text-left">
             <TabsTrigger value="general" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><Store className="w-4 h-4 mr-2" /> General</TabsTrigger>
             <TabsTrigger value="logo" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><ImageIcon className="w-4 h-4 mr-2" /> Logo</TabsTrigger>
             <TabsTrigger value="presupuestos" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><FileText className="w-4 h-4 mr-2" /> Presupuestos</TabsTrigger>
