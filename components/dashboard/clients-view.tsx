@@ -307,7 +307,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <Table className="tabla-movil">
             <TableHeader>
               <TableRow className="bg-secondary/20">
                 <TableHead>Nombre / Razón Social</TableHead>
@@ -373,12 +373,12 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Contacto">
                       <div className="text-sm flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground"/> {cliente.telefono}</div>
                       {cliente.email && <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1"><Mail className="h-3 w-3"/> {cliente.email}</div>}
                     </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-sm">{cliente.documento || "-"}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="DNI / CUIT" className="text-muted-foreground font-mono text-sm">{cliente.documento || "-"}</TableCell>
+                    <TableCell data-label="Flota">
                       <Badge variant="secondary" className="flex w-fit items-center gap-1">
                         <Car className="h-3 w-3" /> {cliente.vehiculos?.length || 0}
                       </Badge>
@@ -415,15 +415,15 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
           {clienteSeleccionado && (
             <>
               {/* Aumentamos el padding a p-8 para que respire más */}
-              <div className="bg-secondary/30 p-8 border-b border-border shrink-0">
-                <div className="flex justify-between items-start">
-                  <div>
+              <div className="bg-secondary/30 p-4 pr-12 sm:p-8 border-b border-border shrink-0">
+                <div className="flex flex-wrap justify-between items-start gap-3">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-3">
                       {/* Agregamos el puntito de color acá también */}
                       {clienteSeleccionado.nivel_problema === 'Naranja' && <div className="w-3.5 h-3.5 rounded-full bg-amber-500 animate-pulse shrink-0" title="Cliente Difícil"></div>}
                       {clienteSeleccionado.nivel_problema === 'Rojo' && <div className="w-3.5 h-3.5 rounded-full bg-red-600 shadow-[0_0_8px_rgba(220,38,38,0.8)] animate-pulse shrink-0" title="Cliente Muy Problemático"></div>}
                       
-                      <h2 className="text-2xl font-bold text-foreground">
+                      <h2 className="text-xl sm:text-2xl font-bold text-foreground break-words">
                         {clienteSeleccionado.tipo_cliente === 'empresa' ? clienteSeleccionado.razon_social : `${clienteSeleccionado.nombre} ${clienteSeleccionado.apellido || ''}`}
                       </h2>
                     </div>
@@ -435,7 +435,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                 </div>
               </div>
 
-              <div className="p-8 flex-1 overflow-y-auto">
+              <div className="p-4 sm:p-8 flex-1 overflow-y-auto">
                 <Tabs defaultValue="datos" className="w-full">
                   <TabsList className="mb-6 bg-secondary">
                     <TabsTrigger value="datos">Datos Personales</TabsTrigger>
@@ -517,8 +517,8 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                           <h3 className="text-lg font-bold">Registrar Nuevo Vehículo</h3>
                         </div>
 
-                        <div className="p-6 bg-secondary/30 rounded-lg border border-border space-y-6">
-                          <div className="grid grid-cols-2 gap-6">
+                        <div className="p-4 sm:p-6 bg-secondary/30 rounded-lg border border-border space-y-6">
+                          <div className="grid grid-cols-2 gap-3 sm:gap-6">
                             <div className="space-y-2">
                               <Label>Patente <span className="text-destructive">*</span></Label>
                               <Input placeholder="AA 123 AA" className="bg-white dark:bg-slate-950 font-mono uppercase text-center tracking-widest" value={vehicleFormData.patente} onChange={handlePatenteChange} maxLength={9} />
@@ -537,7 +537,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-6">
+                          <div className="grid grid-cols-2 gap-3 sm:gap-6">
                             <div className="space-y-2">
                               <Label>Marca <span className="text-destructive">*</span></Label>
                               <Select value={vehicleFormData.marca} onValueChange={(val: string) => setVehicleFormData({...vehicleFormData, marca: val})}>
@@ -553,7 +553,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-3 gap-6 pt-2">
+                          <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-2">
                             <div className="space-y-2"><Label>Año</Label><Input type="number" className="bg-white dark:bg-slate-950" value={vehicleFormData.anio} onChange={(e) => setVehicleFormData({...vehicleFormData, anio: e.target.value})} /></div>
                             <div className="space-y-2"><Label>Color</Label><Input className="bg-white dark:bg-slate-950" value={vehicleFormData.color} onChange={(e) => setVehicleFormData({...vehicleFormData, color: e.target.value})} /></div>
                             <div className="space-y-2"><Label>Km Act.</Label><Input type="number" className="bg-white dark:bg-slate-950" value={vehicleFormData.kilometraje} onChange={(e) => setVehicleFormData({...vehicleFormData, kilometraje: e.target.value})} /></div>
@@ -569,7 +569,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
                           <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Flota del Cliente</h3>
                           <Button size="sm" onClick={abrirFormularioVehiculo} className="bg-primary/10 text-primary hover:bg-primary/20 shadow-none border border-primary/20">
                             <Plus className="w-4 h-4 mr-1"/> Agregar Vehículo
@@ -626,17 +626,17 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-4xl w-[95vw] border-border bg-card h-[90vh] flex flex-col p-0">
-          <DialogHeader className="shrink-0 p-8 border-b border-border bg-secondary/10">
-            <DialogTitle className="text-2xl text-foreground font-bold">
+          <DialogHeader className="shrink-0 p-4 pr-12 sm:p-8 border-b border-border bg-secondary/10 text-left">
+            <DialogTitle className="text-xl sm:text-2xl text-foreground font-bold">
               {editingId ? "Editar Cliente" : "Registrar Nuevo Cliente"}
             </DialogTitle>
             <p className="text-sm text-muted-foreground mt-1">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-8 space-y-10">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-8 sm:space-y-10">
             
             <div className="bg-secondary/30 p-4 rounded-lg flex justify-center border border-border">
-              <RadioGroup defaultValue="persona" className="flex space-x-6" value={formData.tipo_cliente} onValueChange={(val: string) => setFormData({...formData, tipo_cliente: val})}>
+              <RadioGroup defaultValue="persona" className="flex flex-wrap gap-x-6 gap-y-2" value={formData.tipo_cliente} onValueChange={(val: string) => setFormData({...formData, tipo_cliente: val})}>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="persona" id="persona" /><Label htmlFor="persona" className="font-semibold cursor-pointer">Persona Física</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="empresa" id="empresa" /><Label htmlFor="empresa" className="font-semibold cursor-pointer">Empresa</Label></div>
               </RadioGroup>
@@ -646,7 +646,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
               <>
                 <section>
                   <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Datos Personales</h3></div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>Nombre *</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.nombre} onChange={(e) => setFormData({...formData, nombre: e.target.value})} /></div>
                     <div className="space-y-2"><Label>Apellido *</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.apellido} onChange={(e) => setFormData({...formData, apellido: e.target.value})} /></div>
                   </div>
@@ -655,7 +655,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                   <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Domicilio</h3></div>
                   <div className="space-y-4">
                     <div className="space-y-2"><Label>Calle y Altura</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.calle} onChange={(e) => setFormData({...formData, calle: e.target.value})} /></div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2"><Label>Barrio</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.barrio} onChange={(e) => setFormData({...formData, barrio: e.target.value})} /></div>
                       <div className="space-y-2"><Label>Ciudad</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.ciudad} onChange={(e) => setFormData({...formData, ciudad: e.target.value})} /></div>
                     </div>
@@ -666,21 +666,21 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
 
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase">Contacto</h3></div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2"><Label>Número de Teléfono *</Label><Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.telefono} onChange={(e) => setFormData({...formData, telefono: e.target.value})} /></div>
                 <div className="space-y-2"><Label>Email</Label><Input type="email" className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} /></div>
               </div>
             </section>
 
             <section>
-              <div className="border-l-4 border-emerald-600 pl-3 mb-4 flex justify-between items-center">
+              <div className="border-l-4 border-emerald-600 pl-3 mb-4 flex flex-wrap justify-between items-center gap-2">
                 <h3 className="font-bold text-sm text-foreground uppercase">Facturación (ARCA/AFIP)</h3>
                 {formData.tipo_cliente === "persona" && (
                   <Button variant="ghost" size="sm" onClick={copiarDomicilio} className="text-xs h-7 text-primary hover:bg-primary/10"><Copy className="h-3 w-3 mr-1" /> Usar mismo domicilio</Button>
                 )}
               </div>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>CUIT/DNI {formData.tipo_cliente === "empresa" && "*"}</Label>
                     <Input className="bg-slate-50 dark:bg-slate-900 border-border font-mono text-sm" placeholder="XX-XXXXXXXX-X" value={formData.documento} onChange={handleCuitChange} />
@@ -690,7 +690,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
                     <Input className="bg-slate-50 dark:bg-slate-900 border-border" value={formData.razon_social} onChange={(e) => setFormData({...formData, razon_social: e.target.value})} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Condición de IVA</Label>
                     <Select value={formData.condicion_iva} onValueChange={(val: string) => setFormData({...formData, condicion_iva: val})}>
@@ -744,7 +744,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
             </section>
           </div>
           
-          <DialogFooter className="shrink-0 p-8 border-t border-border bg-card rounded-b-lg">
+          <DialogFooter className="shrink-0 p-4 sm:p-8 border-t border-border bg-card rounded-b-lg">
             <div className="flex justify-end gap-2 w-full">
               <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
               <Button onClick={handleGuardarCliente} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">

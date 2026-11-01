@@ -291,7 +291,7 @@ export function AjustesView() {
       <Tabs defaultValue="general" className="w-full shadow-sm rounded-lg overflow-hidden border border-border bg-card">
         {/* MENÚ DE PESTAÑAS (ANCHO COMPLETO) */}
         <div className="border-b border-border bg-secondary/30 overflow-x-auto">
-          <TabsList className="w-full justify-start h-auto p-0 bg-transparent">
+          <TabsList className="w-full justify-start h-auto p-0 bg-transparent max-lg:grid max-lg:grid-cols-2 sm:max-lg:grid-cols-3 max-lg:[&>button]:justify-start max-lg:[&>button]:px-3 max-lg:[&>button]:whitespace-normal max-lg:[&>button]:text-left">
             <TabsTrigger value="general" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><Store className="w-4 h-4 mr-2" /> General</TabsTrigger>
             <TabsTrigger value="logo" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><ImageIcon className="w-4 h-4 mr-2" /> Logo</TabsTrigger>
             <TabsTrigger value="presupuestos" className="rounded-none py-3 px-6 data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-background"><FileText className="w-4 h-4 mr-2" /> Presupuestos</TabsTrigger>
@@ -301,7 +301,7 @@ export function AjustesView() {
           </TabsList>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* --- PESTAÑA 1: GENERAL --- */}
           <TabsContent value="general" className="m-0 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
@@ -477,7 +477,7 @@ export function AjustesView() {
 
           {/* --- PESTAÑA 5: USUARIOS Y PERMISOS --- */}
           <TabsContent value="usuarios" className="m-0 space-y-4">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
               <div>
                 <h3 className="text-xl font-bold">Gestión de Empleados</h3>
                 <p className="text-sm text-muted-foreground">Creá usuarios para tus mecánicos o recepcionistas y definí sus roles.</p>
@@ -488,7 +488,7 @@ export function AjustesView() {
             </div>
 
             <Card className="shadow-none border border-border">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/20">
                   <TableRow>
                     <TableHead className="font-semibold text-foreground">Nombre</TableHead>
@@ -508,8 +508,8 @@ export function AjustesView() {
                     usuarios.map((u) => (
                       <TableRow key={u.id}>
                         <TableCell className="font-medium">{u.nombre} {u.apellido}</TableCell>
-                        <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                        <TableCell>{renderRolBadge(u.rol)}</TableCell>
+                        <TableCell data-label="Email" className="text-muted-foreground break-all">{u.email}</TableCell>
+                        <TableCell data-label="Rol">{renderRolBadge(u.rol)}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -536,7 +536,7 @@ export function AjustesView() {
 
           {/* --- PESTAÑA 6: EXPORTAR DATOS --- */}
           <TabsContent value="exportar" className="m-0 space-y-6 max-w-4xl">
-            <div className="bg-secondary/30 p-6 rounded-lg border border-border">
+            <div className="bg-secondary/30 p-4 sm:p-6 rounded-lg border border-border">
               <h3 className="text-lg font-bold flex items-center gap-2 mb-2"><Database className="w-5 h-5 text-primary" /> Backups y Exportación</h3>
               <p className="text-sm text-muted-foreground mb-6">
                 Descargá la información de tu base de datos en formato CSV (compatible con Microsoft Excel y Google Sheets). Ideal para dárselo a tu contador o hacer cruces de datos.

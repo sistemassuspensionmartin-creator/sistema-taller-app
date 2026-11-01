@@ -447,7 +447,7 @@ export function VehiclesView({
       {vista === "detalle" && vehiculoSeleccionado ? (
         <div className="space-y-6 pb-8 max-w-7xl mx-auto animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               
               <Button 
                 variant="ghost" 
@@ -466,7 +466,7 @@ export function VehiclesView({
               </Button>
               
               <div>
-                <h2 className="text-2xl font-bold flex items-center gap-2">
+                <h2 className="text-xl sm:text-2xl font-bold flex flex-wrap items-center gap-2">
                   <span className="bg-[#008A4B] text-white px-3 py-1 rounded-md font-mono tracking-widest text-lg">
                     {formatearPatenteVisual(vehiculoSeleccionado.patente)}
                   </span>
@@ -490,7 +490,7 @@ export function VehiclesView({
                   <Car className="w-5 h-5" /> Ficha Técnica
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="grid grid-cols-2 gap-y-6 gap-x-6 text-sm">
                   <div><span className="text-muted-foreground block mb-1">Marca</span><p className="font-medium text-base">{vehiculoSeleccionado.marca}</p></div>
                   <div><span className="text-muted-foreground block mb-1">Modelo</span><p className="font-medium text-base">{vehiculoSeleccionado.modelo}</p></div>
@@ -519,7 +519,7 @@ export function VehiclesView({
                       <div className="flex items-center gap-2 group">
                         <p className="font-medium text-base">{vehiculoSeleccionado.kilometraje ? `${vehiculoSeleccionado.kilometraje.toLocaleString()} km` : 'Sin registrar'}</p>
                         {/* El mecánico SÍ puede editar los KM, dejamos el botón libre */}
-                        <Button size="icon" variant="ghost" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-emerald-600" onClick={() => {setNuevoKm(vehiculoSeleccionado.kilometraje?.toString() || ""); setEditandoKm(true);}}>
+                        <Button size="icon" variant="ghost" className="h-6 w-6 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-emerald-600" onClick={() => {setNuevoKm(vehiculoSeleccionado.kilometraje?.toString() || ""); setEditandoKm(true);}}>
                           <Pencil className="w-3.5 h-3.5"/>
                         </Button>
                       </div>
@@ -532,11 +532,11 @@ export function VehiclesView({
             </Card>
 
             <Card className="border-border shadow-sm flex flex-col">
-              <CardHeader className="bg-secondary/10 border-b border-border py-4 flex flex-row items-center justify-between">
+              <CardHeader className="bg-secondary/10 border-b border-border py-4 flex flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-lg flex items-center gap-2 text-emerald-700 dark:text-emerald-500">
                   <User className="w-5 h-5" /> Propietario Actual
                 </CardTitle>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {/* CONDICIONAL: Solo Admin/Cajero edita al cliente o transfiere el auto */}
                   {vehiculoSeleccionado.clientes && !modoTransferencia && userRole !== 'mecanico' && (
                     <Button variant="ghost" size="sm" onClick={abrirModalEditarCliente} className="text-muted-foreground hover:text-primary">
@@ -550,7 +550,7 @@ export function VehiclesView({
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="p-6 flex-1">
+              <CardContent className="p-4 sm:p-6 flex-1">
                 {modoTransferencia ? (
                   <div className="space-y-4 animate-in fade-in duration-200 bg-slate-50 dark:bg-slate-900/50 p-5 rounded-lg border border-border h-full flex flex-col">
                     <div className="mb-4 pb-4 border-b border-border">
@@ -606,7 +606,7 @@ export function VehiclesView({
                       </div>
                     )}
 
-                    <div className="flex justify-end gap-2 pt-2 mt-auto">
+                    <div className="flex flex-wrap justify-end gap-2 pt-2 mt-auto">
                       <Button variant="ghost" onClick={() => {setModoTransferencia(false); setNuevoDuenoId(""); setBusquedaNuevoDueno("");}} disabled={isTransferring}>Cancelar</Button>
                       <Button onClick={() => handleTransferirDueno("transferir")} disabled={!nuevoDuenoId || isTransferring} className="bg-blue-600 hover:bg-blue-700 text-white">
                         {isTransferring ? <Loader2 className="w-4 h-4 animate-spin"/> : "Confirmar Transferencia"}
@@ -665,8 +665,8 @@ export function VehiclesView({
           </div>
 
           <div className="pt-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold flex items-center gap-2 text-foreground">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2 text-foreground">
                 <FileText className="w-5 h-5 text-emerald-600"/> Historial de Presupuestos y Órdenes
               </h3>
               {userRole !== 'mecanico' && (
@@ -680,7 +680,7 @@ export function VehiclesView({
             </div>
             
             <Card className="border-border bg-card overflow-hidden">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/20">
                   <TableRow>
                     <TableHead>Nro</TableHead>
@@ -705,10 +705,10 @@ export function VehiclesView({
                         onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(hp.id, vehiculoSeleccionado)}
                       >
                         <TableCell className="font-mono font-bold group-hover:text-emerald-600 transition-colors">PRE-{hp.numero_correlativo}</TableCell>
-                        <TableCell>{new Date(hp.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
+                        <TableCell data-label="Fecha">{new Date(hp.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
                         
                         {userRole !== 'mecanico' && (
-                           <TableCell className="font-bold font-mono text-emerald-700 dark:text-emerald-500">${hp.total_final?.toLocaleString()}</TableCell>
+                           <TableCell data-label="Total" className="font-bold font-mono text-emerald-700 dark:text-emerald-500">${hp.total_final?.toLocaleString()}</TableCell>
                         )}
 
                         <TableCell className="text-center"><Badge variant="outline">{hp.estado}</Badge></TableCell>
@@ -752,7 +752,7 @@ export function VehiclesView({
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader>
                   <TableRow className="bg-secondary/20">
                     <TableHead>Patente</TableHead>
@@ -800,7 +800,7 @@ export function VehiclesView({
                             <div className="font-semibold text-foreground">{v.marca} {v.modelo}</div>
                             <div className="text-xs text-muted-foreground capitalize">{v.tipo_vehiculo || 'Vehículo'}</div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Dueño">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
                               {v.clientes?.nivel_problema === 'Naranja' ? (
                                 <div className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" title="Cliente Difícil"></div>
@@ -812,7 +812,7 @@ export function VehiclesView({
                               <span className={!v.clientes ? 'italic opacity-60' : ''}>{nombreDueno}</span>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Detalles">
                             <div className="text-xs text-muted-foreground space-y-1">
                               {v.anio && <span className="flex items-center gap-1"><Calendar className="h-3 w-3"/> Año {v.anio}</span>}
                               {v.color && <span className="flex items-center gap-1"><Palette className="h-3 w-3"/> {v.color}</span>}
@@ -838,12 +838,12 @@ export function VehiclesView({
       {/* MODAL COMPARTIDO (NUEVO / EDITAR VEHÍCULO) */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[85vh] flex flex-col">
-          <DialogHeader className="shrink-0 mb-2">
-            <DialogTitle className="text-2xl text-foreground font-bold">{isEditingCar ? "Editar Vehículo" : "Registrar Vehículo"}</DialogTitle>
+          <DialogHeader className="shrink-0 mb-2 pr-8 text-left">
+            <DialogTitle className="text-xl sm:text-2xl text-foreground font-bold">{isEditingCar ? "Editar Vehículo" : "Registrar Vehículo"}</DialogTitle>
             <p className="text-sm text-muted-foreground">{isEditingCar ? "Actualice la información principal del vehículo." : "Vincule un nuevo vehículo a un cliente del taller."}</p>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-4 space-y-8">
+          <div className="flex-1 overflow-y-auto pr-1 sm:pr-4 space-y-8">
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Dueño del Vehículo</h3>
@@ -882,7 +882,7 @@ export function VehiclesView({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-lg">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800 rounded-lg">
                   <div className="flex items-center gap-3">
                     <CheckCircle2 className="h-6 w-6 text-emerald-600" />
                     <div>
@@ -976,12 +976,12 @@ export function VehiclesView({
       {/* NUEVO MODAL: EDITAR CLIENTE */}
       <Dialog open={isEditClientModalOpen} onOpenChange={setIsEditClientModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card max-h-[85vh] flex flex-col">
-          <DialogHeader className="shrink-0 mb-2">
-            <DialogTitle className="text-2xl text-foreground font-bold">Editar Cliente</DialogTitle>
+          <DialogHeader className="shrink-0 mb-2 pr-8 text-left">
+            <DialogTitle className="text-xl sm:text-2xl text-foreground font-bold">Editar Cliente</DialogTitle>
             <p className="text-sm text-muted-foreground">Complete los datos. Los campos marcados con * son obligatorios.</p>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-4 space-y-6">
+          <div className="flex-1 overflow-y-auto pr-1 sm:pr-4 space-y-6">
             <div className="flex gap-4 p-1 bg-secondary/50 rounded-lg w-fit border border-border">
               <Button 
                 variant={clientFormData.tipo_cliente === 'fisica' ? "default" : "ghost"} 
@@ -1003,7 +1003,7 @@ export function VehiclesView({
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Contacto</h3>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Número de Teléfono</Label>
                   <Input 
@@ -1027,7 +1027,7 @@ export function VehiclesView({
               <div className="border-l-4 border-emerald-600 pl-3 mb-4">
                 <h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Facturación (ARCA/AFIP)</h3>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{clientFormData.tipo_cliente === 'empresa' ? 'CUIT *' : 'DNI / CUIT *'}</Label>
                   <Input 

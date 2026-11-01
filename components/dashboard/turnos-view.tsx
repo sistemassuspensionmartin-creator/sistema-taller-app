@@ -534,7 +534,7 @@ export function TurnosView({
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-6rem)] gap-4 pb-4">
+    <div className="flex flex-col h-[calc(100vh-6rem)] supports-[height:100dvh]:h-[calc(100dvh-6rem)] min-h-[520px] gap-4 pb-4">
       {/* Ocultamos el cartel flotante de "Agendando..." si es mecánico */}
       {turnoAgendarInfo && userRole !== 'mecanico' && (
         <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 p-4 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm animate-in slide-in-from-top-4 shrink-0">
@@ -562,7 +562,7 @@ export function TurnosView({
           <p className="text-sm text-muted-foreground">Gestión semanal (Lunes a Viernes)</p>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <div className="flex items-center bg-secondary rounded-md border border-border p-1">
             <Button variant="ghost" size="icon" onClick={prevWeek} disabled={isPrevDisabled} className="h-8 w-8 hover:bg-background disabled:opacity-30">
               <ChevronLeft className="h-4 w-4" />
@@ -592,7 +592,10 @@ export function TurnosView({
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         )}
-        <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0 relative">
+        {/* En celular la semana se desliza de costado (la columna de horas y los días se mueven juntos) */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-x-auto">
+        <div className="flex-1 flex flex-col min-h-0 min-w-[600px] md:min-w-0">
+        <div className="grid grid-cols-[56px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border bg-secondary/50 shrink-0 relative">
           <div className="p-3 text-center border-r border-border flex items-center justify-center">
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>
@@ -617,7 +620,7 @@ export function TurnosView({
                 {!esPasado && userRole !== 'mecanico' && (
                   <Button 
                     variant="ghost" size="icon" 
-                    className={`absolute top-1 right-1 h-6 w-6 rounded-full ${esNoLaborable ? 'text-destructive hover:bg-destructive/20' : 'text-muted-foreground hover:bg-secondary/50'}`}
+                    className={`boton-compacto absolute top-1 right-1 h-6 w-6 rounded-full ${esNoLaborable ? 'text-destructive hover:bg-destructive/20' : 'text-muted-foreground hover:bg-secondary/50'}`}
                     title={esNoLaborable ? "Habilitar Día" : "Marcar como No Laborable"}
                     onClick={() => toggleDiaNoLaborable(fechaString)}
                   >
@@ -632,7 +635,7 @@ export function TurnosView({
         <div className="flex-1 overflow-y-auto min-h-0 bg-background/50">
           <div className="min-w-full relative">
             {HORARIOS.map(hora => (
-              <div key={hora} className="grid grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0">
+              <div key={hora} className="grid grid-cols-[56px_1fr_1fr_1fr_1fr_1fr] sm:grid-cols-[80px_1fr_1fr_1fr_1fr_1fr] border-b border-border last:border-0">
                 <div className="p-2 text-center border-r border-border text-xs font-bold text-muted-foreground bg-secondary/20 flex items-start justify-center pt-3">
                   {hora}
                 </div>
@@ -673,6 +676,8 @@ export function TurnosView({
               </div>
             ))}
           </div>
+        </div>
+        </div>
         </div>
       </Card>
 
@@ -728,7 +733,7 @@ export function TurnosView({
                   <p className="text-muted-foreground mb-1">Patente</p>
                   <p className="font-mono bg-secondary px-2 py-0.5 rounded text-foreground inline-block">{turnoSeleccionado.patente}</p>
                 </div>
-                <div className="col-span-2 flex justify-between items-center bg-secondary/20 p-2 rounded-md border border-border">
+                <div className="col-span-2 flex flex-wrap justify-between items-center gap-2 bg-secondary/20 p-2 rounded-md border border-border">
                   <div>
                     <p className="text-muted-foreground mb-1 text-xs uppercase">Cliente</p>
                     <p className="font-medium text-foreground flex items-center gap-2 mb-1"><User className="w-4 h-4 text-primary" /> {turnoSeleccionado.cliente}</p>
@@ -788,7 +793,7 @@ export function TurnosView({
               <div className="flex flex-col w-full gap-2">
                 {/* CONDICIONAL: Si es mecánico, solo ve el botón de cerrar. Si es otro rol, ve los botones de acción */}
                 {userRole !== 'mecanico' && (
-                  <div className="grid grid-cols-3 gap-2 w-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full">
                       {turnoSeleccionado?.estado !== "cancelado" && turnoSeleccionado?.estado !== "asistio" && (
                           <Button variant="outline" onClick={() => handleValidarIngreso(turnoSeleccionado)} className="border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20">
                               <CheckCircle2 className="w-4 h-4 mr-2" /> Ingresó
@@ -821,14 +826,14 @@ export function TurnosView({
       {/* Modal para Crear Turno */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-2xl border-border bg-card h-[85vh] flex flex-col p-0">
-          <DialogHeader className="shrink-0 p-6 border-b border-border">
+          <DialogHeader className="shrink-0 p-4 pr-12 sm:p-6 border-b border-border text-left">
             <DialogTitle className="text-xl text-card-foreground">Agendar Nuevo Turno</DialogTitle>
             <DialogDescription className="text-muted-foreground">
               Complete los datos para registrar la cita.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="text-card-foreground">Fecha</Label>
@@ -861,7 +866,7 @@ export function TurnosView({
 
             <div className="border border-border rounded-lg p-1 bg-secondary/30">
               <Tabs defaultValue="registrado" onValueChange={setTipoRegistro}>
-                <TabsList className="w-full grid grid-cols-2 bg-transparent">
+                <TabsList className="w-full grid grid-cols-2 bg-transparent [&>button]:whitespace-normal [&>button]:leading-tight [&>button]:text-xs sm:[&>button]:text-sm">
                   <TabsTrigger value="registrado" className="data-[state=active]:bg-background">
                     <Search className="w-4 h-4 mr-2" /> Buscar Registrado
                   </TabsTrigger>

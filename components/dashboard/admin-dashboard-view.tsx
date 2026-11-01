@@ -337,7 +337,7 @@ export function AdminDashboardView() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto bg-slate-100/50 p-1 mb-6">
+        <TabsList className="grid grid-cols-2 md:grid-cols-4 w-full h-auto bg-slate-100/50 p-1 mb-6 [&>button]:whitespace-normal [&>button]:leading-tight">
           <TabsTrigger value="kpis" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm">Tablero General</TabsTrigger>
           <TabsTrigger value="cajas" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm">Tesorería (Cajas)</TabsTrigger>
           <TabsTrigger value="auditoria" className="text-xs font-bold uppercase tracking-wider py-2.5 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm">Auditoría / Reportes</TabsTrigger>
@@ -614,25 +614,25 @@ export function AdminDashboardView() {
               <Card className="shadow-none border-slate-200 bg-white">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Gastos Operativos</p>
-                  <div className="text-xl font-mono font-black text-rose-600">{formatCifra(stats.gastosFijos)}</div>
+                  <div className="text-base sm:text-xl break-all font-mono font-black text-rose-600">{formatCifra(stats.gastosFijos)}</div>
                 </CardContent>
               </Card>
               <Card className="shadow-none border-slate-200 bg-white">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pagos a Proveedores</p>
-                  <div className="text-xl font-mono font-black text-amber-600">{formatCifra(stats.comprasProveedores)}</div>
+                  <div className="text-base sm:text-xl break-all font-mono font-black text-amber-600">{formatCifra(stats.comprasProveedores)}</div>
                 </CardContent>
               </Card>
               <Card className="shadow-none border-slate-200 bg-rose-50 border-rose-100">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-rose-600/70 uppercase tracking-widest mb-1">Total Salidas de Caja</p>
-                  <div className="text-xl font-mono font-black text-rose-700">{formatCifra(stats.gastosFijos + stats.comprasProveedores)}</div>
+                  <div className="text-base sm:text-xl break-all font-mono font-black text-rose-700">{formatCifra(stats.gastosFijos + stats.comprasProveedores)}</div>
                 </CardContent>
               </Card>
               <Card className="shadow-none border-slate-200 bg-slate-50">
                 <CardContent className="p-4">
                   <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Gasto Operativo Diario</p>
-                  <div className="text-xl font-mono font-black text-slate-700">{formatCifra(stats.gastosFijos / 30)}</div>
+                  <div className="text-base sm:text-xl break-all font-mono font-black text-slate-700">{formatCifra(stats.gastosFijos / 30)}</div>
                 </CardContent>
               </Card>
             </div>
@@ -743,16 +743,16 @@ export function AdminDashboardView() {
 
       {/* --- MODAL: HISTORIAL INDIVIDUAL DE CAJA --- */}
       <Dialog open={!!cajaHistorialSeleccionada} onOpenChange={(open:any) => !open && setCajaHistorialSeleccionada(null)}>
-        <DialogContent className="!max-w-[90vw] w-full lg:max-w-4xl border-border bg-card h-[85vh] flex flex-col p-0">
-          <DialogHeader className="shrink-0 p-6 border-b border-slate-100 bg-slate-50/50">
-            <DialogTitle className="text-xl flex items-center justify-between pr-8">
+        <DialogContent className="max-md:!max-w-[calc(100vw-1rem)] !max-w-[90vw] w-full lg:max-w-4xl border-border bg-card h-[85vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-4 sm:p-6 border-b border-slate-100 bg-slate-50/50 text-left">
+            <DialogTitle className="text-lg sm:text-xl flex flex-wrap items-center justify-between gap-2 pr-8">
               <span className="flex items-center gap-2 text-emerald-800">
                 <Landmark className="w-5 h-5" /> 
                 Historial: {cajaHistorialSeleccionada?.nombre}
               </span>
-              <div className="text-right">
+              <div className="sm:text-right">
                 <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Saldo Actual</p>
-                <span className="font-mono text-2xl font-black text-slate-900">
+                <span className="font-mono text-xl sm:text-2xl font-black text-slate-900">
                   {showMoney ? formatCifra(Number(cajaHistorialSeleccionada?.saldo || 0)) : "••••••"}
                 </span>
               </div>
@@ -762,7 +762,7 @@ export function AdminDashboardView() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6 bg-slate-50/30">
             <div className="border rounded-lg border-slate-200 bg-white overflow-hidden shadow-sm">
               <Table>
                 <TableHeader className="bg-slate-100/50 sticky top-0 backdrop-blur-sm z-10 shadow-sm">

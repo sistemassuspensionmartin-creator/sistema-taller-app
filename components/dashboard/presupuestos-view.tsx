@@ -68,7 +68,7 @@ const BuscadorRepuesto = ({ fila, catalogo, aplicarItemCatalogo }: any) => {
       onOpenChange={(open: boolean) => { if(open) setBusqueda("") }} 
       onValueChange={(val: string) => aplicarItemCatalogo(fila.id, val)}
     >
-      <SelectTrigger className="w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
+      <SelectTrigger className="w-full sm:w-[180px] h-10 text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800 shrink-0 print:hidden">
         <SelectValue placeholder={`Elegir ${fila.tipo}...`} />
       </SelectTrigger>
       <SelectContent>
@@ -1241,7 +1241,7 @@ export function PresupuestosView({
                         <Button variant="outline" onClick={() => setIsEditing(true)} className="border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400">
                           <Pencil className="w-4 h-4 mr-2"/> Activar Edición
                         </Button>
-                        <div className="h-6 w-px bg-border mx-2"></div>
+                        <div className="hidden sm:block h-6 w-px bg-border mx-2"></div>
                       </>
                     )}
                   </>
@@ -1255,7 +1255,7 @@ export function PresupuestosView({
                     <Button onClick={handleGuardarPresupuesto} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
                       {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} {editandoId ? "Guardar Cambios" : "Crear Presupuesto"}
                     </Button>
-                    <div className="h-6 w-px bg-border mx-2"></div>
+                    <div className="hidden sm:block h-6 w-px bg-border mx-2"></div>
                   </>
                 )}
 
@@ -1283,13 +1283,13 @@ export function PresupuestosView({
             </div>
             <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
               <CardHeader className="bg-secondary/10 border-b border-border pb-4">
-                <CardTitle className="text-lg flex justify-between items-center text-emerald-700 dark:text-emerald-500">
+                <CardTitle className="text-lg flex flex-wrap justify-between items-center gap-2 text-emerald-700 dark:text-emerald-500">
                   <div className="flex items-center gap-2"><FileText className="w-5 h-5" /> Datos del Presupuesto</div>
                   {editandoId && <Badge variant="outline" className="font-mono text-base bg-background px-3 py-1">PRE-{numeroCorrelativo}</Badge>}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6 print:hidden">
+              <CardContent className="p-4 sm:p-6">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 sm:gap-6 mb-6 print:hidden">
                   
                   {isEditing && (
                     <div className="md:col-span-6 space-y-2 relative">
@@ -1439,7 +1439,7 @@ export function PresupuestosView({
             </Card>
 
             <Card className={`border-border shadow-sm transition-all ${isEditing ? 'ring-2 ring-emerald-500/20' : ''}`}>
-              <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row items-center justify-between">
+              <CardHeader className="bg-secondary/10 border-b border-border py-3 flex flex-row flex-wrap items-center justify-between gap-2">
                 <CardTitle className="text-lg">Detalle de Repuestos y Trabajos</CardTitle>
                 {userRole !== 'mecanico' && (
                   <Button variant="outline" size="sm" onClick={() => setMostrarCostos(!mostrarCostos)} className={`print:hidden ${mostrarCostos ? "bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200" : "text-amber-600 border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-900"}`}>
@@ -1449,7 +1449,7 @@ export function PresupuestosView({
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table className="tabla-movil">
                     <TableHeader>
                       <TableRow className="bg-secondary/5 hover:bg-secondary/5">
                         <TableHead className="w-[155px] print:hidden">Tipo</TableHead>
@@ -1495,8 +1495,8 @@ export function PresupuestosView({
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
+                            <TableCell className="celda-completa">
+                              <div className="flex flex-col sm:flex-row gap-2">
                                 {isEditing && (
                                   <BuscadorRepuesto 
                                     fila={fila} 
@@ -1507,7 +1507,7 @@ export function PresupuestosView({
                                 <Input value={fila.detalle} onChange={(e: any) => actualizarFila(fila.id, 'detalle', e.target.value)} readOnly={!isEditing} placeholder={isEditing ? "Escriba el detalle..." : ""} className={`h-10 flex-1 ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} />
                               </div>
                             </TableCell>
-                            <TableCell className="align-top pt-3">
+                            <TableCell data-label="Cant." className="align-top pt-3 max-md:basis-20">
                               <div className="flex flex-col items-center justify-start gap-1">
                                 <Input value={fila.cant} onChange={(e: any) => actualizarFila(fila.id, 'cant', e.target.value)} readOnly={!isEditing} className={`h-10 text-center font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-white dark:bg-slate-950'}`} />
                                 
@@ -1522,12 +1522,12 @@ export function PresupuestosView({
                             
                             {/* Columnas ocultas al mecánico */}
                             {mostrarCostos && userRole !== 'mecanico' && (
-                              <TableCell className="print:hidden"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 text-amber-700' : 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400'}`} /></TableCell>
+                              <TableCell data-label="Costo unit." className="print:hidden max-md:flex-1"><Input value={fila.costo} onChange={(e: any) => actualizarFila(fila.id, 'costo', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 text-amber-700' : 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-900 focus-visible:ring-amber-400'}`} /></TableCell>
                             )}
                             {userRole !== 'mecanico' && (
                               <>
-                                <TableCell><Input value={fila.precio} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
-                                <TableCell className="text-right font-bold font-mono text-base pt-4">${((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)).toLocaleString()}</TableCell>
+                                <TableCell data-label="Precio venta" className="max-md:flex-1"><Input value={fila.precio} onChange={(e: any) => actualizarFila(fila.id, 'precio', e.target.value)} readOnly={!isEditing} className={`h-10 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-medium' : 'bg-white dark:bg-slate-950'}`} /></TableCell>
+                                <TableCell data-label="Subtotal" className="text-right font-bold font-mono text-base pt-4 max-md:flex-1">${((parseFloat(fila.precio) || 0) * (parseFloat(fila.cant) || 1)).toLocaleString()}</TableCell>
                               </>
                             )}
 
@@ -1574,7 +1574,7 @@ export function PresupuestosView({
               {userRole !== 'mecanico' && (
                 <div className="flex flex-col justify-between">
                   <Card className="border-border shadow-md mb-6">
-                    <CardContent className="p-6 space-y-4">
+                    <CardContent className="p-4 sm:p-6 space-y-4">
                       <div className="flex justify-between items-center text-muted-foreground"><span>Subtotal Neto:</span><span className="font-mono text-lg">${subtotalNeto.toLocaleString()}</span></div>
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Descuento / Atención:</span>
@@ -1583,8 +1583,8 @@ export function PresupuestosView({
                           <Input value={descuento} onChange={(e: any) => setDescuento(e.target.value)} readOnly={!isEditing} className={`h-10 pl-7 text-right font-mono ${!isEditing ? 'bg-transparent border-transparent px-0 font-bold' : 'bg-slate-50 dark:bg-slate-900'}`} />
                         </div>
                       </div>
-                      <div className="border-t border-border pt-4 mt-2 flex justify-between items-center"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
-                      {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
+                      <div className="border-t border-border pt-4 mt-2 flex flex-wrap justify-between items-center gap-x-4 gap-y-1"><span className="text-xl font-bold text-foreground">Total Final:</span><span className="text-3xl sm:text-4xl break-all font-bold text-emerald-600 dark:text-emerald-400 font-mono">${totalFinal.toLocaleString()}</span></div>
+                      {mostrarCostos && (<div className="mt-6 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg flex flex-wrap gap-2 justify-between items-center animate-in fade-in duration-300 print:hidden"><span className="font-semibold text-emerald-800 dark:text-emerald-400">Ganancia Neta Estimada:</span><span className="text-xl font-bold text-emerald-700 dark:text-emerald-500 font-mono">${gananciaEstimada.toLocaleString()}</span></div>)}
                     </CardContent>
                   </Card>
 
@@ -1706,7 +1706,7 @@ export function PresupuestosView({
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <Table>
+                <Table className="tabla-movil">
                   <TableHeader>
                     <TableRow className="bg-secondary/20">
                       <TableHead>Nro</TableHead>
@@ -1747,13 +1747,13 @@ export function PresupuestosView({
                     ) : (
                       presupuestosFiltrados.map((p) => (
                         <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group transition-colors" onClick={() => handleAbrirPresupuesto(p)}>
-                          <TableCell className="font-mono font-bold">
+                          <TableCell className="celda-auto font-mono font-bold">
                             PRE-{p.numero_correlativo}
                             {/* --- MAGIA VISUAL: PUNTITO AZUL DE ALERTA --- */}
                             {p.visto_admin === false && userRole !== 'mecanico' && <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block animate-pulse" title="Cambios sin ver"></span>}
                           </TableCell>
-                          <TableCell>{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
-                          <TableCell>
+                          <TableCell data-label="Fecha">{new Date(p.fecha_emision).toLocaleDateString('es-AR')}</TableCell>
+                          <TableCell className="celda-completa">
                             {p.vehiculo_patente ? (
                               <>
                                 <div className="font-medium text-foreground group-hover:text-emerald-600 transition-colors">
@@ -1774,10 +1774,10 @@ export function PresupuestosView({
                           
                           {/* Ocultamos el precio en la fila al mecánico */}
                           {userRole !== 'mecanico' && (
-                            <TableCell className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
+                            <TableCell data-label="Total" className="text-right font-bold font-mono">${p.total_final?.toLocaleString()}</TableCell>
                           )}
                           
-                          <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <TableCell data-label="Estado" className="text-center" onClick={(e) => e.stopPropagation()}>
                             {/* El mecánico ve una etiqueta estática. Los demás ven el selector. */}
                             {userRole === 'mecanico' ? (
                               <Badge className={`${getEstadoColor(p.estado)}`}>{p.estado}</Badge>

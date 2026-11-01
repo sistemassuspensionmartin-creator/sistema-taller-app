@@ -156,19 +156,19 @@ export function MetricsCards({
       {/* ENCABEZADO */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">¡Buen día!</h2>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">¡Buen día!</h2>
           <p className="text-muted-foreground">Este es el resumen operativo de tu taller para hoy.</p>
         </div>
-        <div className="text-sm font-medium text-slate-500 bg-secondary/50 px-4 py-2 rounded-full">
+        <div className="self-start sm:self-auto text-sm font-medium text-slate-500 bg-secondary/50 px-4 py-2 rounded-full">
           {new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </div>
       </div>
 
       {/* ALERTA DE CAJA: Solo visible si NO es mecánico */}
       {alertaCaja && userRole !== 'mecanico' && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm flex items-start gap-4">
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm flex flex-wrap sm:flex-nowrap items-start gap-4">
           <AlertTriangle className="w-6 h-6 text-red-500 shrink-0 mt-0.5" />
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h3 className="text-red-800 font-bold">Alerta de Tesorería</h3>
             <p className="text-red-700 text-sm mt-1">
               El sistema detectó movimientos de dinero en días anteriores sin un Cierre de Caja correspondiente. Por favor, realice el cierre para auditar los saldos.
@@ -183,7 +183,7 @@ export function MetricsCards({
       {/* MÉTRICAS RÁPIDAS (Esto lo ven todos) */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-border shadow-sm bg-white dark:bg-slate-950">
-          <CardContent className="p-6 flex items-center gap-4">
+          <CardContent className="p-4 sm:p-6 flex items-center gap-4">
             <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
               <CalendarDays className="h-6 w-6 text-blue-600" />
             </div>
@@ -195,7 +195,7 @@ export function MetricsCards({
         </Card>
 
         <Card className="border-border shadow-sm bg-white dark:bg-slate-950">
-          <CardContent className="p-6 flex items-center gap-4">
+          <CardContent className="p-4 sm:p-6 flex items-center gap-4">
             <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
               <Car className="h-6 w-6 text-amber-600" />
             </div>
@@ -207,7 +207,7 @@ export function MetricsCards({
         </Card>
 
         <Card className="border-border shadow-sm bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-900/50">
-          <CardContent className="p-6 flex items-center gap-4">
+          <CardContent className="p-4 sm:p-6 flex items-center gap-4">
             <div className="p-4 bg-emerald-200/50 dark:bg-emerald-800/50 rounded-xl">
               <CheckCircle2 className="h-6 w-6 text-emerald-700 dark:text-emerald-400" />
             </div>
@@ -247,7 +247,7 @@ export function MetricsCards({
 
         {/* AGENDA DEL DÍA (8 Columnas) (Lo ven todos) */}
         <div className="md:col-span-8 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-bold text-foreground">Agenda de Recepción</h3>
             <Button variant="ghost" size="sm" onClick={onNavigateToTurnos} className="text-blue-600 hover:text-blue-800">
               Ver agenda completa <ArrowRight className="w-4 h-4 ml-1" />
@@ -267,14 +267,14 @@ export function MetricsCards({
                 agendaHoy.map((turno) => {
                   const estadoVisual = determinarEstadoTurno(turno);
                   return (
-                  <div key={turno.id} className="p-4 flex items-center justify-between hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-secondary p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px]">
+                  <div key={turno.id} className="p-3 sm:p-4 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 hover:bg-secondary/20 transition-colors">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      <div className="bg-secondary p-3 rounded-lg flex flex-col items-center justify-center min-w-[70px] shrink-0">
                         <Clock className="w-4 h-4 text-muted-foreground mb-1" />
                         <span className="font-mono font-bold text-sm">{turno.hora ? turno.hora.substring(0,5) : '--:--'}</span>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-foreground flex items-center gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-foreground flex flex-wrap items-center gap-x-2">
                           <span className="uppercase tracking-widest text-blue-600">{turno.patente}</span>
                           <span className="text-muted-foreground font-normal">- {turno.cliente}</span>
                         </h4>

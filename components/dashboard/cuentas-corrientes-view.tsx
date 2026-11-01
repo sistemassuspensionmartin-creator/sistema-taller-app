@@ -390,7 +390,7 @@ export function CuentasCorrientesView() {
   const totalProveedoresNegativo = totalDeudaProveedores < 0;
 
   return (
-    <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300">
+    <div className="space-y-4 sm:space-y-6 pb-8 lg:h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300">
       
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between shrink-0">
         <div>
@@ -400,7 +400,7 @@ export function CuentasCorrientesView() {
       </div>
 
       <Tabs defaultValue="clientes" className="flex-1 flex flex-col min-h-0">
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 shrink-0">
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-4 shrink-0 [&>button]:whitespace-normal [&>button]:leading-tight [&>button]:text-xs sm:[&>button]:text-sm">
           <TabsTrigger value="clientes" className="data-[state=active]:bg-card data-[state=active]:text-blue-600">
             <Users className="w-4 h-4 mr-2" /> Clientes (A Cobrar)
           </TabsTrigger>
@@ -411,10 +411,10 @@ export function CuentasCorrientesView() {
 
         <TabsContent value="clientes" className="flex-1 flex flex-col min-h-0 m-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
-            <Card className="border-border shadow-sm md:col-span-3 flex items-center justify-between p-6">
+            <Card className="border-border shadow-sm md:col-span-3 flex items-center justify-between gap-3 p-4 sm:p-6">
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Cobrar</p>
-                <h3 className="text-3xl font-black text-blue-600 font-mono">
+                <h3 className="text-2xl sm:text-3xl font-black text-blue-600 font-mono break-all">
                   ${getTotalCobrarClientes().toLocaleString()}
                 </h3>
               </div>
@@ -425,7 +425,7 @@ export function CuentasCorrientesView() {
           </div>
 
           <div className="flex items-center gap-2 mb-4 shrink-0">
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar cliente por nombre o CUIT..." className="pl-9 bg-card border-border" value={busquedaCliente} onChange={(e) => setBusquedaCliente(e.target.value)} />
             </div>
@@ -433,7 +433,7 @@ export function CuentasCorrientesView() {
 
           <Card className="flex-1 border-border shadow-sm overflow-hidden flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto p-0">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/50 sticky top-0 backdrop-blur-sm z-10 shadow-sm">
                   <TableRow>
                     <TableHead>Cliente / Razón Social</TableHead>
@@ -461,8 +461,8 @@ export function CuentasCorrientesView() {
                             </div>
                             {cli.documento && <div className="text-xs text-muted-foreground font-mono ml-6">CUIT/DNI: {cli.documento}</div>}
                           </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">{cli.telefono || '-'}</TableCell>
-                          <TableCell className="text-right font-mono font-bold text-lg">
+                          <TableCell data-label="Contacto" className="text-muted-foreground text-sm">{cli.telefono || '-'}</TableCell>
+                          <TableCell data-label="Balance" className="text-right font-mono font-bold text-lg">
                             <span className={saldo > 0 ? "text-rose-600" : saldo < 0 ? "text-blue-600" : "text-foreground"}>
                               {saldo < 0 ? `+ $${Math.abs(saldo).toLocaleString()}` : `$${saldo.toLocaleString()}`}
                             </span>
@@ -507,10 +507,10 @@ export function CuentasCorrientesView() {
 
         <TabsContent value="proveedores" className="flex-1 flex flex-col min-h-0 m-0">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 shrink-0">
-            <Card className="border-border shadow-sm md:col-span-2 flex items-center justify-between p-6">
+            <Card className="border-border shadow-sm md:col-span-2 flex items-center justify-between gap-3 p-4 sm:p-6">
               <div>
                 <p className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-1">Total a Pagar</p>
-                <h3 className={`text-3xl font-black font-mono ${totalProveedoresNegativo ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <h3 className={`text-2xl sm:text-3xl font-black font-mono break-all ${totalProveedoresNegativo ? 'text-emerald-600' : 'text-rose-600'}`}>
                   ${totalDeudaProveedores.toLocaleString()}
                 </h3>
               </div>
@@ -518,14 +518,14 @@ export function CuentasCorrientesView() {
                 <Receipt className={`w-8 h-8 ${totalProveedoresNegativo ? 'text-emerald-600' : 'text-rose-600'}`} />
               </div>
             </Card>
-            <Button onClick={() => { setNuevoProveedor({ id: null, nombre: "", telefono: "", cuit: "", notas: "" }); setIsNuevoProveedorOpen(true); }} className="h-full min-h-[100px] border-2 border-dashed border-border bg-transparent text-foreground hover:bg-secondary hover:border-primary flex flex-col gap-2">
+            <Button onClick={() => { setNuevoProveedor({ id: null, nombre: "", telefono: "", cuit: "", notas: "" }); setIsNuevoProveedorOpen(true); }} className="h-full min-h-[64px] sm:min-h-[100px] border-2 border-dashed border-border bg-transparent text-foreground hover:bg-secondary hover:border-primary flex flex-col gap-2">
               <Plus className="w-6 h-6 text-primary" />
               <span>Nuevo Proveedor</span>
             </Button>
           </div>
 
           <div className="flex items-center gap-2 mb-4 shrink-0">
-            <div className="relative flex-1 max-w-sm">
+            <div className="relative flex-1 sm:max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar por nombre o CUIT..." className="pl-9 bg-card border-border" value={busquedaProveedor} onChange={(e) => setBusquedaProveedor(e.target.value)} />
             </div>
@@ -533,7 +533,7 @@ export function CuentasCorrientesView() {
 
           <Card className="flex-1 border-border shadow-sm overflow-hidden flex flex-col min-h-0">
             <div className="flex-1 overflow-y-auto p-0">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/50 sticky top-0 backdrop-blur-sm z-10 shadow-sm">
                   <TableRow>
                     <TableHead>Proveedor / Empresa</TableHead>
@@ -555,8 +555,8 @@ export function CuentasCorrientesView() {
                           <div className="font-bold text-foreground uppercase tracking-wide">{prov.nombre}</div>
                           {prov.cuit && <div className="text-xs text-muted-foreground font-mono">CUIT: {prov.cuit}</div>}
                         </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{prov.telefono || '-'}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-lg">${Number(prov.saldo).toLocaleString()}</TableCell>
+                        <TableCell data-label="Contacto" className="text-muted-foreground text-sm">{prov.telefono || '-'}</TableCell>
+                        <TableCell data-label="Saldo actual" className="text-right font-mono font-bold text-lg">${Number(prov.saldo).toLocaleString()}</TableCell>
                         <TableCell className="text-center">
                           {Number(prov.saldo) > 0 ? (
                             <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50">Con Deuda</Badge>
@@ -730,15 +730,15 @@ export function CuentasCorrientesView() {
 
       {/* --- MODAL ANCHO: HISTORIAL CLIENTE --- */}
       <Dialog open={isLedgerClienteOpen} onOpenChange={setIsLedgerClienteOpen}>
-        <DialogContent className="!max-w-[90vw] w-full border-border bg-card h-[85vh] flex flex-col p-0">
-          <DialogHeader className="shrink-0 p-6 border-b border-border">
-            <DialogTitle className="text-xl flex items-center justify-between pr-10">
+        <DialogContent className="max-md:!max-w-[calc(100vw-1rem)] !max-w-[90vw] w-full border-border bg-card h-[85vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-4 sm:p-6 border-b border-border">
+            <DialogTitle className="text-lg sm:text-xl flex items-center justify-between pr-10 text-left">
               <span className="flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Ficha de Cuenta: {clienteSeleccionado && getNombreCliente(clienteSeleccionado)}</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6">
             <div className="border rounded-md border-border">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/50 sticky top-0 backdrop-blur-sm shadow-sm">
                   <TableRow>
                     <TableHead>Fecha</TableHead>
@@ -768,7 +768,7 @@ export function CuentasCorrientesView() {
                             {mov.caja_destino_id && <Badge variant="secondary" className="text-[9px] px-1 py-0 uppercase">Entró a {cajas.find(c => c.id === mov.caja_destino_id)?.nombre || 'Caja'}</Badge>}
                           </div>
                         </TableCell>
-                        <TableCell className={`text-right font-mono font-bold ${mov.tipo === 'cargo_deuda' ? 'text-rose-600' : 'text-blue-600'}`}>
+                        <TableCell data-label="Monto" className={`text-right font-mono font-bold ${mov.tipo === 'cargo_deuda' ? 'text-rose-600' : 'text-blue-600'}`}>
                           {mov.tipo === 'cargo_deuda' ? '+' : '-'}${Math.abs(Number(mov.monto)).toLocaleString()}
                         </TableCell>
                         <TableCell>
@@ -858,21 +858,21 @@ export function CuentasCorrientesView() {
 
       {/* --- MODAL ANCHO: HISTORIAL PROVEEDOR --- */}
       <Dialog open={isLedgerProvOpen} onOpenChange={setIsLedgerProvOpen}>
-        <DialogContent className="!max-w-[90vw] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
-          <DialogHeader className="shrink-0 p-6 border-b border-border">
-            <DialogTitle className="text-xl flex items-center justify-between pr-10">
+        <DialogContent className="max-md:!max-w-[calc(100vw-1rem)] !max-w-[90vw] max-md:w-[calc(100vw-1rem)] w-[90vw] border-border bg-card h-[85vh] flex flex-col p-0">
+          <DialogHeader className="shrink-0 p-4 sm:p-6 border-b border-border">
+            <DialogTitle className="text-lg sm:text-xl flex flex-wrap items-center justify-between gap-2 pr-10 text-left">
               <span className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-primary" /> 
                 Resumen de Cuenta: {provSeleccionado?.nombre}
               </span>
               
-              <span className={`font-mono text-xl ${Number(provSeleccionado?.saldo || 0) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              <span className={`font-mono text-base sm:text-xl ${Number(provSeleccionado?.saldo || 0) < 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                 Deuda Actual: ${Number(provSeleccionado?.saldo || 0).toLocaleString()}
               </span>
             </DialogTitle>
           </DialogHeader>
           
-          <div className="flex-1 flex flex-col min-h-0 p-6">
+          <div className="flex-1 flex flex-col min-h-0 p-3 sm:p-6">
             <div className="relative mb-4 shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
@@ -884,7 +884,7 @@ export function CuentasCorrientesView() {
             </div>
 
             <div className="flex-1 overflow-y-auto border rounded-md border-border">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/50 sticky top-0 backdrop-blur-sm shadow-sm">
                   <TableRow>
                     <TableHead>Fecha</TableHead>
@@ -931,7 +931,7 @@ export function CuentasCorrientesView() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className={`text-right font-mono font-bold text-lg ${mov.tipo === 'factura_compra' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                        <TableCell data-label="Monto" className={`text-right font-mono font-bold text-lg ${mov.tipo === 'factura_compra' ? 'text-rose-600' : 'text-emerald-600'}`}>
                           {mov.tipo === 'factura_compra' ? '+' : '-'}${Number(mov.monto).toLocaleString()}
                         </TableCell>
                         <TableCell>

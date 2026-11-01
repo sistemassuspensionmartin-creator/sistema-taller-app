@@ -452,7 +452,7 @@ export function CajaView({
 
   return (
     <>
-      <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300 print:hidden">
+      <div className="space-y-4 sm:space-y-6 pb-8 lg:h-[calc(100vh-6rem)] flex flex-col animate-in fade-in duration-300 print:hidden">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between shrink-0">
           <div>
             <h2 className="text-2xl font-semibold text-foreground">Tablero de Turno (Mostrador)</h2>
@@ -477,59 +477,59 @@ export function CajaView({
         </div>
 
         {/* 4 TARJETAS DEL DÍA A DÍA */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 shrink-0">
           <Card className="border-border shadow-sm border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-900/10">
-            <CardContent className="p-5">
-              <div className="flex justify-between items-start">
-                <div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
                   <p className="text-xs font-bold text-emerald-800 dark:text-emerald-400 mb-1 uppercase tracking-wider">Efectivo Cajón</p>
-                  <h3 className="text-2xl font-black text-emerald-900 dark:text-emerald-100 font-mono">
+                  <h3 className="text-lg sm:text-2xl font-black text-emerald-900 dark:text-emerald-100 font-mono break-all">
                     ${saldoMostrador.toLocaleString()}
                   </h3>
                 </div>
-                <div className="p-2 bg-emerald-200/50 dark:bg-emerald-800/50 rounded-lg"><Wallet className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /></div>
+                <div className="hidden sm:block p-2 bg-emerald-200/50 dark:bg-emerald-800/50 rounded-lg"><Wallet className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /></div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-border shadow-sm">
-            <CardContent className="p-5">
-              <div className="flex justify-between items-start">
-                <div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
                   <p className="text-xs font-bold text-blue-600 mb-1 uppercase tracking-wider">Transf. Turno</p>
-                  <h3 className="text-2xl font-black text-foreground font-mono">
+                  <h3 className="text-lg sm:text-2xl font-black text-foreground font-mono break-all">
                     ${totalesTurno.transferencias.toLocaleString()}
                   </h3>
                 </div>
-                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg"><Building className="h-4 w-4 text-blue-600" /></div>
+                <div className="hidden sm:block p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg"><Building className="h-4 w-4 text-blue-600" /></div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-border shadow-sm">
-            <CardContent className="p-5">
-              <div className="flex justify-between items-start">
-                <div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
                   <p className="text-xs font-bold text-orange-600 mb-1 uppercase tracking-wider">Tarjetas Turno</p>
-                  <h3 className="text-2xl font-black text-foreground font-mono">
+                  <h3 className="text-lg sm:text-2xl font-black text-foreground font-mono break-all">
                     ${totalesTurno.tarjetas.toLocaleString()}
                   </h3>
                 </div>
-                <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg"><CreditCard className="h-4 w-4 text-orange-600" /></div>
+                <div className="hidden sm:block p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg"><CreditCard className="h-4 w-4 text-orange-600" /></div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="border-border shadow-sm">
-            <CardContent className="p-5">
-              <div className="flex justify-between items-start">
-                <div>
+            <CardContent className="p-3 sm:p-5">
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
                   <p className="text-xs font-bold text-purple-600 mb-1 uppercase tracking-wider">Cheques Turno</p>
-                  <h3 className="text-2xl font-black text-foreground font-mono">
+                  <h3 className="text-lg sm:text-2xl font-black text-foreground font-mono break-all">
                     ${totalesTurno.cheques.toLocaleString()}
                   </h3>
                 </div>
-                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg"><Banknote className="h-4 w-4 text-purple-600" /></div>
+                <div className="hidden sm:block p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg"><Banknote className="h-4 w-4 text-purple-600" /></div>
               </div>
             </CardContent>
           </Card>
@@ -538,20 +538,20 @@ export function CajaView({
         {/* PESTAÑAS DEL TURNO */}
         <Tabs defaultValue="pendientes" className="flex-1 flex flex-col min-h-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0 mb-2">
-            <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-secondary/30 h-11 border border-border/50">
+            <TabsList className="grid grid-cols-3 w-full max-w-2xl bg-secondary/30 h-11 border border-border/50 [&>button]:whitespace-normal [&>button]:leading-tight [&>button]:text-xs sm:[&>button]:text-sm">
               <TabsTrigger value="pendientes" className="data-[state=active]:bg-card data-[state=active]:shadow-sm">A Cobrar</TabsTrigger>
               <TabsTrigger value="cobrados" className="data-[state=active]:bg-card data-[state=active]:shadow-sm">Cobrados Hoy</TabsTrigger>
               <TabsTrigger value="movimientos" className="data-[state=active]:bg-card data-[state=active]:shadow-sm">Movimientos Turno</TabsTrigger>
             </TabsList>
-            <div className="relative max-w-xs w-full">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <div className="relative sm:max-w-xs w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar patente..." className="pl-9 h-10 bg-background shadow-sm" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
             </div>
           </div>
           
           <TabsContent value="pendientes" className="flex-1 flex flex-col min-h-0 border border-border rounded-xl shadow-sm bg-card mt-0">
             <div className="flex-1 overflow-y-auto p-0">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/20 sticky top-0 backdrop-blur-sm shadow-sm">
                   <TableRow>
                     <TableHead>Presupuesto</TableHead>
@@ -573,7 +573,7 @@ export function CajaView({
                     filtrarLista(cuentasPendientes).map(cuenta => (
                       <TableRow key={cuenta.id} className="hover:bg-secondary/20 transition-colors">
                         <TableCell 
-                          className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                          className="celda-auto font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
                           onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(cuenta.id)}
                           title="Ir al detalle del presupuesto"
                         >
@@ -583,9 +583,9 @@ export function CajaView({
                           <div className="font-bold tracking-widest uppercase">{cuenta.patente}</div>
                           <div className="text-xs text-muted-foreground">{cuenta.cliente}</div>
                         </TableCell>
-                        <TableCell className="text-right font-mono font-bold">${cuenta.total.toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono text-emerald-600 font-bold">${cuenta.pagado.toLocaleString()}</TableCell>
-                        <TableCell className="text-right font-mono font-bold text-red-500 text-lg">${cuenta.restante.toLocaleString()}</TableCell>
+                        <TableCell data-label="Total" className="text-right font-mono font-bold">${cuenta.total.toLocaleString()}</TableCell>
+                        <TableCell data-label="Pagado" className="text-right font-mono text-emerald-600 font-bold">${cuenta.pagado.toLocaleString()}</TableCell>
+                        <TableCell data-label="Falta cobrar" className="text-right font-mono font-bold text-red-500 text-lg">${cuenta.restante.toLocaleString()}</TableCell>
                         <TableCell className="text-right">
                           <Button size="sm" onClick={() => abrirModalCobro(cuenta)} className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
                             <DollarSign className="w-4 h-4 mr-1" /> Cobrar
@@ -601,7 +601,7 @@ export function CajaView({
 
           <TabsContent value="cobrados" className="flex-1 flex flex-col min-h-0 border border-border rounded-xl shadow-sm bg-card mt-0">
             <div className="flex-1 overflow-y-auto p-0">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/20 sticky top-0 backdrop-blur-sm shadow-sm">
                   <TableRow>
                     <TableHead>Presupuesto</TableHead>
@@ -622,7 +622,7 @@ export function CajaView({
                     filtrarLista(cuentasCobradas).map(cuenta => (
                       <TableRow key={cuenta.id} className="hover:bg-secondary/20 transition-colors bg-emerald-50/10">
                         <TableCell 
-                          className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
+                          className="celda-auto font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors"
                           onClick={() => onNavigateToPresupuesto && onNavigateToPresupuesto(cuenta.id)}
                           title="Ir al detalle del presupuesto"
                         >
@@ -632,7 +632,7 @@ export function CajaView({
                           <div className="font-bold tracking-widest uppercase">{cuenta.patente}</div>
                           <div className="text-xs text-muted-foreground">{cuenta.cliente}</div>
                         </TableCell>
-                        <TableCell className="text-right font-mono font-bold text-emerald-700">${cuenta.total.toLocaleString()}</TableCell>
+                        <TableCell data-label="Total cobrado" className="text-right font-mono font-bold text-emerald-700">${cuenta.total.toLocaleString()}</TableCell>
                         <TableCell className="text-center">
                           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Pagado Hoy</Badge>
                         </TableCell>
@@ -651,7 +651,7 @@ export function CajaView({
 
           <TabsContent value="movimientos" className="flex-1 flex flex-col min-h-0 border border-border rounded-xl shadow-sm bg-card mt-0">
             <div className="flex-1 overflow-y-auto p-0">
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader className="bg-secondary/20 sticky top-0 shadow-sm">
                   <TableRow>
                     <TableHead>Hora</TableHead>
@@ -682,7 +682,7 @@ export function CajaView({
                         {mov.caja_destino && mov.tipo_movimiento !== 'egreso_gasto' && <div className="text-[10px] text-muted-foreground mt-0.5 font-bold uppercase tracking-wider">Destino: {mov.caja_destino.nombre}</div>}
                         {mov.caja_origen && (mov.tipo_movimiento === 'egreso_gasto' || mov.tipo_movimiento === 'ajuste_faltante') && <div className="text-[10px] text-red-600/70 mt-0.5 font-bold uppercase tracking-wider">Salió de: {mov.caja_origen.nombre}</div>}
                       </TableCell>
-                      <TableCell className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : mov.tipo_movimiento === 'egreso_gasto' ? 'text-red-600' : 'text-foreground'}`}>
+                      <TableCell data-label="Monto" className={`text-right font-mono font-bold ${mov.tipo_movimiento === 'ingreso_cobro' ? 'text-emerald-600' : mov.tipo_movimiento === 'egreso_gasto' ? 'text-red-600' : 'text-foreground'}`}>
                         {mov.tipo_movimiento === 'ingreso_cobro' || mov.tipo_movimiento === 'ajuste_sobrante' ? '+' : mov.tipo_movimiento === 'egreso_gasto' || mov.tipo_movimiento === 'ajuste_faltante' ? '-' : ''}${Number(mov.monto).toLocaleString()}
                       </TableCell>
                     </TableRow>

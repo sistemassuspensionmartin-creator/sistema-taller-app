@@ -360,7 +360,7 @@ export function WorkOrdersTable({
   }
 
   return (
-    <div className="space-y-6 pb-8 h-[calc(100vh-6rem)] flex flex-col">
+    <div className="space-y-4 sm:space-y-6 pb-4 sm:pb-8 h-[calc(100vh-6rem)] supports-[height:100dvh]:h-[calc(100dvh-6rem)] min-h-[480px] flex flex-col">
       {/* --- CABECERA CON BUSCADOR ALINEADO --- */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
@@ -384,7 +384,7 @@ export function WorkOrdersTable({
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-4">
+      <div className="flex-1 min-h-0 flex lg:grid lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto snap-x snap-mandatory lg:snap-none pb-4">
         {COLUMNAS.map(columna => {
           const Icono = columna.icono
           
@@ -403,7 +403,7 @@ export function WorkOrdersTable({
           }
 
           return (
-            <div key={columna.id} className={`flex flex-col rounded-xl border ${columna.border} ${columna.bg} overflow-hidden h-full max-h-full`}>
+            <div key={columna.id} className={`flex flex-col rounded-xl border ${columna.border} ${columna.bg} overflow-hidden h-full max-h-full w-[85%] sm:w-[60%] md:w-[calc(50%-0.5rem)] lg:w-auto shrink-0 snap-start`}>
               <div className={`p-3 border-b ${columna.border} bg-background/50 flex items-center justify-between shrink-0`}>
                 <div className="flex items-center gap-2 font-semibold">
                   <Icono className={`w-4 h-4 ${columna.color}`} />
@@ -429,12 +429,12 @@ export function WorkOrdersTable({
                       }}
                     >
                       <CardContent className="p-3 relative">
-                        <div className="flex justify-between items-start mb-1">
-                          <div className="font-bold text-foreground text-lg">{orden.vehiculo_patente}</div>
+                        <div className="flex justify-between items-start gap-2 mb-1">
+                          <div className="font-bold text-foreground text-lg shrink-0">{orden.vehiculo_patente}</div>
                           
                           {/* --- NUEVO: MARCA Y MODELO CORREGIDO --- */}
                           {orden.presupuestos?.vehiculos && (
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-muted-foreground bg-secondary/30">
+                            <Badge variant="outline" className="text-[10px] uppercase font-bold text-muted-foreground bg-secondary/30 whitespace-normal text-right shrink min-w-0">
                               {orden.presupuestos.vehiculos.marca} {orden.presupuestos.vehiculos.modelo}
                             </Badge>
                           )}
