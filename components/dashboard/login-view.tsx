@@ -86,7 +86,7 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
         <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
           
           {/* Cabecera del Login */}
-          <div className="px-8 pt-10 pb-6 text-center">
+          <div className="px-6 sm:px-8 pt-8 sm:pt-10 pb-6 text-center">
             <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-sm">
               <img src="/icon.png" alt="Logo" className="w-14 h-14 object-contain" />
             </div>
@@ -95,7 +95,7 @@ export function LoginView({ onLoginSuccess }: { onLoginSuccess: () => void }) {
           </div>
 
           {/* Formulario */}
-          <form onSubmit={handleLogin} className="px-8 pb-10 space-y-6">
+          <form onSubmit={handleLogin} className="px-6 sm:px-8 pb-8 sm:pb-10 space-y-6">
             
             {errorMensaje && (
               <div className="bg-rose-50 border border-rose-200 text-rose-600 p-3 rounded-lg text-sm font-medium flex items-start gap-2">

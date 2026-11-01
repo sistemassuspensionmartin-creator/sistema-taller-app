@@ -1,7 +1,7 @@
 "use client"
 
 import { supabase } from "@/lib/supabase"
-import { Bell, Search, User, CheckCircle2, Car, ArrowRight, FileText, Pencil } from "lucide-react"
+import { Bell, Search, User, CheckCircle2, Car, ArrowRight, FileText, Pencil, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -22,13 +22,15 @@ export function DashboardHeader({
   onSectionChange,
   userRole,
   userName,
-  onNavigateToPresupuesto 
+  onNavigateToPresupuesto,
+  onAbrirMenuMovil
 }: { 
   activeSection?: string, 
   onSectionChange?: (section: string) => void,
   userRole?: string | null,
   userName?: string | null,
-  onNavigateToPresupuesto?: (id: string) => void 
+  onNavigateToPresupuesto?: (id: string) => void,
+  onAbrirMenuMovil?: () => void
 }) {
   
   const [notificaciones, setNotificaciones] = useState<any[]>([])
@@ -151,15 +153,21 @@ export function DashboardHeader({
   const nombreMostrar = userName || rolFormat;
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border bg-card px-6 shrink-0">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">{activeSection || "Panel de Control"}</h1>
-        <p className="text-sm text-muted-foreground">
-          Bienvenido de vuelta, {nombreMostrar}
-        </p>
+    <header className="flex h-16 items-center justify-between gap-2 border-b border-border bg-card px-3 sm:px-4 lg:px-6 shrink-0">
+      <div className="flex min-w-0 items-center gap-2">
+        {/* Botón del menú: solo en celular y tablet */}
+        <Button variant="ghost" size="icon" onClick={onAbrirMenuMovil} className="lg:hidden size-10 shrink-0 text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label="Abrir menú">
+          <Menu className="h-6 w-6" />
+        </Button>
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-semibold text-foreground truncate">{activeSection || "Panel de Control"}</h1>
+          <p className="hidden sm:block text-sm text-muted-foreground truncate">
+            Bienvenido de vuelta, {nombreMostrar}
+          </p>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-4">
         <div className="relative hidden md:block">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Buscar..." className="w-64 bg-secondary border-border pl-9" />
@@ -167,7 +175,7 @@ export function DashboardHeader({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className={`relative text-muted-foreground hover:bg-secondary hover:text-foreground transition-all ${campanaSuena ? 'animate-bounce text-emerald-600' : ''}`}>
+            <Button variant="ghost" size="icon" className={`relative size-10 sm:size-9 text-muted-foreground hover:bg-secondary hover:text-foreground transition-all ${campanaSuena ? 'animate-bounce text-emerald-600' : ''}`}>
               <Bell className="h-5 w-5" />
               {notificaciones.length > 0 && (
                 <span className="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white border-2 border-card">
@@ -176,8 +184,8 @@ export function DashboardHeader({
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 border-border bg-popover p-0">
-            <div className="p-3 border-b border-border bg-secondary/30 flex justify-between items-center">
+          <DropdownMenuContent align="end" collisionPadding={8} className="w-[calc(100vw-1rem)] max-w-80 border-border bg-popover p-0">
+            <div className="p-3 border-b border-border bg-secondary/30 flex flex-wrap gap-y-1 justify-between items-center">
               <span className="font-bold text-sm text-foreground">Notificaciones</span>
               {notificaciones.length > 0 && (
                 <div className="flex items-center gap-2">
@@ -188,7 +196,7 @@ export function DashboardHeader({
                 </div>
               )}
             </div>
-            <div className="max-h-[350px] overflow-y-auto">
+            <div className="max-h-[min(350px,calc(100dvh-9rem))] overflow-y-auto">
               {notificaciones.length === 0 ? (
                 <div className="p-6 text-center text-sm text-muted-foreground flex flex-col items-center"><CheckCircle2 className="h-8 w-8 mb-2 opacity-20" /><p>Todo al día. No hay novedades.</p></div>
               ) : (
@@ -198,8 +206,8 @@ export function DashboardHeader({
                   return (
                   <div key={notif.id} className="p-3 border-b border-border/50 hover:bg-secondary/50 transition-colors flex flex-col gap-2 group">
                     <div className="flex justify-between items-start">
-                      <div className={`flex items-center gap-2 font-bold text-sm ${color}`}><Icono className="h-4 w-4" /> {notif.titulo}</div>
-                      <span className="text-xs text-muted-foreground">{horaNotif(notif.created_at)}</span>
+                      <div className={`flex min-w-0 items-center gap-2 font-bold text-sm ${color}`}><Icono className="h-4 w-4 shrink-0" /> {notif.titulo}</div>
+                      <span className="text-xs text-muted-foreground shrink-0 pl-2">{horaNotif(notif.created_at)}</span>
                     </div>
                     <p className="text-sm text-foreground leading-snug">{notif.mensaje}</p>
                     <div className="flex gap-2 mt-1">
@@ -220,7 +228,7 @@ export function DashboardHeader({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 px-2 hover:bg-secondary">
+            <Button variant="ghost" className="flex items-center gap-2 px-1 sm:px-2 hover:bg-secondary">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">{iniciales}</AvatarFallback>
               </Avatar>

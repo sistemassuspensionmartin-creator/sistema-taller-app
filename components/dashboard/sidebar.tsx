@@ -28,6 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 
 interface NavItem {
   label: string
@@ -54,9 +55,12 @@ interface DashboardSidebarProps {
   activeSection: string
   onSectionChange: (section: string) => void
   userRole: string | null 
+  // En celular y tablet el menú es un panel que se abre con el botón de las tres rayitas
+  menuMovilAbierto?: boolean
+  onMenuMovilChange?: (abierto: boolean) => void
 }
 
-export function DashboardSidebar({ activeSection, onSectionChange, userRole }: DashboardSidebarProps) {
+export function DashboardSidebar({ activeSection, onSectionChange, userRole, menuMovilAbierto = false, onMenuMovilChange }: DashboardSidebarProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
 
   useEffect(() => {
@@ -77,180 +81,203 @@ export function DashboardSidebar({ activeSection, onSectionChange, userRole }: D
 
   const allowedNavItems = navItems.filter(item => userRole ? item.roles.includes(userRole) : false)
 
-  return (
-    <TooltipProvider delayDuration={0}>
-      <aside
-        className={cn(
-          "flex h-screen flex-col border-r border-border bg-sidebar transition-all duration-300",
-          collapsed ? "w-16" : "w-64"
+  const irA = (seccion: string) => {
+    onSectionChange(seccion)
+    onMenuMovilChange?.(false)
+  }
+
+  const renderContenido = (collapsed: boolean, enPanelMovil: boolean) => (
+    <>
+      {/* Logo Box */}
+      <div className={cn("flex h-20 shrink-0 items-center justify-center border-b border-border px-4", enPanelMovil && "pr-12")}>
+        {!collapsed ? (
+          logoUrl ? (
+            <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
+              <img src={logoUrl} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : (
+            <div className="flex h-14 w-full items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-secondary/50">
+              <span className="text-sm font-medium text-muted-foreground">Logo del Taller</span>
+            </div>
+          )
+        ) : (
+          logoUrl ? (
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
+              <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+            </div>
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50">
+              <span className="text-xs font-medium text-muted-foreground">Logo</span>
+            </div>
+          )
         )}
-      >
-        {/* Logo Box */}
-        <div className="flex h-20 items-center justify-center border-b border-border px-4">
-          {!collapsed ? (
-            logoUrl ? (
-              <div className="flex h-14 w-full items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
-                <img src={logoUrl} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
-              </div>
-            ) : (
-              <div className="flex h-14 w-full items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border bg-secondary/50">
-                <span className="text-sm font-medium text-muted-foreground">Logo del Taller</span>
-              </div>
-            )
-          ) : (
-            logoUrl ? (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white dark:bg-slate-900 p-1 border border-border shadow-sm">
-                <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
-              </div>
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-dashed border-border bg-secondary/50">
-                <span className="text-xs font-medium text-muted-foreground">Logo</span>
-              </div>
-            )
-          )}
-        </div>
+      </div>
 
-        {/* Navigation - AQUÍ APLICAMOS EL SPACE-Y-3 PARA DARLE AIRE */}
-        <nav className="flex-1 space-y-3 p-4 overflow-y-auto">
-          {allowedNavItems.map((item) => {
-            const Icon = item.icon
-            const isActive = activeSection === item.label
+      {/* Navigation - AQUÍ APLICAMOS EL SPACE-Y-3 PARA DARLE AIRE */}
+      <nav className="flex-1 space-y-3 p-4 overflow-y-auto">
+        {allowedNavItems.map((item) => {
+          const Icon = item.icon
+          const isActive = activeSection === item.label
 
-            if (collapsed) {
-              return (
-                <Tooltip key={item.label}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => onSectionChange(item.label)}
-                      className={cn(
-                        "flex w-full items-center justify-center rounded-lg p-2.5 transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-5 w-5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="border-border bg-popover">
-                    {item.label}
-                  </TooltipContent>
-                </Tooltip>
-              )
-            }
-
+          if (collapsed) {
             return (
-              <button
-                key={item.label}
-                onClick={() => onSectionChange(item.label)}
-                className={cn(
-                  "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <Icon className="h-5 w-5 shrink-0" />
-                <span>{item.label}</span>
-              </button>
-            )
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="border-t border-border p-3 space-y-2">
-          {/* Theme Toggle */}
-          {collapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  className="flex w-full items-center justify-center rounded-lg p-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                >
-                  {mounted && theme === "dark" ? (
-                    <Sun className="h-5 w-5" />
-                  ) : (
-                    <Moon className="h-5 w-5" />
-                  )}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="border-border bg-popover">
-                {theme === "dark" ? "Modo claro" : "Modo oscuro"}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            >
-              {mounted && theme === "dark" ? (
-                <Sun className="h-5 w-5 shrink-0" />
-              ) : (
-                <Moon className="h-5 w-5 shrink-0" />
-              )}
-              <span>{mounted && theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>
-            </button>
-          )}
-
-          {/* Settings - SOLO VISIBLE PARA ADMIN */}
-          {userRole === "admin" && (
-            collapsed ? (
-              <Tooltip>
+              <Tooltip key={item.label}>
                 <TooltipTrigger asChild>
-                  <button 
-                    onClick={() => onSectionChange("Configuración")}
-                    className="flex w-full items-center justify-center rounded-lg p-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  <button
+                    onClick={() => irA(item.label)}
+                    className={cn(
+                      "flex w-full items-center justify-center rounded-lg p-2.5 transition-colors",
+                      isActive
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    )}
                   >
-                    <Settings className="h-5 w-5" />
+                    <Icon className="h-5 w-5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="border-border bg-popover">
-                  Configuración
+                  {item.label}
                 </TooltipContent>
               </Tooltip>
-            ) : (
-              <button 
-                onClick={() => onSectionChange("Configuración")}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                <Settings className="h-5 w-5 shrink-0" />
-                <span>Configuración</span>
-              </button>
             )
-          )}
+          }
 
-          {/* Collapse button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setCollapsed(!collapsed)}
-            className={cn(
-              "mt-2 w-full justify-center text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              collapsed && "px-0"
-            )}
+          return (
+            <button
+              key={item.label}
+              onClick={() => irA(item.label)}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <Icon className="h-5 w-5 shrink-0" />
+              <span>{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="border-t border-border p-3 space-y-2">
+        {/* Theme Toggle */}
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="flex w-full items-center justify-center rounded-lg p-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                {mounted && theme === "dark" ? (
+                  <Sun className="h-5 w-5" />
+                ) : (
+                  <Moon className="h-5 w-5" />
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="border-border bg-popover">
+              {theme === "dark" ? "Modo claro" : "Modo oscuro"}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
+            {mounted && theme === "dark" ? (
+              <Sun className="h-5 w-5 shrink-0" />
             ) : (
-              <>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                <span>Colapsar</span>
-              </>
+              <Moon className="h-5 w-5 shrink-0" />
             )}
-          </Button>
+            <span>{mounted && theme === "dark" ? "Modo claro" : "Modo oscuro"}</span>
+          </button>
+        )}
+
+        {/* Settings - SOLO VISIBLE PARA ADMIN */}
+        {userRole === "admin" && (
+          collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button 
+                  onClick={() => irA("Configuración")}
+                  className="flex w-full items-center justify-center rounded-lg p-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                >
+                  <Settings className="h-5 w-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="border-border bg-popover">
+                Configuración
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <button 
+              onClick={() => irA("Configuración")}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <Settings className="h-5 w-5 shrink-0" />
+              <span>Configuración</span>
+            </button>
+          )
+        )}
+
+        {/* Collapse button (solo en PC: en celular el menú se cierra solo) */}
+        {!enPanelMovil && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCollapsed(!collapsed)}
+          className={cn(
+            "mt-2 w-full justify-center text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            collapsed && "px-0"
+          )}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <>
+              <ChevronLeft className="h-4 w-4 mr-2" />
+              <span>Colapsar</span>
+            </>
+          )}
+        </Button>
+        )}
+      </div>
+        {/* --- FIRMA / MARCA DE AGUA --- */}
+      <div className="mt-auto p-4 border-t border-slate-200">
+        <div className="flex flex-col items-center justify-center opacity-40 hover:opacity-100 transition-opacity duration-300 cursor-default">
+          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+            Designed & Coded By
+          </span>
+          <span className="text-xs font-black text-slate-700 tracking-wide mt-0.5">
+            JUAN PABLO MARTIN
+          </span>
         </div>
-          {/* --- FIRMA / MARCA DE AGUA --- */}
-        <div className="mt-auto p-4 border-t border-slate-200">
-          <div className="flex flex-col items-center justify-center opacity-40 hover:opacity-100 transition-opacity duration-300 cursor-default">
-            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">
-              Designed & Coded By
-            </span>
-            <span className="text-xs font-black text-slate-700 tracking-wide mt-0.5">
-              JUAN PABLO MARTIN
-            </span>
-          </div>
-        </div>
+      </div>
+    </>
+  )
+
+  return (
+    <TooltipProvider delayDuration={0}>
+      {/* PC: menú fijo a la izquierda, como siempre */}
+      <aside
+        className={cn(
+          "hidden lg:flex h-screen flex-col border-r border-border bg-sidebar transition-all duration-300 shrink-0",
+          collapsed ? "w-16" : "w-64"
+        )}
+      >
+        {renderContenido(collapsed, false)}
       </aside>
+
+      {/* Celular y tablet: el mismo menú en un panel deslizable */}
+      <Sheet open={menuMovilAbierto} onOpenChange={(abierto) => onMenuMovilChange?.(abierto)}>
+        <SheetContent side="left" className="lg:hidden w-72 max-w-[85vw] sm:max-w-xs gap-0 p-0 bg-sidebar flex flex-col">
+          <SheetTitle className="sr-only">Menú</SheetTitle>
+          <SheetDescription className="sr-only">Secciones del sistema</SheetDescription>
+          {renderContenido(false, true)}
+        </SheetContent>
+      </Sheet>
     </TooltipProvider>
   )
 }

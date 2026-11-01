@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
   const [activeSection, setActiveSection] = useState("Inicio")
+  const [menuMovilAbierto, setMenuMovilAbierto] = useState(false)
 
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
   const [nuevaPassword, setNuevaPassword] = useState("")
@@ -346,8 +347,8 @@ export default function DashboardPage() {
         return <AdminDashboardView />;
       case "Perfil":
      return (
-       <div className="max-w-xl mx-auto py-8 animate-in fade-in">
-         <div className="border border-border bg-card rounded-2xl p-8 shadow-sm flex flex-col items-center text-center">
+       <div className="max-w-xl mx-auto py-4 sm:py-8 animate-in fade-in">
+         <div className="border border-border bg-card rounded-2xl p-5 sm:p-8 shadow-sm flex flex-col items-center text-center">
            <div className="bg-emerald-100 dark:bg-emerald-950/40 p-6 rounded-full mb-4">
              <User className="w-12 h-12 text-emerald-700 dark:text-emerald-400" />
            </div>
@@ -471,10 +472,10 @@ export default function DashboardPage() {
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       {/* --- PANTALLA NEGRA DE BLOQUEO --- */}
       {isLocked && (
-        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-slate-950/95 backdrop-blur-md text-white animate-in fade-in">
-          <Lock className="w-16 h-16 text-emerald-500 mb-6" />
-          <h2 className="text-3xl font-bold mb-2 tracking-wide">Pantalla Bloqueada</h2>
-          <p className="text-slate-400 mb-8">Por seguridad, el sistema se bloqueó tras 5 min de inactividad.</p>
+        <div className="fixed inset-0 z-[99999] flex flex-col items-center justify-center overflow-y-auto px-4 py-6 bg-slate-950/95 backdrop-blur-md text-white text-center animate-in fade-in">
+          <Lock className="w-12 h-12 sm:w-16 sm:h-16 text-emerald-500 mb-4 sm:mb-6 shrink-0" />
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2 tracking-wide">Pantalla Bloqueada</h2>
+          <p className="text-slate-400 mb-6 sm:mb-8">Por seguridad, el sistema se bloqueó tras 5 min de inactividad.</p>
 
           {/* Los 4 puntitos del PIN */}
           <div className="flex gap-4 mb-8">
@@ -503,18 +504,20 @@ export default function DashboardPage() {
             </button>
           </div>
           
-          <button onClick={async () => { await supabase.auth.signOut(); setIsLocked(false); }} className="mt-12 text-sm text-slate-500 hover:text-white transition-colors underline underline-offset-4">
+          <button onClick={async () => { await supabase.auth.signOut(); setIsLocked(false); }} className="mt-8 sm:mt-12 text-sm text-slate-500 hover:text-white transition-colors underline underline-offset-4">
             No soy {userName}, Cerrar Sesión
           </button>
         </div>
       )}
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen supports-[height:100dvh]:h-dvh bg-background">
         <DashboardSidebar 
           activeSection={activeSection} 
           onSectionChange={setActiveSection} 
           userRole={userRole} 
+          menuMovilAbierto={menuMovilAbierto}
+          onMenuMovilChange={setMenuMovilAbierto}
         />
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <DashboardHeader 
             activeSection={activeSection} 
             onSectionChange={setActiveSection} 
@@ -525,8 +528,9 @@ export default function DashboardPage() {
               setVolverA(activeSection);
               setActiveSection("Presupuestos");
             }}
+            onAbrirMenuMovil={() => setMenuMovilAbierto(true)}
           />
-          <main className="flex-1 overflow-y-auto p-6 relative">
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-6 relative">
             <div className="mx-auto max-w-7xl">
               {renderContent()}
             </div>

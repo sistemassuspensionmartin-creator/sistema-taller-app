@@ -132,3 +132,85 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* --- Celular y tablet ---
+   Solo en pantalla (la impresión desde la PC no cambia). */
+@media screen and (max-width: 767px), screen and (pointer: coarse) {
+  /* Con letra menor a 16px el iPhone agranda la pantalla al tocar un campo */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+@media screen and (pointer: coarse) {
+  /* Botones cómodos para el dedo (~40px) */
+  button:not([role='checkbox']):not([role='switch']):not([role='radio']):not([data-slot='dialog-close']):not(.boton-compacto),
+  [role='menuitem'],
+  [role='option'] {
+    min-height: 40px;
+  }
+  [data-slot='tabs-list'] {
+    height: auto !important;
+  }
+  button:has(> svg:only-child):not([role='checkbox']):not([role='switch']):not([role='radio']):not([data-slot='dialog-close']):not(.boton-compacto) {
+    min-width: 40px;
+  }
+}
+
+
+/* --- Tablas en celular: cada fila se ve como una tarjeta ---
+   Se activa poniendo className="tabla-movil" en <Table>. En tablet y PC la tabla queda igual.
+   Las celdas con data-label muestran ese título arriba del valor. */
+@media screen and (max-width: 767px) {
+  table.tabla-movil thead {
+    display: none;
+  }
+  table.tabla-movil,
+  table.tabla-movil tbody {
+    display: block;
+    width: 100%;
+  }
+  table.tabla-movil tr:not(.hidden) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem;
+  }
+  table.tabla-movil td:not(.hidden) {
+    display: block;
+    padding: 0;
+    white-space: normal;
+    text-align: left;
+    min-width: 0;
+  }
+  table.tabla-movil td:first-child,
+  table.tabla-movil td:last-child,
+  table.tabla-movil td[colspan],
+  table.tabla-movil td.celda-completa {
+    flex-basis: 100%;
+  }
+  table.tabla-movil td[colspan] {
+    text-align: center;
+  }
+  table.tabla-movil td.celda-auto {
+    flex-basis: auto;
+  }
+  table.tabla-movil td:last-child:not(:first-child) > div {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  table.tabla-movil td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+}

@@ -505,7 +505,7 @@ return (
           <CardContent className="p-0">
             {filtroTab === "pedidos" ? (
               /* --- NUEVA TABLA: PEDIDOS A PROVEEDOR --- */
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader>
                   <TableRow className="bg-secondary/20">
                     <TableHead className="w-[140px]">Estado</TableHead>
@@ -536,9 +536,9 @@ return (
                             {pedido.estado}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-medium text-foreground">{pedido.detalle}</TableCell>
-                        <TableCell className="text-center font-bold text-lg">{pedido.cantidad}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{new Date(pedido.created_at).toLocaleDateString('es-AR')}</TableCell>
+                        <TableCell className="celda-completa font-medium text-foreground">{pedido.detalle}</TableCell>
+                        <TableCell data-label="Cantidad" className="text-center font-bold text-lg">{pedido.cantidad}</TableCell>
+                        <TableCell data-label="Fecha" className="text-muted-foreground text-sm">{new Date(pedido.created_at).toLocaleDateString('es-AR')}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
                             {pedido.estado !== 'Ingresaron' && (
@@ -563,7 +563,7 @@ return (
               </Table>
             ) : (
               /* --- TU TABLA ORIGINAL INTACTA: CATÁLOGO --- */
-              <Table>
+              <Table className="tabla-movil">
                 <TableHeader>
                   <TableRow className="bg-secondary/20">
                     <TableHead className="w-[150px]">Tipo</TableHead>
@@ -609,8 +609,8 @@ return (
                               {item.tipo}
                             </Badge>
                           </TableCell>
-                          <TableCell className="font-medium text-foreground">{item.detalle}</TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="celda-completa font-medium text-foreground">{item.detalle}</TableCell>
+                          <TableCell data-label="Stock" className="text-center">
                             {(item.tipo === "Repuesto" || item.tipo === "Neumático") ? (
                               item.controlar_stock !== false ? (
                                 <Badge variant={item.stock_actual <= 2 ? "destructive" : "secondary"} className="font-mono">
@@ -623,13 +623,13 @@ return (
                               <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-right bg-slate-50 dark:bg-slate-900/20 text-muted-foreground font-mono">
+                          <TableCell data-label="Costo" className="text-right bg-slate-50 dark:bg-slate-900/20 text-muted-foreground font-mono">
                             ${(item.costo_base || 0).toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-bold text-foreground font-mono">
+                          <TableCell data-label="Precio venta" className="text-right font-bold text-foreground font-mono">
                             ${item.precio_base.toLocaleString()}
                           </TableCell>
-                          <TableCell className="text-right font-medium text-emerald-600 dark:text-emerald-400 font-mono">
+                          <TableCell data-label="Ganancia" className="text-right font-medium text-emerald-600 dark:text-emerald-400 font-mono">
                             ${margen.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-right">
@@ -663,16 +663,16 @@ return (
       {/* --- TU MODAL ORIGINAL PARA CREAR/EDITAR --- */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-3xl min-h-[500px] border-border bg-card overflow-y-auto p-0 flex flex-col">
-          <div className="bg-secondary/30 p-6 border-b border-border shrink-0">
-            <DialogTitle className="text-2xl text-foreground font-bold">
+          <div className="bg-secondary/30 p-4 pr-12 sm:p-6 border-b border-border shrink-0">
+            <DialogTitle className="text-xl sm:text-2xl text-foreground font-bold">
               {editingId ? "Editar Ítem del Catálogo" : "Registrar Nuevo Ítem"}
             </DialogTitle>
             <p className="text-sm text-muted-foreground mt-1">Cargue los detalles, costos y precios de venta.</p>
           </div>
 
-          <div className="p-8 flex-1 space-y-8">
+          <div className="p-4 sm:p-8 flex-1 space-y-8">
             <div className="bg-secondary/20 p-4 rounded-lg flex justify-center border border-border">
-              <RadioGroup defaultValue="Repuesto" className="grid grid-cols-2 gap-x-12 gap-y-4" value={formData.tipo} onValueChange={(val: string) => setFormData({...formData, tipo: val})}>
+              <RadioGroup defaultValue="Repuesto" className="grid grid-cols-2 gap-x-4 sm:gap-x-12 gap-y-4" value={formData.tipo} onValueChange={(val: string) => setFormData({...formData, tipo: val})}>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="Repuesto" id="repuesto" /><Label htmlFor="repuesto" className="font-semibold cursor-pointer flex items-center"><Package className="w-4 h-4 mr-1 text-blue-600"/> Repuesto</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="Neumático" id="neumatico" /><Label htmlFor="neumatico" className="font-semibold cursor-pointer flex items-center"><CircleDashed className="w-4 h-4 mr-1 text-zinc-600"/> Neumáticos</Label></div>
                 <div className="flex items-center space-x-2"><RadioGroupItem value="Servicio" id="servicio" /><Label htmlFor="servicio" className="font-semibold cursor-pointer flex items-center"><Wrench className="w-4 h-4 mr-1 text-orange-600"/> Servicio</Label></div>
@@ -684,7 +684,7 @@ return (
               <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Información Principal</h3></div>
               
               {formData.tipo === "Neumático" ? (
-                <div className="grid sm:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900/30 p-6 rounded-lg border border-border">
+                <div className="grid sm:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900/30 p-4 sm:p-6 rounded-lg border border-border">
                   <div className="space-y-2">
                     <Label>Medida <span className="text-destructive">*</span></Label>
                     <Input placeholder="Ej: 265 / 65 R 18" className="h-12 font-mono uppercase text-center tracking-widest bg-white dark:bg-slate-950" value={formData.medida} onChange={handleMedidaChange} maxLength={15} />
@@ -734,7 +734,7 @@ return (
                       </div>
                       
                       {formData.controlar_stock && (
-                        <div className="space-y-2 w-1/3 animate-in fade-in slide-in-from-top-2">
+                        <div className="space-y-2 w-full sm:w-1/3 animate-in fade-in slide-in-from-top-2">
                           <Label>Cantidad en Stock</Label>
                           <Input type="number" placeholder="0" className="bg-white dark:bg-slate-900 border-border font-mono" value={formData.stock_actual} onChange={(e) => setFormData({...formData, stock_actual: e.target.value})} />
                         </div>
@@ -747,7 +747,7 @@ return (
 
             <section>
               <div className="border-l-4 border-emerald-600 pl-3 mb-4"><h3 className="font-bold text-sm text-foreground uppercase tracking-wide">Precios y Rentabilidad</h3></div>
-              <div className="grid grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900/30 p-6 rounded-lg border border-border">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900/30 p-4 sm:p-6 rounded-lg border border-border">
                 <div className="space-y-2">
                   <Label className="text-muted-foreground">Costo Interno (Su costo)</Label>
                   <div className="relative">
@@ -766,7 +766,7 @@ return (
             </section>
           </div>
           
-          <div className="p-6 border-t border-border bg-secondary/10 shrink-0 flex justify-end gap-2">
+          <div className="p-4 sm:p-6 border-t border-border bg-secondary/10 shrink-0 flex flex-wrap justify-end gap-2">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSaving}>Cancelar</Button>
             <Button onClick={handleGuardarItem} disabled={isSaving} className="bg-emerald-600 text-white hover:bg-emerald-700">
               {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : (editingId ? "Actualizar Ítem" : "Guardar en Catálogo")}
