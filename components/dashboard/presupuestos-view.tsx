@@ -26,6 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
+import { traerTodos } from "@/lib/consultas"
 import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, separarCodigoError, TIPOS_TARJETA } from "@/lib/operaciones"
 import { crearNotificacion, destinoDeRol, marcarVistasDePresupuesto } from "@/lib/notificaciones"
 import { suscribirCanal } from "@/lib/realtime"
@@ -191,18 +192,19 @@ export function PresupuestosView({
 
   // Recarga liviana para el tiempo real: solo la lista de presupuestos, sin spinner
   const recargarPresupuestos = async () => {
-    const { data, error } = await supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false })
-    if (!error && data) setPresupuestos(data)
+    try {
+      setPresupuestos(await traerTodos(() => supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }).order('id')))
+    } catch (e) { console.error("Error al recargar presupuestos:", e) }
   }
 
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
       const [resClientes, resVehiculos, resCatalogo, resPresupuestos, resConfig, resCajas] = await Promise.all([
-        supabase.from('clientes').select('*').order('nombre'),
-        supabase.from('vehiculos').select('*'),
-        supabase.from('catalogo').select('*'),
-        supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }),
+        traerTodos(() => supabase.from('clientes').select('*').order('nombre').order('id')).then(data => ({ data })),
+        traerTodos(() => supabase.from('vehiculos').select('*').order('patente')).then(data => ({ data })),
+        traerTodos(() => supabase.from('catalogo').select('*').order('id')).then(data => ({ data })),
+        traerTodos(() => supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }).order('id')).then(data => ({ data })),
         supabase.from('configuracion').select('*').eq('id', 1).single(),
         supabase.from('cajas').select('*').order('nombre')
       ])
@@ -493,18 +495,18 @@ export function PresupuestosView({
   }
 
   const handleEliminarPresupuesto = async (id: string) => {
-    if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Esta acción no se puede deshacer.")) return;
+    if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Queda 7 días en la papelera por si hay que recuperarlo.")) return;
 
     try {
-      await supabase.from('presupuesto_items').delete().eq('presupuesto_id', id);
-      const { error } = await supabase.from('presupuestos').delete().eq('id', id);
-      if (error) throw error;
+      // La base controla que no tenga cobros, facturas ni ingreso al taller, y guarda una copia
+      const { error } = await supabase.rpc('presupuesto_eliminar', { p_presupuesto_id: id });
+      if (error) throw new Error(separarCodigoError(error.message).mensaje);
       
       setVista("lista")
       cargarDatos()
     } catch (error: any) {
       console.error("Error al eliminar:", error);
-      alert("Hubo un error al eliminar el presupuesto: " + error.message);
+      alert("No se pudo eliminar el presupuesto: " + error.message);
     }
   }
 
@@ -632,15 +634,15 @@ export function PresupuestosView({
         await supabase.from('presupuesto_items').delete().eq('presupuesto_id', editandoId);
         
       } else {
-        numAleatorio = Math.floor(1000 + Math.random() * 9000);
+        // El número PRE lo asigna la base en orden (secuencia): no se repite
         const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
-          numero_correlativo: numAleatorio,
           ...datosPresupuesto
         }]).select()
 
         if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
         if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
         presId = presData[0].id;
+        numAleatorio = presData[0].numero_correlativo;
       }
 
       const itemsToInsert = filasValidas.map(f => ({
@@ -657,9 +659,11 @@ export function PresupuestosView({
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
       if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
-      if (presupuestosAEliminar.length > 0) {
-        await supabase.from('presupuesto_items').delete().in('presupuesto_id', presupuestosAEliminar);
-        await supabase.from('presupuestos').delete().in('id', presupuestosAEliminar);
+      // Asociar: los ítems ya se sumaron a este presupuesto y el anterior se elimina
+      // (queda en la papelera por si hay que recuperarlo)
+      for (const idAsociado of presupuestosAEliminar) {
+        const { error: errAsociar } = await supabase.rpc('presupuesto_eliminar', { p_presupuesto_id: idAsociado });
+        if (errAsociar) throw new Error("Se guardó el presupuesto, pero no se pudo eliminar el asociado: " + separarCodigoError(errAsociar.message).mensaje);
       }
 
       // --- SINCRONIZACIÓN CON LA FICHA DEL VEHÍCULO ---
