@@ -40,3 +40,16 @@ completo. Hacerlo **después de las 19 h o el fin de semana**, con nadie usando 
 
 Cada script tiene su versión para deshacer en `rollback/`, con el mismo nombre. Se corren
 en orden inverso (primero el 000400, después 000300, etc.).
+
+## Arreglo urgente: presupuestos que no aparecen o se repiten
+
+| Paso | Qué hacer | Archivo |
+|------|-----------|---------|
+| A | Numeración en orden, asociar sin borrar y papelera | `migrations/20261031000550_presupuestos_seguros.sql` |
+| B | Pruebas (no guardan nada) | `pruebas/pruebas_presupuestos.sql` |
+| C | Publicar la versión nueva (merge a `main` → Vercel) | — |
+
+- Hacer A, B y C seguidos: la pantalla nueva ya no manda número de presupuesto y usa la eliminación con papelera.
+- Para recuperar un presupuesto eliminado (solo admin, en el SQL Editor):
+  `select id, numero_correlativo, vehiculo_patente, eliminado_at from presupuestos_eliminados order by eliminado_at desc;`
+  y después `select public.presupuesto_restaurar('<id>');`

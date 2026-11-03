@@ -26,6 +26,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { supabase } from "@/lib/supabase"
+import { traerTodos } from "@/lib/consultas"
 import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, separarCodigoError, TIPOS_TARJETA } from "@/lib/operaciones"
 import { crearNotificacion, destinoDeRol, marcarVistasDePresupuesto } from "@/lib/notificaciones"
 import { suscribirCanal } from "@/lib/realtime"
@@ -38,6 +39,7 @@ const getEstadoColor = (estado: string) => {
     case "Aprobado": return "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800";
     case "Rechazado": return "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
     case "Facturado": return "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
+    case "Asociado": return "bg-slate-200 text-slate-600 border-slate-400 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600";
     case "Cobrado": return "bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800";
     default: return "bg-secondary text-foreground border-border";
   }
@@ -191,18 +193,19 @@ export function PresupuestosView({
 
   // Recarga liviana para el tiempo real: solo la lista de presupuestos, sin spinner
   const recargarPresupuestos = async () => {
-    const { data, error } = await supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false })
-    if (!error && data) setPresupuestos(data)
+    try {
+      setPresupuestos(await traerTodos(() => supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }).order('id')))
+    } catch (e) { console.error("Error al recargar presupuestos:", e) }
   }
 
   const cargarDatos = async () => {
     setIsLoading(true)
     try {
       const [resClientes, resVehiculos, resCatalogo, resPresupuestos, resConfig, resCajas] = await Promise.all([
-        supabase.from('clientes').select('*').order('nombre'),
-        supabase.from('vehiculos').select('*'),
-        supabase.from('catalogo').select('*'),
-        supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }),
+        traerTodos(() => supabase.from('clientes').select('*').order('nombre').order('id')).then(data => ({ data })),
+        traerTodos(() => supabase.from('vehiculos').select('*').order('patente')).then(data => ({ data })),
+        traerTodos(() => supabase.from('catalogo').select('*').order('id')).then(data => ({ data })),
+        traerTodos(() => supabase.from('presupuestos').select('*, vehiculos(*, clientes(*)), presupuesto_items(*)').order('created_at', { ascending: false }).order('id')).then(data => ({ data })),
         supabase.from('configuracion').select('*').eq('id', 1).single(),
         supabase.from('cajas').select('*').order('nombre')
       ])
@@ -493,18 +496,18 @@ export function PresupuestosView({
   }
 
   const handleEliminarPresupuesto = async (id: string) => {
-    if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Esta acción no se puede deshacer.")) return;
+    if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Queda guardado en la papelera y el administrador lo puede recuperar.")) return;
 
     try {
-      await supabase.from('presupuesto_items').delete().eq('presupuesto_id', id);
-      const { error } = await supabase.from('presupuestos').delete().eq('id', id);
-      if (error) throw error;
+      // La base controla que no tenga cobros, facturas ni ingreso al taller, y guarda una copia
+      const { error } = await supabase.rpc('presupuesto_eliminar', { p_presupuesto_id: id });
+      if (error) throw new Error(separarCodigoError(error.message).mensaje);
       
       setVista("lista")
       cargarDatos()
     } catch (error: any) {
       console.error("Error al eliminar:", error);
-      alert("Hubo un error al eliminar el presupuesto: " + error.message);
+      alert("No se pudo eliminar el presupuesto: " + error.message);
     }
   }
 
@@ -536,7 +539,7 @@ export function PresupuestosView({
       setIsAsociarModalOpen(false);
       setPresupuestoAFusionar("");
       
-      alert("Ítems importados correctamente. Revise el nuevo total y haga clic en 'Guardar Cambios' para confirmar la asociación.");
+      alert("Ítems importados correctamente. Revise el nuevo total y haga clic en 'Guardar Cambios' para confirmar la asociación. El presupuesto anterior no se borra: queda como 'Asociado'.");
     } catch (error: any) {
       alert("Error al intentar fusionar: " + error.message);
     } finally {
@@ -632,15 +635,15 @@ export function PresupuestosView({
         await supabase.from('presupuesto_items').delete().eq('presupuesto_id', editandoId);
         
       } else {
-        numAleatorio = Math.floor(1000 + Math.random() * 9000);
+        // El número PRE lo asigna la base en orden (secuencia): no se repite
         const { data: presData, error: presError } = await supabase.from('presupuestos').insert([{
-          numero_correlativo: numAleatorio,
           ...datosPresupuesto
         }]).select()
 
         if (presError) throw new Error("Error al guardar presupuesto: " + presError.message)
         if (!presData || presData.length === 0) throw new Error("Error interno al obtener el ID generado.")
         presId = presData[0].id;
+        numAleatorio = presData[0].numero_correlativo;
       }
 
       const itemsToInsert = filasValidas.map(f => ({
@@ -657,9 +660,12 @@ export function PresupuestosView({
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
       if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
+      // Los presupuestos asociados no se borran: quedan en estado "Asociado" y vinculados a este
       if (presupuestosAEliminar.length > 0) {
-        await supabase.from('presupuesto_items').delete().in('presupuesto_id', presupuestosAEliminar);
-        await supabase.from('presupuestos').delete().in('id', presupuestosAEliminar);
+        const { error: errAsociar } = await supabase.from('presupuestos')
+          .update({ estado: 'Asociado', asociado_a: presId })
+          .in('id', presupuestosAEliminar);
+        if (errAsociar) throw new Error("Se guardó el presupuesto, pero no se pudo marcar el asociado: " + errAsociar.message);
       }
 
       // --- SINCRONIZACIÓN CON LA FICHA DEL VEHÍCULO ---
@@ -1350,6 +1356,7 @@ export function PresupuestosView({
                         <SelectItem value="Rechazado">Rechazado</SelectItem>
                         <SelectItem value="Facturado">Facturado</SelectItem>
                         <SelectItem value="Cobrado">Cobrado</SelectItem>
+                        <SelectItem value="Asociado" disabled>Asociado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1608,7 +1615,7 @@ export function PresupuestosView({
                       <Link2 className="w-5 h-5 text-blue-600" /> Asociar Presupuesto
                     </DialogTitle>
                     <DialogDescription>
-                      Seleccioná otro presupuesto abierto de este mismo vehículo. Los repuestos se fusionarán y el presupuesto viejo será eliminado de la lista.
+                      Seleccioná otro presupuesto abierto de este mismo vehículo. Los repuestos se suman a este presupuesto y el anterior queda guardado como 'Asociado'.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -1749,6 +1756,7 @@ export function PresupuestosView({
                         <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group transition-colors" onClick={() => handleAbrirPresupuesto(p)}>
                           <TableCell className="celda-auto font-mono font-bold">
                             PRE-{p.numero_correlativo}
+                            {p.asociado_a && (() => { const destino = presupuestos.find(x => x.id === p.asociado_a); return <span className="block text-[10px] font-sans font-normal text-muted-foreground">Asociado a PRE-{destino?.numero_correlativo ?? "?"}</span> })()}
                             {/* --- MAGIA VISUAL: PUNTITO AZUL DE ALERTA --- */}
                             {p.visto_admin === false && userRole !== 'mecanico' && <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block animate-pulse" title="Cambios sin ver"></span>}
                           </TableCell>
@@ -1793,6 +1801,7 @@ export function PresupuestosView({
                                   <SelectItem value="Rechazado">Rechazado</SelectItem>
                                   <SelectItem value="Facturado">Facturado</SelectItem>
                                   <SelectItem value="Cobrado">Cobrado</SelectItem>
+                                  <SelectItem value="Asociado" disabled>Asociado</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}

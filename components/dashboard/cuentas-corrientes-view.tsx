@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { supabase } from "@/lib/supabase"
+import { traerTodos } from "@/lib/consultas"
 import { ejecutarOperacion, nuevaOperacionId, resolverCajaDestino, TIPOS_TARJETA } from "@/lib/operaciones"
 import {
   Building2, Users, Plus, FileText, ArrowDownRight, ArrowUpRight,
@@ -95,7 +96,7 @@ export function CuentasCorrientesView() {
       const [{ data: provs }, { data: cjs }, { data: clis }] = await Promise.all([
         supabase.from('proveedores').select('*').order('nombre'),
         supabase.from('cajas').select('*').order('nombre'),
-        supabase.from('clientes').select('*').order('fecha_registro', { ascending: false })
+        traerTodos(() => supabase.from('clientes').select('*').order('fecha_registro', { ascending: false }).order('id')).then(data => ({ data }))
       ])
       
       setProveedores(provs || [])

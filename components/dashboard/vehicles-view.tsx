@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { supabase } from "@/lib/supabase"
+import { traerTodos } from "@/lib/consultas"
 
 const MARCAS_COMUNES = [
   "Volkswagen", "Ford", "Chevrolet", "Toyota", "Renault", 
@@ -106,7 +107,7 @@ export function VehiclesView({
   const fetchVehiculos = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo, nivel_problema )`)
+      const { data, error } = await traerTodos(() => supabase.from('vehiculos').select(`*, clientes ( id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo, nivel_problema )`).order('patente')).then(data => ({ data, error: null }), error => ({ data: null, error }))
       if (error) throw error
       setVehiculos(data || [])
     } catch (error) {
@@ -118,7 +119,7 @@ export function VehiclesView({
 
   const fetchClientesParaSelect = async () => {
     try {
-      const { data, error } = await supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo, nivel_problema').order('nombre')
+      const { data, error } = await traerTodos(() => supabase.from('clientes').select('id, nombre, apellido, razon_social, tipo_cliente, documento, telefono, email, condicion_iva, domicilio_fiscal, notas, saldo, nivel_problema').order('nombre').order('id')).then(data => ({ data, error: null }), error => ({ data: null, error }))
       if (error) throw error
       setClientes(data || [])
     } catch (error) {

@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select"
 
 import { supabase } from "@/lib/supabase"
+import { traerTodos } from "@/lib/consultas"
 
 const MARCAS_NEUMATICOS = [
   "GoodYear", "Gt Radial", "Champiro", "Pirelli", 
@@ -67,7 +68,7 @@ export function CatalogoView() {
     setIsLoading(true)
     try {
       // Le sacamos el order() de la base de datos porque lo vamos a ordenar nosotros a mano
-      const { data, error } = await supabase.from('catalogo').select('*')
+      const { data, error } = await traerTodos(() => supabase.from('catalogo').select('*').order('id')).then(data => ({ data, error: null }), error => ({ data: null, error }))
       if (error) throw error
 
       // MAGIA: Ordenamiento por Tipo y luego Inteligente

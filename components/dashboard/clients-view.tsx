@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select"
 
 import { supabase } from "@/lib/supabase"
+import { traerTodos } from "@/lib/consultas"
 
 const MARCAS_COMUNES = [
   "Volkswagen", "Ford", "Chevrolet", "Toyota", "Renault", 
@@ -72,7 +73,7 @@ export function ClientsView({ onNavigateToVehicles, clienteAbreDetalle, onClearC
   const fetchClientes = async () => {
     setIsLoading(true)
     try {
-      const { data, error } = await supabase.from('clientes').select('*, vehiculos(*)').order('fecha_registro', { ascending: false })
+      const { data, error } = await traerTodos(() => supabase.from('clientes').select('*, vehiculos(*)').order('fecha_registro', { ascending: false }).order('id')).then(data => ({ data, error: null }), error => ({ data: null, error }))
       if (error) throw error
       
       setClientes(data || [])
