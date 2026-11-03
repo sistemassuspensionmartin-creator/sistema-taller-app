@@ -8,7 +8,8 @@
 --      la función presupuesto_eliminar:
 --        - no deja eliminar uno con cobros, facturas o ingreso al taller;
 --        - guarda una copia completa (con sus ítems) en la papelera
---          presupuestos_eliminados, de donde se puede restaurar.
+--          presupuestos_eliminados, de donde se puede restaurar durante 7 días;
+--          pasado ese plazo se borra definitivamente.
 -- Script re-ejecutable.
 -- Para deshacer: rollback/20261031000550_presupuestos_seguros_rollback.sql
 -- =====================================================================
@@ -75,6 +76,9 @@ declare
 begin
   perform public._exigir_rol(array['admin', 'cajero', 'mecanico']);
 
+  -- La papelera guarda 7 días: lo más viejo se borra definitivamente
+  delete from public.presupuestos_eliminados where eliminado_at < now() - interval '7 days';
+
   select * into v_pres from public.presupuestos where id = p_presupuesto_id for update;
   if not found then
     raise exception 'El presupuesto no existe.';
@@ -109,7 +113,7 @@ begin
 end;
 $$;
 
--- Restaurar desde la papelera (solo admin). Ejemplo en el SQL Editor:
+-- Restaurar desde la papelera (solo admin, dentro de los 7 días). Ejemplo en el SQL Editor:
 --   select public.presupuesto_restaurar('<id>');
 -- (el id se ve en: select id, numero_correlativo, vehiculo_patente, eliminado_at from presupuestos_eliminados order by eliminado_at desc;)
 create or replace function public.presupuesto_restaurar(p_presupuesto_id uuid)

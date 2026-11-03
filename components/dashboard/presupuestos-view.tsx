@@ -495,7 +495,7 @@ export function PresupuestosView({
   }
 
   const handleEliminarPresupuesto = async (id: string) => {
-    if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Queda guardado en la papelera y el administrador lo puede recuperar.")) return;
+    if (!confirm("¿Estás seguro de que querés eliminar este presupuesto? Queda 7 días en la papelera por si hay que recuperarlo.")) return;
 
     try {
       // La base controla que no tenga cobros, facturas ni ingreso al taller, y guarda una copia
