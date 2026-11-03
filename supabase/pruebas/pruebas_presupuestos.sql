@@ -1,5 +1,5 @@
 -- =====================================================================
--- PRUEBAS AUTOMÁTICAS de numeración, asociación y papelera (script 000550)
+-- PRUEBAS AUTOMÁTICAS de numeración y papelera (script 000550)
 -- NO MODIFICA DATOS: al final se cancela todo a propósito.
 --   * "PRUEBAS OK ..."  -> todo funcionó (y no quedó nada guardado).
 --   * "FALLO: ..."      -> indica qué prueba falló.
@@ -58,12 +58,13 @@ begin
   end;
   if not v_fallo then raise exception 'FALLO: se pudo eliminar un presupuesto con cobros'; end if;
 
-  -- Asociar: el anterior queda vinculado, no se borra
-  update public.presupuestos set estado = 'Asociado', asociado_a = v_a where id = v_b;
-  if not exists (select 1 from public.presupuestos where id = v_b and asociado_a = v_a) then
-    raise exception 'FALLO: la asociación no quedó registrada';
+  -- Asociar: el anterior (sin cobros) se elimina y queda en la papelera
+  perform public.presupuesto_eliminar(v_b);
+  if exists (select 1 from public.presupuestos where id = v_b)
+     or not exists (select 1 from public.presupuestos_eliminados where id = v_b) then
+    raise exception 'FALLO: el asociado no pasó a la papelera';
   end if;
 
-  raise exception 'PRUEBAS OK: numeración, asociación y papelera funcionan. No se guardó ningún dato.';
+  raise exception 'PRUEBAS OK: numeración y papelera funcionan. No se guardó ningún dato.';
 end;
 $$;

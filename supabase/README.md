@@ -45,7 +45,7 @@ en orden inverso (primero el 000400, después 000300, etc.).
 
 | Paso | Qué hacer | Archivo |
 |------|-----------|---------|
-| A | Numeración en orden, asociar sin borrar y papelera | `migrations/20261031000550_presupuestos_seguros.sql` |
+| A | Numeración en orden y papelera de presupuestos eliminados | `migrations/20261031000550_presupuestos_seguros.sql` |
 | B | Pruebas (no guardan nada) | `pruebas/pruebas_presupuestos.sql` |
 | C | Publicar la versión nueva (merge a `main` → Vercel) | — |
 

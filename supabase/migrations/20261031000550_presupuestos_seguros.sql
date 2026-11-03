@@ -4,9 +4,8 @@
 --   1. Números PRE en orden: los nuevos siguen desde el número más alto que
 --      existe hoy y no se pueden repetir (antes se elegían al azar entre
 --      1000 y 9999 y se repetían). Los viejos conservan su número.
---   2. "Asociar presupuesto" ya no borra el presupuesto viejo: queda en
---      estado "Asociado" y vinculado al nuevo (columna asociado_a).
---   3. Eliminar un presupuesto pasa por la función presupuesto_eliminar:
+--   2. Eliminar un presupuesto (a mano o al "Asociar" uno con otro) pasa por
+--      la función presupuesto_eliminar:
 --        - no deja eliminar uno con cobros, facturas o ingreso al taller;
 --        - guarda una copia completa (con sus ítems) en la papelera
 --          presupuestos_eliminados, de donde se puede restaurar.
@@ -46,13 +45,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------
--- 2. Asociar sin borrar
--- ---------------------------------------------------------------------
-alter table public.presupuestos add column if not exists asociado_a uuid references public.presupuestos(id);
-create index if not exists presupuestos_asociado_idx on public.presupuestos (asociado_a);
-
--- ---------------------------------------------------------------------
--- 3. Papelera y eliminación segura
+-- 2. Papelera y eliminación segura
 -- ---------------------------------------------------------------------
 create table if not exists public.presupuestos_eliminados (
   id uuid primary key,
@@ -107,9 +100,8 @@ begin
     auth.uid(), v_nombre)
   on conflict (id) do update set datos = excluded.datos, items = excluded.items, eliminado_at = now();
 
-  -- Lo que lo referenciaba queda sin vínculo (el turno o el asociado siguen existiendo)
+  -- Si tenía un turno, el turno sigue existiendo sin el vínculo
   update public.turnos set presupuesto_id = null where presupuesto_id = p_presupuesto_id;
-  update public.presupuestos set asociado_a = null where asociado_a = p_presupuesto_id;
 
   delete from public.presupuesto_items where presupuesto_id = p_presupuesto_id;
   delete from public.presupuestos where id = p_presupuesto_id;

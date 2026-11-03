@@ -39,7 +39,6 @@ const getEstadoColor = (estado: string) => {
     case "Aprobado": return "bg-emerald-100 text-emerald-700 border-emerald-300 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-800";
     case "Rechazado": return "bg-red-100 text-red-700 border-red-300 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
     case "Facturado": return "bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
-    case "Asociado": return "bg-slate-200 text-slate-600 border-slate-400 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600";
     case "Cobrado": return "bg-purple-100 text-purple-700 border-purple-300 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800";
     default: return "bg-secondary text-foreground border-border";
   }
@@ -539,7 +538,7 @@ export function PresupuestosView({
       setIsAsociarModalOpen(false);
       setPresupuestoAFusionar("");
       
-      alert("Ítems importados correctamente. Revise el nuevo total y haga clic en 'Guardar Cambios' para confirmar la asociación. El presupuesto anterior no se borra: queda como 'Asociado'.");
+      alert("Ítems importados correctamente. Revise el nuevo total y haga clic en 'Guardar Cambios' para confirmar la asociación.");
     } catch (error: any) {
       alert("Error al intentar fusionar: " + error.message);
     } finally {
@@ -660,12 +659,11 @@ export function PresupuestosView({
       const { error: itemsError } = await supabase.from('presupuesto_items').insert(itemsToInsert)
       if (itemsError) throw new Error("Error al guardar ítems: " + itemsError.message)
 
-      // Los presupuestos asociados no se borran: quedan en estado "Asociado" y vinculados a este
-      if (presupuestosAEliminar.length > 0) {
-        const { error: errAsociar } = await supabase.from('presupuestos')
-          .update({ estado: 'Asociado', asociado_a: presId })
-          .in('id', presupuestosAEliminar);
-        if (errAsociar) throw new Error("Se guardó el presupuesto, pero no se pudo marcar el asociado: " + errAsociar.message);
+      // Asociar: los ítems ya se sumaron a este presupuesto y el anterior se elimina
+      // (queda en la papelera por si hay que recuperarlo)
+      for (const idAsociado of presupuestosAEliminar) {
+        const { error: errAsociar } = await supabase.rpc('presupuesto_eliminar', { p_presupuesto_id: idAsociado });
+        if (errAsociar) throw new Error("Se guardó el presupuesto, pero no se pudo eliminar el asociado: " + separarCodigoError(errAsociar.message).mensaje);
       }
 
       // --- SINCRONIZACIÓN CON LA FICHA DEL VEHÍCULO ---
@@ -1356,7 +1354,6 @@ export function PresupuestosView({
                         <SelectItem value="Rechazado">Rechazado</SelectItem>
                         <SelectItem value="Facturado">Facturado</SelectItem>
                         <SelectItem value="Cobrado">Cobrado</SelectItem>
-                        <SelectItem value="Asociado" disabled>Asociado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1615,7 +1612,7 @@ export function PresupuestosView({
                       <Link2 className="w-5 h-5 text-blue-600" /> Asociar Presupuesto
                     </DialogTitle>
                     <DialogDescription>
-                      Seleccioná otro presupuesto abierto de este mismo vehículo. Los repuestos se suman a este presupuesto y el anterior queda guardado como 'Asociado'.
+                      Seleccioná otro presupuesto abierto de este mismo vehículo. Los repuestos se fusionarán y el presupuesto viejo será eliminado de la lista.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -1756,7 +1753,6 @@ export function PresupuestosView({
                         <TableRow key={p.id} className="hover:bg-secondary/50 cursor-pointer group transition-colors" onClick={() => handleAbrirPresupuesto(p)}>
                           <TableCell className="celda-auto font-mono font-bold">
                             PRE-{p.numero_correlativo}
-                            {p.asociado_a && (() => { const destino = presupuestos.find(x => x.id === p.asociado_a); return <span className="block text-[10px] font-sans font-normal text-muted-foreground">Asociado a PRE-{destino?.numero_correlativo ?? "?"}</span> })()}
                             {/* --- MAGIA VISUAL: PUNTITO AZUL DE ALERTA --- */}
                             {p.visto_admin === false && userRole !== 'mecanico' && <span className="ml-2 w-2 h-2 rounded-full bg-blue-500 inline-block animate-pulse" title="Cambios sin ver"></span>}
                           </TableCell>
@@ -1801,7 +1797,6 @@ export function PresupuestosView({
                                   <SelectItem value="Rechazado">Rechazado</SelectItem>
                                   <SelectItem value="Facturado">Facturado</SelectItem>
                                   <SelectItem value="Cobrado">Cobrado</SelectItem>
-                                  <SelectItem value="Asociado" disabled>Asociado</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
